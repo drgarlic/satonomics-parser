@@ -1,2 +1,8 @@
 /target
 .DS_Store
+.vscode
+profile.json
+inputs*
+outputs*
+outputs*
+snapshots*

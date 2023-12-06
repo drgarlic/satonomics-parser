@@ -1,39 +1,28 @@
-use bitcoin_explorer::BitcoinDB;
-use std::{fs, path::Path, time::Instant};
-
+mod computers;
+mod run;
+mod structs;
 mod utils;
 
-mod chunks;
-mod sth;
+// use crate::utils::{start_node, stop_node, wait_for_new_block, wait_node_sync};
+
+use run::run;
 
 fn main() -> color_eyre::Result<()> {
-    println!();
-
-    println!("Starting...");
-
     color_eyre::install()?;
 
-    let timer = Instant::now();
+    // start_node();
 
-    let path = Path::new("/Volumes/t7s/bitcoin");
+    // loop {
+    //     wait_node_sync()?;
 
-    let db = BitcoinDB::new(path, true)?;
+    //     stop_node();
 
-    let block_count = db.get_block_count();
+    let block_count = run()?;
 
-    println!("{block_count} blocks found.");
+    //     start_node();
 
-    let outputs_folder_rawpath = "./outputs";
-    fs::create_dir_all(outputs_folder_rawpath)?;
-
-    let process_chunks = false;
-    if process_chunks {
-        chunks::process(&db, block_count, outputs_folder_rawpath)?;
-    }
-
-    sth::process(&db, block_count, outputs_folder_rawpath)?;
-
-    println!("Done in {} seconds.", timer.elapsed().as_secs_f32());
+    //     wait_for_new_block(block_count - 1)?;
+    // }
 
     Ok(())
 }
