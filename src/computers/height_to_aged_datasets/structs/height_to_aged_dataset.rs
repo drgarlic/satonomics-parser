@@ -5,7 +5,7 @@ use itertools::Itertools;
 
 use crate::structs::HeightMap;
 
-use super::BlockDatasPerDay;
+use super::{BlockDatasPerDay, SquashedBlockData, SquashedDateData};
 
 pub enum AgeRange {
     Full,
@@ -148,47 +148,58 @@ impl HeightToAgedDataset {
         Ok(())
     }
 
-    pub fn insert(&self, block_datas_per_day: &BlockDatasPerDay, height: usize, price: f32) {
-        let mut sliced_block_datas_per_day = {
-            let len = block_datas_per_day.len();
+    pub fn insert(
+        &self,
+        squashed_block_datas_per_day: &Vec<SquashedDateData>,
+        height: usize,
+        price: f32,
+    ) {
+        let sliced_dataset = {
+            let len = squashed_block_datas_per_day.len();
 
             match self.range {
-                AgeRange::Full => block_datas_per_day.iter().collect_vec(),
+                AgeRange::Full => squashed_block_datas_per_day.iter().collect_vec(),
                 AgeRange::From(from) => {
                     if from < len {
-                        block_datas_per_day[..(len - from)].iter().collect_vec()
+                        squashed_block_datas_per_day[..(len - from)]
+                            .iter()
+                            .collect_vec()
                     } else {
                         vec![]
                     }
                 }
                 AgeRange::To(to) => {
                     if to <= len {
-                        block_datas_per_day[(len - to)..].iter().collect_vec()
+                        squashed_block_datas_per_day[(len - to)..]
+                            .iter()
+                            .collect_vec()
                     } else {
-                        block_datas_per_day.iter().collect_vec()
+                        squashed_block_datas_per_day.iter().collect_vec()
                     }
                 }
                 AgeRange::FromTo(from, to) => {
                     if from < len {
                         if to <= len {
-                            block_datas_per_day[(len - to)..(len - from)]
+                            squashed_block_datas_per_day[(len - to)..(len - from)]
                                 .iter()
                                 .collect_vec()
                         } else {
-                            block_datas_per_day[..(len - from)].iter().collect_vec()
+                            squashed_block_datas_per_day[..(len - from)]
+                                .iter()
+                                .collect_vec()
                         }
                     } else {
                         vec![]
                     }
                 }
-                AgeRange::Year(year) => block_datas_per_day
+                AgeRange::Year(year) => squashed_block_datas_per_day
                     .iter()
-                    .filter(|date_data| date_data.date.year() == year as i32)
+                    .filter(|date_data| date_data.year == year as i32)
                     .collect_vec(),
             }
         };
 
-        if sliced_block_datas_per_day.is_empty() {
+        if sliced_dataset.is_empty() {
             self.height_to_utxo_count.insert(height, 0);
 
             self.height_to_total_supply.insert(height, 0.0);
@@ -222,59 +233,51 @@ impl HeightToAgedDataset {
         }
 
         {
-            let utxo_count = sliced_block_datas_per_day
+            let utxo_count = sliced_dataset
                 .iter()
-                .map(|date_data| {
+                .flat_map(|date_data| {
                     date_data
                         .blocks
-                        .borrow()
                         .iter()
-                        .map(|block_data| block_data.txid_index_to_outputs.borrow().len())
-                        .sum::<usize>()
+                        .map(|block_data| block_data.utxo_count)
                 })
                 .sum();
 
             self.height_to_utxo_count.insert(height, utxo_count);
         }
 
-        let mut amount_price_tuples = sliced_block_datas_per_day
-            .drain(..)
-            .flat_map(|date_data| {
-                date_data
-                    .blocks
-                    .borrow()
-                    .iter()
-                    .map(|block_data| block_data.to_amount_price_tuple())
-                    .collect_vec()
-            })
+        let mut flat_date_dataset = sliced_dataset
+            .iter()
+            .flat_map(|date_data| &date_data.blocks)
             .collect_vec();
 
-        amount_price_tuples.sort_by(|tuple_a, tuple_b| tuple_a.1.partial_cmp(&tuple_b.1).unwrap());
+        flat_date_dataset
+            .sort_by(|tuple_a, tuple_b| tuple_a.price.partial_cmp(&tuple_b.price).unwrap());
 
-        let total_supply = amount_price_tuples
+        let total_supply = flat_date_dataset
             .iter()
-            .map(|(amount, _)| amount)
+            .map(|block_data| block_data.amount)
             .sum::<f64>();
 
         self.height_to_total_supply.insert(height, total_supply);
 
         {
-            let tuples_in_profit = amount_price_tuples
+            let blocks_in_profit = flat_date_dataset
                 .iter()
-                .filter(|(_, _price)| *_price < price)
+                .filter(|block_data| block_data.price < price)
                 .collect_vec();
 
-            let unrealized_profit = tuples_in_profit
+            let unrealized_profit = blocks_in_profit
                 .iter()
-                .map(|(amount, _price)| amount * (price - *_price) as f64)
+                .map(|block_data| block_data.amount * (price - block_data.price) as f64)
                 .sum::<f64>();
 
             self.height_to_unrealized_profit
                 .insert(height, unrealized_profit as f32);
 
-            let supply_in_profit = tuples_in_profit
+            let supply_in_profit = blocks_in_profit
                 .iter()
-                .map(|(amount, _)| amount)
+                .map(|block_data| block_data.amount)
                 .sum::<f64>();
 
             self.height_to_supply_in_profit
@@ -282,14 +285,14 @@ impl HeightToAgedDataset {
         }
 
         {
-            let tuples_in_loss = amount_price_tuples
+            let blocks_in_loss = flat_date_dataset
                 .iter()
-                .filter(|(_, _price)| *_price > price)
+                .filter(|block_data| block_data.price > price)
                 .collect_vec();
 
-            let unrealized_loss = tuples_in_loss
+            let unrealized_loss = blocks_in_loss
                 .iter()
-                .map(|(amount, _price)| amount * (*_price - price) as f64)
+                .map(|block_data| block_data.amount * (block_data.price - price) as f64)
                 .sum::<f64>();
 
             self.height_to_unrealized_loss
@@ -297,9 +300,9 @@ impl HeightToAgedDataset {
         }
 
         {
-            let price_mean = (amount_price_tuples
+            let price_mean = (flat_date_dataset
                 .iter()
-                .map(|(amount, price)| amount * (*price as f64))
+                .map(|block_data| block_data.amount * (block_data.price as f64))
                 .sum::<f64>()
                 / total_supply) as f32;
 
@@ -329,7 +332,9 @@ impl HeightToAgedDataset {
 
             let mut processed_amount = 0.0;
 
-            amount_price_tuples.iter().try_for_each(|(amount, price)| {
+            flat_date_dataset.iter().try_for_each(|block_data| {
+                let SquashedBlockData { amount, price, .. } = block_data;
+
                 processed_amount += amount;
 
                 if price_05p.is_none() && processed_amount >= total_supply * 0.05 {

@@ -1,7 +1,7 @@
 use chrono::Datelike;
 use itertools::Itertools;
 
-use super::{AgeRange, BlockDatasPerDay, HeightToAgedDataset};
+use super::{AgeRange, BlockDatasPerDay, DateData, HeightToAgedDataset};
 
 pub struct HeightToAgedDatasets {
     height_to_1d_dataset: HeightToAgedDataset,
@@ -121,9 +121,14 @@ impl HeightToAgedDatasets {
         current_block_height: usize,
         current_block_price: f32,
     ) {
+        let squashed_date_dataset = block_datas_per_day
+            .iter()
+            .map(DateData::squash)
+            .collect_vec();
+
         self.to_vec().iter().for_each(|dataset| {
             dataset.insert(
-                block_datas_per_day,
+                &squashed_date_dataset,
                 current_block_height,
                 current_block_price,
             )

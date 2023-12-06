@@ -10,6 +10,12 @@ pub struct BlockData {
     pub txid_index_to_outputs: RefCell<IntMap<usize, RefCell<Outputs>>>,
 }
 
+pub struct SquashedBlockData {
+    pub price: f32,
+    pub amount: f64,
+    pub utxo_count: usize,
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct SerializedBlockData(f32, IntMap<usize, Outputs>);
 
@@ -36,7 +42,7 @@ impl BlockData {
         }
     }
 
-    pub fn to_amount_price_tuple(&self) -> (f64, f32) {
+    pub fn squash(&self) -> SquashedBlockData {
         let amount = self
             .txid_index_to_outputs
             .borrow()
@@ -44,6 +50,12 @@ impl BlockData {
             .map(|map| map.borrow().values().sum::<f64>())
             .sum();
 
-        (amount, self.price)
+        let utxo_count = self.txid_index_to_outputs.borrow().len();
+
+        SquashedBlockData {
+            amount,
+            price: self.price,
+            utxo_count,
+        }
     }
 }
