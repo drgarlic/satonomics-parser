@@ -1,6 +1,6 @@
 use std::{
     ops::{Deref, DerefMut},
-    rc::Rc,
+    sync::Arc,
 };
 
 use itertools::Itertools;
@@ -8,10 +8,10 @@ use nohash_hasher::IntMap;
 
 use super::{BlockData, BlockDatasPerDay};
 
-pub struct TxidIndexToBlockData(IntMap<usize, Rc<BlockData>>);
+pub struct TxidIndexToBlockData(IntMap<usize, Arc<BlockData>>);
 
 impl Deref for TxidIndexToBlockData {
-    type Target = IntMap<usize, Rc<BlockData>>;
+    type Target = IntMap<usize, Arc<BlockData>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -32,15 +32,17 @@ impl TxidIndexToBlockData {
                 .flat_map(|date_data| {
                     date_data
                         .blocks
-                        .borrow()
+                        .read()
+                        .unwrap()
                         .iter()
                         .flat_map(|block_data| {
                             block_data
                                 .txid_index_to_outputs
-                                .borrow()
+                                .read()
+                                .unwrap()
                                 .iter()
                                 .map(|(txid_index, _)| {
-                                    (txid_index.to_owned(), Rc::clone(block_data))
+                                    (txid_index.to_owned(), Arc::clone(block_data))
                                 })
                                 .collect_vec()
                         })

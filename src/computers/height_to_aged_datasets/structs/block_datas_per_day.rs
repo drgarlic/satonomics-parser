@@ -1,12 +1,12 @@
 use std::{
-    cell::RefCell,
     collections::HashSet,
     ops::{Deref, DerefMut},
-    rc::Rc,
+    sync::{Arc, RwLock},
 };
 
 use chrono::NaiveDate;
 use itertools::Itertools;
+use rayon::prelude::*;
 
 use crate::utils::{export_snapshot, import_snapshot_vec};
 
@@ -29,40 +29,36 @@ impl BlockDatasPerDay {
                 BLOCKS_DATAS_PER_DAY_SNAPSHOT_NAME,
                 true,
             )?
-            .drain(..)
+            .par_iter()
             .enumerate()
-            .map(|(index, mut imported_date_data)| DateData {
+            .map(|(index, imported_date_data)| DateData {
                 date: dates_set[index].to_owned(),
-                blocks: RefCell::new(
+                blocks: RwLock::new(
                     imported_date_data
-                        .drain(..)
+                        .iter()
                         .map(|serialized_block_data| {
-                            Rc::new(BlockData::import(serialized_block_data))
+                            Arc::new(BlockData::import(serialized_block_data))
                         })
-                        .collect_vec(),
+                        .collect(),
                 ),
             })
-            .collect_vec(),
+            .collect(),
         ))
     }
 
     pub fn export(&self) -> color_eyre::Result<()> {
         let value = self
-            .iter()
+            .par_iter()
             .map(|date_data| {
                 date_data
                     .blocks
-                    .borrow()
+                    .read()
+                    .unwrap()
                     .iter()
-                    .map(|block_data| {
-                        (
-                            block_data.price,
-                            block_data.txid_index_to_outputs.to_owned(),
-                        )
-                    })
+                    .map(|block_data| block_data.serialize())
                     .collect_vec()
             })
-            .collect_vec();
+            .collect::<Vec<_>>();
 
         export_snapshot(BLOCKS_DATAS_PER_DAY_SNAPSHOT_NAME, &value, false)?;
 

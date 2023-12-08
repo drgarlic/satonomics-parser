@@ -1,11 +1,11 @@
-use std::ops::ControlFlow;
+use std::sync::Arc;
 
 use chrono::Datelike;
 use itertools::Itertools;
 
 use crate::structs::HeightMap;
 
-use super::{BlockDatasPerDay, SquashedBlockData, SquashedDateData};
+use super::BlockDatasPerDay;
 
 pub enum AgeRange {
     Full,
@@ -48,7 +48,7 @@ pub struct HeightToAgedDataset {
 }
 
 impl HeightToAgedDataset {
-    pub fn import(name: &str, range: AgeRange) -> color_eyre::Result<Self> {
+    pub fn new(name: &str, range: AgeRange) -> color_eyre::Result<Self> {
         let f = |s: &str| format!("height_to_{}_{}.json", name, s);
 
         Ok(Self {
@@ -148,53 +148,42 @@ impl HeightToAgedDataset {
         Ok(())
     }
 
-    pub fn insert(
-        &self,
-        squashed_block_datas_per_day: &Vec<SquashedDateData>,
-        height: usize,
-        price: f32,
-    ) {
+    pub fn insert(&self, block_datas_per_day: &BlockDatasPerDay, height: usize, price: f32) {
         let sliced_dataset = {
-            let len = squashed_block_datas_per_day.len();
+            let len = block_datas_per_day.len();
 
             match self.range {
-                AgeRange::Full => squashed_block_datas_per_day.iter().collect_vec(),
+                AgeRange::Full => block_datas_per_day.iter().collect_vec(),
                 AgeRange::From(from) => {
                     if from < len {
-                        squashed_block_datas_per_day[..(len - from)]
-                            .iter()
-                            .collect_vec()
+                        block_datas_per_day[..(len - from)].iter().collect_vec()
                     } else {
                         vec![]
                     }
                 }
                 AgeRange::To(to) => {
                     if to <= len {
-                        squashed_block_datas_per_day[(len - to)..]
-                            .iter()
-                            .collect_vec()
+                        block_datas_per_day[(len - to)..].iter().collect_vec()
                     } else {
-                        squashed_block_datas_per_day.iter().collect_vec()
+                        block_datas_per_day.iter().collect_vec()
                     }
                 }
                 AgeRange::FromTo(from, to) => {
                     if from < len {
                         if to <= len {
-                            squashed_block_datas_per_day[(len - to)..(len - from)]
+                            block_datas_per_day[(len - to)..(len - from)]
                                 .iter()
                                 .collect_vec()
                         } else {
-                            squashed_block_datas_per_day[..(len - from)]
-                                .iter()
-                                .collect_vec()
+                            block_datas_per_day[..(len - from)].iter().collect_vec()
                         }
                     } else {
                         vec![]
                     }
                 }
-                AgeRange::Year(year) => squashed_block_datas_per_day
+                AgeRange::Year(year) => block_datas_per_day
                     .iter()
-                    .filter(|date_data| date_data.year == year as i32)
+                    .filter(|date_data| date_data.date.year() == year as i32)
                     .collect_vec(),
             }
         };
@@ -232,267 +221,250 @@ impl HeightToAgedDataset {
             return;
         }
 
-        {
-            let utxo_count = sliced_dataset
-                .iter()
-                .flat_map(|date_data| {
-                    date_data
-                        .blocks
-                        .iter()
-                        .map(|block_data| block_data.utxo_count)
-                })
-                .sum();
-
-            self.height_to_utxo_count.insert(height, utxo_count);
-        }
+        let mut utxo_count = 0;
 
         let mut flat_date_dataset = sliced_dataset
             .iter()
-            .flat_map(|date_data| &date_data.blocks)
+            .flat_map(|date_data| {
+                utxo_count += date_data
+                    .blocks
+                    .read()
+                    .unwrap()
+                    .iter()
+                    .map(|block| block.txid_index_to_outputs.read().unwrap().len())
+                    .sum::<usize>();
+
+                date_data
+                    .blocks
+                    .read()
+                    .unwrap()
+                    .iter()
+                    .map(Arc::clone)
+                    .collect_vec()
+            })
             .collect_vec();
 
-        flat_date_dataset
-            .sort_by(|tuple_a, tuple_b| tuple_a.price.partial_cmp(&tuple_b.price).unwrap());
+        flat_date_dataset.sort_unstable_by(|tuple_a, tuple_b| {
+            tuple_a.price.partial_cmp(&tuple_b.price).unwrap()
+        });
 
         let total_supply = flat_date_dataset
             .iter()
-            .map(|block_data| block_data.amount)
-            .sum::<f64>();
+            .map(|block_data| block_data.amount.read().unwrap().to_owned())
+            .sum();
+
+        let mut unrealized_profit = 0.0;
+        let mut unrealized_loss = 0.0;
+
+        let mut supply_in_profit = 0.0;
+
+        let mut undivided_price_mean = 0.0;
+
+        let mut price_05p = None;
+        let mut price_10p = None;
+        let mut price_15p = None;
+        let mut price_20p = None;
+        let mut price_25p = None;
+        let mut price_30p = None;
+        let mut price_35p = None;
+        let mut price_40p = None;
+        let mut price_45p = None;
+        let mut price_median = None;
+        let mut price_55p = None;
+        let mut price_60p = None;
+        let mut price_65p = None;
+        let mut price_70p = None;
+        let mut price_75p = None;
+        let mut price_80p = None;
+        let mut price_85p = None;
+        let mut price_90p = None;
+        let mut price_95p = None;
+
+        let mut processed_amount = 0.0;
+
+        flat_date_dataset.iter().for_each(|block_data| {
+            let amount = block_data.amount.read().unwrap().to_owned();
+
+            processed_amount += amount;
+
+            if block_data.price < price {
+                unrealized_profit += amount * (price - block_data.price) as f64;
+                supply_in_profit += amount;
+            } else if block_data.price > price {
+                unrealized_loss += amount * (block_data.price - price) as f64
+            }
+
+            undivided_price_mean += amount * (block_data.price as f64);
+
+            let owned_block_data_price = block_data.price.to_owned();
+
+            if price_05p.is_none() && processed_amount >= total_supply * 0.05 {
+                price_05p.replace(owned_block_data_price);
+            }
+
+            if price_10p.is_none() && processed_amount >= total_supply * 0.1 {
+                price_10p.replace(owned_block_data_price);
+            }
+
+            if price_15p.is_none() && processed_amount >= total_supply * 0.15 {
+                price_15p.replace(owned_block_data_price);
+            }
+
+            if price_20p.is_none() && processed_amount >= total_supply * 0.2 {
+                price_20p.replace(owned_block_data_price);
+            }
+
+            if price_25p.is_none() && processed_amount >= total_supply * 0.25 {
+                price_25p.replace(owned_block_data_price);
+            }
+
+            if price_30p.is_none() && processed_amount >= total_supply * 0.3 {
+                price_30p.replace(owned_block_data_price);
+            }
+
+            if price_35p.is_none() && processed_amount >= total_supply * 0.35 {
+                price_35p.replace(owned_block_data_price);
+            }
+
+            if price_40p.is_none() && processed_amount >= total_supply * 0.4 {
+                price_40p.replace(owned_block_data_price);
+            }
+
+            if price_45p.is_none() && processed_amount >= total_supply * 0.45 {
+                price_45p.replace(owned_block_data_price);
+            }
+
+            if price_median.is_none() && processed_amount >= total_supply * 0.5 {
+                price_median.replace(owned_block_data_price);
+            }
+
+            if price_55p.is_none() && processed_amount >= total_supply * 0.55 {
+                price_55p.replace(owned_block_data_price);
+            }
+
+            if price_60p.is_none() && processed_amount >= total_supply * 0.6 {
+                price_60p.replace(owned_block_data_price);
+            }
+
+            if price_65p.is_none() && processed_amount >= total_supply * 0.65 {
+                price_65p.replace(owned_block_data_price);
+            }
+
+            if price_70p.is_none() && processed_amount >= total_supply * 0.7 {
+                price_70p.replace(owned_block_data_price);
+            }
+
+            if price_75p.is_none() && processed_amount >= total_supply * 0.75 {
+                price_75p.replace(owned_block_data_price);
+            }
+
+            if price_80p.is_none() && processed_amount >= total_supply * 0.8 {
+                price_80p.replace(owned_block_data_price);
+            }
+
+            if price_85p.is_none() && processed_amount >= total_supply * 0.85 {
+                price_85p.replace(owned_block_data_price);
+            }
+
+            if price_90p.is_none() && processed_amount >= total_supply * 0.9 {
+                price_90p.replace(owned_block_data_price);
+            }
+
+            if price_95p.is_none() && processed_amount >= total_supply * 0.95 {
+                price_95p.replace(owned_block_data_price);
+            }
+        });
+
+        self.height_to_mean_price
+            .insert(height, (undivided_price_mean / total_supply) as f32);
+
+        self.height_to_utxo_count.insert(height, utxo_count);
 
         self.height_to_total_supply.insert(height, total_supply);
 
-        {
-            let blocks_in_profit = flat_date_dataset
-                .iter()
-                .filter(|block_data| block_data.price < price)
-                .collect_vec();
+        self.height_to_unrealized_profit
+            .insert(height, unrealized_profit as f32);
 
-            let unrealized_profit = blocks_in_profit
-                .iter()
-                .map(|block_data| block_data.amount * (price - block_data.price) as f64)
-                .sum::<f64>();
+        self.height_to_supply_in_profit
+            .insert(height, supply_in_profit);
 
-            self.height_to_unrealized_profit
-                .insert(height, unrealized_profit as f32);
+        self.height_to_unrealized_loss
+            .insert(height, unrealized_loss as f32);
 
-            let supply_in_profit = blocks_in_profit
-                .iter()
-                .map(|block_data| block_data.amount)
-                .sum::<f64>();
-
-            self.height_to_supply_in_profit
-                .insert(height, supply_in_profit);
+        if let Some(price) = price_05p {
+            self.height_to_05p_price.insert(height, price)
         }
 
-        {
-            let blocks_in_loss = flat_date_dataset
-                .iter()
-                .filter(|block_data| block_data.price > price)
-                .collect_vec();
-
-            let unrealized_loss = blocks_in_loss
-                .iter()
-                .map(|block_data| block_data.amount * (block_data.price - price) as f64)
-                .sum::<f64>();
-
-            self.height_to_unrealized_loss
-                .insert(height, unrealized_loss as f32);
+        if let Some(price) = price_10p {
+            self.height_to_10p_price.insert(height, price)
         }
 
-        {
-            let price_mean = (flat_date_dataset
-                .iter()
-                .map(|block_data| block_data.amount * (block_data.price as f64))
-                .sum::<f64>()
-                / total_supply) as f32;
-
-            self.height_to_mean_price.insert(height, price_mean);
+        if let Some(price) = price_15p {
+            self.height_to_15p_price.insert(height, price)
         }
 
-        {
-            let mut price_05p = None;
-            let mut price_10p = None;
-            let mut price_15p = None;
-            let mut price_20p = None;
-            let mut price_25p = None;
-            let mut price_30p = None;
-            let mut price_35p = None;
-            let mut price_40p = None;
-            let mut price_45p = None;
-            let mut price_median = None;
-            let mut price_55p = None;
-            let mut price_60p = None;
-            let mut price_65p = None;
-            let mut price_70p = None;
-            let mut price_75p = None;
-            let mut price_80p = None;
-            let mut price_85p = None;
-            let mut price_90p = None;
-            let mut price_95p = None;
+        if let Some(price) = price_20p {
+            self.height_to_20p_price.insert(height, price)
+        }
 
-            let mut processed_amount = 0.0;
+        if let Some(price) = price_25p {
+            self.height_to_25p_price.insert(height, price)
+        }
 
-            flat_date_dataset.iter().try_for_each(|block_data| {
-                let SquashedBlockData { amount, price, .. } = block_data;
+        if let Some(price) = price_30p {
+            self.height_to_30p_price.insert(height, price)
+        }
 
-                processed_amount += amount;
+        if let Some(price) = price_35p {
+            self.height_to_35p_price.insert(height, price)
+        }
 
-                if price_05p.is_none() && processed_amount >= total_supply * 0.05 {
-                    price_05p.replace(price.to_owned());
-                }
+        if let Some(price) = price_40p {
+            self.height_to_40p_price.insert(height, price)
+        }
 
-                if price_10p.is_none() && processed_amount >= total_supply * 0.1 {
-                    price_10p.replace(price.to_owned());
-                }
+        if let Some(price) = price_45p {
+            self.height_to_45p_price.insert(height, price)
+        }
 
-                if price_15p.is_none() && processed_amount >= total_supply * 0.15 {
-                    price_15p.replace(price.to_owned());
-                }
+        if let Some(price) = price_median {
+            self.height_to_median_price.insert(height, price)
+        }
 
-                if price_20p.is_none() && processed_amount >= total_supply * 0.2 {
-                    price_20p.replace(price.to_owned());
-                }
+        if let Some(price) = price_55p {
+            self.height_to_55p_price.insert(height, price)
+        }
 
-                if price_25p.is_none() && processed_amount >= total_supply * 0.25 {
-                    price_25p.replace(price.to_owned());
-                }
+        if let Some(price) = price_60p {
+            self.height_to_60p_price.insert(height, price)
+        }
 
-                if price_30p.is_none() && processed_amount >= total_supply * 0.3 {
-                    price_30p.replace(price.to_owned());
-                }
+        if let Some(price) = price_65p {
+            self.height_to_65p_price.insert(height, price)
+        }
 
-                if price_35p.is_none() && processed_amount >= total_supply * 0.35 {
-                    price_35p.replace(price.to_owned());
-                }
+        if let Some(price) = price_70p {
+            self.height_to_70p_price.insert(height, price)
+        }
 
-                if price_40p.is_none() && processed_amount >= total_supply * 0.4 {
-                    price_40p.replace(price.to_owned());
-                }
+        if let Some(price) = price_75p {
+            self.height_to_75p_price.insert(height, price)
+        }
 
-                if price_45p.is_none() && processed_amount >= total_supply * 0.45 {
-                    price_45p.replace(price.to_owned());
-                }
+        if let Some(price) = price_80p {
+            self.height_to_80p_price.insert(height, price)
+        }
 
-                if price_median.is_none() && processed_amount >= total_supply * 0.5 {
-                    price_median.replace(price.to_owned());
-                }
+        if let Some(price) = price_85p {
+            self.height_to_85p_price.insert(height, price)
+        }
 
-                if price_55p.is_none() && processed_amount >= total_supply * 0.55 {
-                    price_55p.replace(price.to_owned());
-                }
+        if let Some(price) = price_90p {
+            self.height_to_90p_price.insert(height, price)
+        }
 
-                if price_60p.is_none() && processed_amount >= total_supply * 0.6 {
-                    price_60p.replace(price.to_owned());
-                }
-
-                if price_65p.is_none() && processed_amount >= total_supply * 0.65 {
-                    price_65p.replace(price.to_owned());
-                }
-
-                if price_70p.is_none() && processed_amount >= total_supply * 0.7 {
-                    price_70p.replace(price.to_owned());
-                }
-
-                if price_75p.is_none() && processed_amount >= total_supply * 0.75 {
-                    price_75p.replace(price.to_owned());
-                }
-
-                if price_80p.is_none() && processed_amount >= total_supply * 0.8 {
-                    price_80p.replace(price.to_owned());
-                }
-
-                if price_85p.is_none() && processed_amount >= total_supply * 0.85 {
-                    price_85p.replace(price.to_owned());
-                }
-
-                if price_90p.is_none() && processed_amount >= total_supply * 0.9 {
-                    price_90p.replace(price.to_owned());
-                }
-
-                if price_95p.is_none() && processed_amount >= total_supply * 0.95 {
-                    price_95p.replace(price.to_owned());
-
-                    return ControlFlow::Break(());
-                }
-
-                ControlFlow::Continue(())
-            });
-
-            if let Some(price) = price_05p {
-                self.height_to_05p_price.insert(height, price)
-            }
-
-            if let Some(price) = price_10p {
-                self.height_to_10p_price.insert(height, price)
-            }
-
-            if let Some(price) = price_15p {
-                self.height_to_15p_price.insert(height, price)
-            }
-
-            if let Some(price) = price_20p {
-                self.height_to_20p_price.insert(height, price)
-            }
-
-            if let Some(price) = price_25p {
-                self.height_to_25p_price.insert(height, price)
-            }
-
-            if let Some(price) = price_30p {
-                self.height_to_30p_price.insert(height, price)
-            }
-
-            if let Some(price) = price_35p {
-                self.height_to_35p_price.insert(height, price)
-            }
-
-            if let Some(price) = price_40p {
-                self.height_to_40p_price.insert(height, price)
-            }
-
-            if let Some(price) = price_45p {
-                self.height_to_45p_price.insert(height, price)
-            }
-
-            if let Some(price) = price_median {
-                self.height_to_median_price.insert(height, price)
-            }
-
-            if let Some(price) = price_55p {
-                self.height_to_55p_price.insert(height, price)
-            }
-
-            if let Some(price) = price_60p {
-                self.height_to_60p_price.insert(height, price)
-            }
-
-            if let Some(price) = price_65p {
-                self.height_to_65p_price.insert(height, price)
-            }
-
-            if let Some(price) = price_70p {
-                self.height_to_70p_price.insert(height, price)
-            }
-
-            if let Some(price) = price_75p {
-                self.height_to_75p_price.insert(height, price)
-            }
-
-            if let Some(price) = price_80p {
-                self.height_to_80p_price.insert(height, price)
-            }
-
-            if let Some(price) = price_85p {
-                self.height_to_85p_price.insert(height, price)
-            }
-
-            if let Some(price) = price_90p {
-                self.height_to_90p_price.insert(height, price)
-            }
-
-            if let Some(price) = price_95p {
-                self.height_to_95p_price.insert(height, price)
-            }
+        if let Some(price) = price_95p {
+            self.height_to_95p_price.insert(height, price)
         }
     }
 }

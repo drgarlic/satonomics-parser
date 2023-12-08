@@ -1,7 +1,7 @@
 use std::{
-    cell::RefCell,
     cmp::Ordering,
     path::{Path, PathBuf},
+    sync::RwLock,
 };
 
 use serde::{de::DeserializeOwned, Serialize};
@@ -14,7 +14,7 @@ pub struct HeightMap<T>
 where
     T: Clone,
 {
-    batch: RefCell<Vec<(usize, T)>>,
+    batch: RwLock<Vec<(usize, T)>>,
     path: PathBuf,
 }
 
@@ -26,7 +26,7 @@ where
         let path = Path::new(OUTPUTS_FOLDER_RAW_PATH).join(path);
 
         Self {
-            batch: RefCell::new(vec![]),
+            batch: RwLock::new(vec![]),
             path: path.to_owned(),
         }
     }
@@ -80,11 +80,9 @@ where
     // }
 
     pub fn insert(&self, height: usize, value: T) {
-        self.batch.borrow_mut().push((height, value));
+        self.batch.write().unwrap().push((height, value));
 
-        let len = self.batch.borrow().len();
-
-        if len != 0 && len % 1_000 == 0 {
+        if self.batch.read().unwrap().len() >= 1_000 {
             self.export().expect("JSON export to work");
         }
     }
@@ -93,7 +91,8 @@ where
         let mut list = self.import()?;
 
         self.batch
-            .borrow_mut()
+            .write()
+            .unwrap()
             .drain(..)
             .for_each(|(height, value)| {
                 let height = height.to_owned();

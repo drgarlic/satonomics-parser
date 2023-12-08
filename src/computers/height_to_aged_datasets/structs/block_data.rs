@@ -1,19 +1,15 @@
-use std::cell::RefCell;
+use std::sync::RwLock;
 
+use bitcoin_explorer::FTransaction;
 use nohash_hasher::IntMap;
 use serde::{Deserialize, Serialize};
 
-use crate::structs::Outputs;
+use crate::{structs::Outputs, utils::ftransaction_to_outputs};
 
 pub struct BlockData {
     pub price: f32,
-    pub txid_index_to_outputs: RefCell<IntMap<usize, RefCell<Outputs>>>,
-}
-
-pub struct SquashedBlockData {
-    pub price: f32,
-    pub amount: f64,
-    pub utxo_count: usize,
+    pub amount: RwLock<f64>,
+    pub txid_index_to_outputs: RwLock<IntMap<usize, RwLock<Outputs>>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -23,39 +19,54 @@ impl BlockData {
     pub fn new(price: f32) -> Self {
         Self {
             price,
-            txid_index_to_outputs: RefCell::new(IntMap::default()),
+            amount: RwLock::new(0.0),
+            txid_index_to_outputs: RwLock::new(IntMap::default()),
         }
     }
 
-    pub fn import(serialized: SerializedBlockData) -> Self {
+    pub fn import(serialized: &SerializedBlockData) -> Self {
+        let txid_index_to_outputs: IntMap<usize, RwLock<Outputs>> = serialized
+            .1
+            .iter()
+            .map(|(txid_index, outputs)| (txid_index.to_owned(), RwLock::new(outputs.to_owned())))
+            .collect();
+
+        let amount = txid_index_to_outputs
+            .values()
+            .map(|outputs| outputs.read().unwrap().values().sum::<f64>())
+            .sum::<f64>();
+
         Self {
             price: serialized.0,
-            txid_index_to_outputs: RefCell::new(
-                serialized
-                    .1
-                    .iter()
-                    .map(|(txid_index, outputs)| {
-                        (txid_index.to_owned(), RefCell::new(outputs.to_owned()))
-                    })
-                    .collect(),
-            ),
+            amount: RwLock::new(amount),
+            txid_index_to_outputs: RwLock::new(txid_index_to_outputs),
         }
     }
 
-    pub fn squash(&self) -> SquashedBlockData {
-        let amount = self
+    pub fn insert_outputs(&self, txid_index: usize, tx: &FTransaction) {
+        self.txid_index_to_outputs
+            .write()
+            .unwrap()
+            .insert(txid_index, {
+                let outputs = ftransaction_to_outputs(tx);
+
+                *self.amount.write().unwrap() += outputs.values().sum::<f64>();
+
+                RwLock::new(outputs)
+            });
+    }
+
+    pub fn serialize(&self) -> SerializedBlockData {
+        let price = self.price;
+
+        let outputs = self
             .txid_index_to_outputs
-            .borrow()
-            .values()
-            .map(|map| map.borrow().values().sum::<f64>())
-            .sum();
+            .read()
+            .unwrap()
+            .iter()
+            .map(|(index, outputs)| (index.to_owned(), outputs.read().unwrap().to_owned()))
+            .collect();
 
-        let utxo_count = self.txid_index_to_outputs.borrow().len();
-
-        SquashedBlockData {
-            amount,
-            price: self.price,
-            utxo_count,
-        }
+        SerializedBlockData(price, outputs)
     }
 }

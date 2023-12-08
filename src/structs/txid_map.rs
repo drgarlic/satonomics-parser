@@ -86,9 +86,9 @@ where
         self.max_size.is_some()
     }
 
-    pub fn remove(&self, txid: &Txid) -> Option<T> {
-        self.borrow_mut_map().remove(txid)
-    }
+    // pub fn remove(&self, txid: &Txid) -> Option<T> {
+    //     self.borrow_mut_map().remove(txid)
+    // }
 
     pub fn export(&self) -> color_eyre::Result<()> {
         if let Some(name) = &self.snapshot_name {

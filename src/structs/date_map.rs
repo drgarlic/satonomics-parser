@@ -63,7 +63,7 @@ where
             .map(|(key, value)| (key.to_owned(), value.to_owned()))
             .collect_vec();
 
-        vec.sort_by(|a, b| {
+        vec.sort_unstable_by(|a, b| {
             string_to_naive_date(&a.0)
                 .partial_cmp(&string_to_naive_date(&b.0))
                 .unwrap()
