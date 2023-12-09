@@ -1,45 +1,22 @@
 use std::{
     cell::{Ref, RefCell, RefMut},
     collections::VecDeque,
-    str::FromStr,
 };
 
 use bitcoin_explorer::Txid;
 use rustc_hash::FxHashMap;
-use serde::{de::DeserializeOwned, Serialize};
-
-use crate::utils::{export_snapshot, import_snapshot_map};
 
 pub type TxidHashMap<T> = FxHashMap<Txid, T>;
 
 pub struct TxidMap<T> {
-    snapshot_name: Option<String>,
     map: RefCell<TxidHashMap<T>>,
     ordered_txids: RefCell<VecDeque<Txid>>,
     max_size: Option<usize>,
 }
 
-impl<T> TxidMap<T>
-where
-    T: Clone + Serialize + DeserializeOwned,
-{
-    pub fn import(snapshot_name: &str) -> color_eyre::Result<Self> {
-        let x = import_snapshot_map::<T>(snapshot_name, true)?
-            .iter()
-            .map(|(txid, value)| (Txid::from_str(txid).unwrap(), value.to_owned()))
-            .collect::<TxidHashMap<T>>();
-
-        Ok(Self {
-            snapshot_name: Some(snapshot_name.to_string()),
-            map: RefCell::new(x),
-            ordered_txids: RefCell::new(VecDeque::new()),
-            max_size: None,
-        })
-    }
-
+impl<T> TxidMap<T> {
     pub fn new(max_size: Option<usize>) -> Self {
         Self {
-            snapshot_name: None,
             map: RefCell::new(FxHashMap::default()),
             ordered_txids: RefCell::new(VecDeque::new()),
             max_size,
@@ -89,14 +66,4 @@ where
     // pub fn remove(&self, txid: &Txid) -> Option<T> {
     //     self.borrow_mut_map().remove(txid)
     // }
-
-    pub fn export(&self) -> color_eyre::Result<()> {
-        if let Some(name) = &self.snapshot_name {
-            export_snapshot(name, &self.borrow_map().clone(), false)?;
-        } else {
-            panic!("Can't export a nameless txid_map !");
-        }
-
-        Ok(())
-    }
 }

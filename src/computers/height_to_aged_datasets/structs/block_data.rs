@@ -1,72 +1,42 @@
 use std::sync::RwLock;
 
-use bitcoin_explorer::FTransaction;
-use nohash_hasher::IntMap;
 use serde::{Deserialize, Serialize};
 
-use crate::{structs::Outputs, utils::ftransaction_to_outputs};
-
 pub struct BlockData {
+    pub height: u32,
     pub price: f32,
     pub amount: RwLock<f64>,
-    pub txid_index_to_outputs: RwLock<IntMap<usize, RwLock<Outputs>>>,
+    pub outputs_len: RwLock<u32>,
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct SerializedBlockData(f32, IntMap<usize, Outputs>);
+pub struct SerializedBlockData(u32, f32, f64, u32);
 
 impl BlockData {
-    pub fn new(price: f32) -> Self {
+    pub fn new(height: usize, price: f32) -> Self {
         Self {
+            height: height as u32,
             price,
             amount: RwLock::new(0.0),
-            txid_index_to_outputs: RwLock::new(IntMap::default()),
+            outputs_len: RwLock::new(0),
         }
     }
 
     pub fn import(serialized: &SerializedBlockData) -> Self {
-        let txid_index_to_outputs: IntMap<usize, RwLock<Outputs>> = serialized
-            .1
-            .iter()
-            .map(|(txid_index, outputs)| (txid_index.to_owned(), RwLock::new(outputs.to_owned())))
-            .collect();
-
-        let amount = txid_index_to_outputs
-            .values()
-            .map(|outputs| outputs.read().unwrap().values().sum::<f64>())
-            .sum::<f64>();
-
         Self {
-            price: serialized.0,
-            amount: RwLock::new(amount),
-            txid_index_to_outputs: RwLock::new(txid_index_to_outputs),
+            height: serialized.0,
+            price: serialized.1,
+            amount: RwLock::new(serialized.2),
+            outputs_len: RwLock::new(serialized.3),
         }
     }
 
-    pub fn insert_outputs(&self, txid_index: usize, tx: &FTransaction) {
-        self.txid_index_to_outputs
-            .write()
-            .unwrap()
-            .insert(txid_index, {
-                let outputs = ftransaction_to_outputs(tx);
-
-                *self.amount.write().unwrap() += outputs.values().sum::<f64>();
-
-                RwLock::new(outputs)
-            });
-    }
-
     pub fn serialize(&self) -> SerializedBlockData {
-        let price = self.price;
-
-        let outputs = self
-            .txid_index_to_outputs
-            .read()
-            .unwrap()
-            .iter()
-            .map(|(index, outputs)| (index.to_owned(), outputs.read().unwrap().to_owned()))
-            .collect();
-
-        SerializedBlockData(price, outputs)
+        SerializedBlockData(
+            self.height,
+            self.price,
+            self.amount.read().unwrap().to_owned(),
+            self.outputs_len.read().unwrap().to_owned(),
+        )
     }
 }

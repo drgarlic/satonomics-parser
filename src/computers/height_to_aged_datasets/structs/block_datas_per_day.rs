@@ -60,9 +60,7 @@ impl BlockDatasPerDay {
             })
             .collect::<Vec<_>>();
 
-        export_snapshot(BLOCKS_DATAS_PER_DAY_SNAPSHOT_NAME, &value, false)?;
-
-        Ok(())
+        export_snapshot(BLOCKS_DATAS_PER_DAY_SNAPSHOT_NAME, &value, false)
     }
 }
 

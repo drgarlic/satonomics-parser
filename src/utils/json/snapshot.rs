@@ -32,7 +32,9 @@ where
 {
     let path = format!("{SNAPSHOT_FOLDER}/{name}.json");
 
-    fs::copy(&path, format!("{SNAPSHOT_FOLDER}/{name}__backup.json"))?;
+    if Path::new(&path).exists() {
+        fs::copy(&path, format!("{SNAPSHOT_FOLDER}/{name}__backup.json"))?;
+    }
 
     export_json(Path::new(&path), value, pretty)
 }

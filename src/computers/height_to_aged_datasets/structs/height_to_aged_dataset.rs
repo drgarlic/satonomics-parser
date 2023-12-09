@@ -48,7 +48,7 @@ pub struct HeightToAgedDataset {
 }
 
 impl HeightToAgedDataset {
-    pub fn new(name: &str, range: AgeRange) -> color_eyre::Result<Self> {
+    pub fn import(name: &str, range: AgeRange) -> color_eyre::Result<Self> {
         let f = |s: &str| format!("height_to_{}_{}.json", name, s);
 
         Ok(Self {
@@ -231,7 +231,7 @@ impl HeightToAgedDataset {
                     .read()
                     .unwrap()
                     .iter()
-                    .map(|block| block.txid_index_to_outputs.read().unwrap().len())
+                    .map(|block| block.outputs_len.read().unwrap().to_owned() as usize)
                     .sum::<usize>();
 
                 date_data
