@@ -16,18 +16,20 @@ where
 {
     batch: RwLock<Vec<(usize, T)>>,
     path: PathBuf,
+    auto_save_insert: bool,
 }
 
 impl<T> HeightMap<T>
 where
     T: Clone + DeserializeOwned + Serialize,
 {
-    pub fn new(path: &str) -> Self {
+    pub fn new(path: &str, auto_save_insert: bool) -> Self {
         let path = Path::new(OUTPUTS_FOLDER_RAW_PATH).join(path);
 
         Self {
             batch: RwLock::new(vec![]),
             path: path.to_owned(),
+            auto_save_insert,
         }
     }
 
@@ -82,7 +84,8 @@ where
     pub fn insert(&self, height: usize, value: T) {
         self.batch.write().unwrap().push((height, value));
 
-        if self.batch.read().unwrap().len() >= 1_000 {
+        if self.auto_save_insert && self.batch.read().unwrap().len() >= 1_000 {
+            println!("Saving do not close !!");
             self.export().expect("JSON export to work");
         }
     }

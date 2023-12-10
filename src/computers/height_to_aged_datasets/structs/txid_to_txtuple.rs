@@ -1,10 +1,10 @@
 use std::{
+    collections::BTreeMap,
     ops::{Deref, DerefMut},
     str::FromStr,
 };
 
 use bitcoin_explorer::Txid;
-use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -67,7 +67,7 @@ impl TxidToTxtuple {
                 .borrow_map()
                 .iter()
                 .map(|(txid, tuple)| (txid.to_owned(), tuple.export()))
-                .collect::<FxHashMap<_, _>>(),
+                .collect::<BTreeMap<_, _>>(),
             false,
         )
     }

@@ -68,7 +68,6 @@ pub fn compute_height_to_aged_datasets(
     let mut current_height = start_height;
 
     println!("{:?} - Starting loop", Local::now());
-    loop {}
 
     db.iter_block::<FBlock>(start_height, block_count)
         .batching(create_group_blocks_by_day_closure())
@@ -247,7 +246,7 @@ pub fn compute_height_to_aged_datasets(
 
             current_height += blocks_len;
 
-            if (date.day() == 1 || date.day() == 14 || block_count - 1000 < current_height)
+            if (date.day() == 1 || block_count - 1000 < current_height)
                 && current_height < block_count - NUMBER_OF_UNSAFE_BLOCKS
             {
                 export_all(

@@ -1,10 +1,11 @@
-use std::ops::{Deref, DerefMut};
-
-use nohash_hasher::IntMap;
+use std::{
+    collections::BTreeMap,
+    ops::{Deref, DerefMut},
+};
 
 use crate::utils::{export_snapshot, import_snapshot_map};
 
-pub struct TxoutIndexToValue(IntMap<usize, f64>);
+pub struct TxoutIndexToValue(BTreeMap<usize, f64>);
 
 const SNAPSHOT_NAME: &str = "height_to_aged__txout_index_to_value";
 
@@ -14,7 +15,7 @@ impl TxoutIndexToValue {
             import_snapshot_map::<f64>(SNAPSHOT_NAME, true)?
                 .into_iter()
                 .map(|(txout_index, value)| (txout_index.parse::<usize>().unwrap(), value))
-                .collect::<IntMap<_, _>>(),
+                .collect::<BTreeMap<_, _>>(),
         ))
     }
 
@@ -24,7 +25,7 @@ impl TxoutIndexToValue {
 }
 
 impl Deref for TxoutIndexToValue {
-    type Target = IntMap<usize, f64>;
+    type Target = BTreeMap<usize, f64>;
 
     fn deref(&self) -> &Self::Target {
         &self.0

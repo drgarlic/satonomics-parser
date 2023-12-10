@@ -8,7 +8,7 @@ pub fn compute_height_to_timestamp(
 ) -> color_eyre::Result<HeightMap<u32>> {
     println!("Computing height_to_timestamp...");
 
-    let height_to_timestamp = HeightMap::new("height_to_timestamp.json");
+    let height_to_timestamp = HeightMap::new("height_to_timestamp.json", true);
 
     let start = height_to_timestamp.get_first_unsafe_height().unwrap_or(0);
 

@@ -1,12 +1,11 @@
 use std::{
     cell::{Ref, RefCell, RefMut},
-    collections::VecDeque,
+    collections::{BTreeMap, VecDeque},
 };
 
 use bitcoin_explorer::Txid;
-use rustc_hash::FxHashMap;
 
-pub type TxidHashMap<T> = FxHashMap<Txid, T>;
+pub type TxidHashMap<T> = BTreeMap<Txid, T>;
 
 pub struct TxidMap<T> {
     map: RefCell<TxidHashMap<T>>,
@@ -17,7 +16,7 @@ pub struct TxidMap<T> {
 impl<T> TxidMap<T> {
     pub fn new(max_size: Option<usize>) -> Self {
         Self {
-            map: RefCell::new(FxHashMap::default()),
+            map: RefCell::new(BTreeMap::default()),
             ordered_txids: RefCell::new(VecDeque::new()),
             max_size,
         }

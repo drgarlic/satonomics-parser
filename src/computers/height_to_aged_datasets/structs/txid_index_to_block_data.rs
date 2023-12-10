@@ -1,4 +1,7 @@
-use std::ops::{Deref, DerefMut};
+use std::{
+    collections::BTreeMap,
+    ops::{Deref, DerefMut},
+};
 
 use nohash_hasher::IntMap;
 
@@ -7,10 +10,10 @@ use crate::utils::{export_snapshot, import_snapshot_map};
 use super::BlockDatasPerDay;
 
 /// `txid_index` => `txout_index` at `vout` 0
-pub struct TxidIndexToBlockData(IntMap<usize, u32>);
+pub struct TxidIndexToBlockData(BTreeMap<usize, u32>);
 
 impl Deref for TxidIndexToBlockData {
-    type Target = IntMap<usize, u32>;
+    type Target = BTreeMap<usize, u32>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
