@@ -1,7 +1,6 @@
 use std::{
     collections::HashSet,
     ops::{Deref, DerefMut},
-    sync::{Arc, RwLock},
 };
 
 use chrono::NaiveDate;
@@ -33,14 +32,7 @@ impl BlockDatasPerDay {
             .enumerate()
             .map(|(index, imported_date_data)| DateData {
                 date: dates_set[index].to_owned(),
-                blocks: RwLock::new(
-                    imported_date_data
-                        .iter()
-                        .map(|serialized_block_data| {
-                            Arc::new(BlockData::import(serialized_block_data))
-                        })
-                        .collect(),
-                ),
+                blocks: imported_date_data.iter().map(BlockData::import).collect(),
             })
             .collect(),
         ))
@@ -52,8 +44,6 @@ impl BlockDatasPerDay {
             .map(|date_data| {
                 date_data
                     .blocks
-                    .read()
-                    .unwrap()
                     .iter()
                     .map(|block_data| block_data.serialize())
                     .collect_vec()
@@ -61,6 +51,10 @@ impl BlockDatasPerDay {
             .collect::<Vec<_>>();
 
         export_snapshot(BLOCKS_DATAS_PER_DAY_SNAPSHOT_NAME, &value, false)
+    }
+
+    pub fn last_block(&mut self) -> &mut BlockData {
+        self.last_mut().unwrap().blocks.last_mut().unwrap()
     }
 }
 

@@ -2,10 +2,7 @@ use bitcoin_explorer::{BitcoinDB, FBlock, FTransaction};
 use chrono::{offset::Local, Datelike, Days, NaiveDate};
 use itertools::Itertools;
 
-use std::{
-    ops::ControlFlow,
-    sync::{Arc, RwLock},
-};
+use std::ops::ControlFlow;
 
 use crate::{
     computers::height_to_aged_datasets::structs::{DateData, HeightToAgedDatasets, Txtuple},
@@ -29,11 +26,13 @@ pub fn compute_height_to_aged_datasets(
     height_to_date: &[NaiveDate],
     date_to_first_block: &DateMap<usize>,
 ) -> color_eyre::Result<HeightToAgedDatasets> {
+    println!("{:?} - Starting aged", Local::now());
+
     let aged_datasets = HeightToAgedDatasets::import()?;
 
     let mut block_datas_per_day = BlockDatasPerDay::import(height_to_date)?;
 
-    let mut txid_index_to_block_data = TxidIndexToBlockData::import(&block_datas_per_day)?;
+    let mut txid_index_to_block_data = TxidIndexToBlockData::import()?;
 
     // Ram usage: 80% of serialized file (ex: ~6.6 > ~5.3)
     let txid_to_txtuple = TxidToTxtuple::import()?;
@@ -68,6 +67,9 @@ pub fn compute_height_to_aged_datasets(
 
     let mut current_height = start_height;
 
+    println!("{:?} - Starting loop", Local::now());
+    loop {}
+
     db.iter_block::<FBlock>(start_height, block_count)
         .batching(create_group_blocks_by_day_closure())
         .try_for_each(|blocks| -> color_eyre::Result<()> {
@@ -83,10 +85,8 @@ pub fn compute_height_to_aged_datasets(
 
             block_datas_per_day.push(DateData {
                 date,
-                blocks: RwLock::new(vec![]),
+                blocks: vec![],
             });
-
-            let block_data_list = &block_datas_per_day.last().unwrap().blocks;
 
             blocks.into_iter().enumerate().for_each(|(index, block)| {
                 let height = current_height + index;
@@ -96,12 +96,11 @@ pub fn compute_height_to_aged_datasets(
                     .unwrap_or_else(|| panic!("Expect {height} to have a price"))
                     .to_owned();
 
-                let block_data = Arc::new(BlockData::new(height, price));
-
-                block_data_list
-                    .write()
+                block_datas_per_day
+                    .last_mut()
                     .unwrap()
-                    .push(Arc::clone(&block_data));
+                    .blocks
+                    .push(BlockData::new(price));
 
                 block.txdata.into_iter().for_each(|tx| {
                     let txid = tx.txid;
@@ -130,13 +129,9 @@ pub fn compute_height_to_aged_datasets(
 
                             let value = convert_sats_to_bitcoins(value);
 
-                            *block_data.amount.write().unwrap() += value;
+                            block_datas_per_day.last_block().amount += value;
 
                             let txout_index = txid_index + vout;
-
-                            // if txid.to_string() == "2f2442f68e38b980a6c4cec21e71851b0d8a5847d85208331a27321a9967bbd6" || txout_index == 144533 {
-                            //     dbg!((txid_index, vout, value));
-                            // }
 
                             txout_index_to_value.insert(txout_index, value);
                         });
@@ -145,9 +140,9 @@ pub fn compute_height_to_aged_datasets(
                         txid_to_txtuple
                             .insert(txid, Txtuple::new(txid_index, non_zero_outputs_len as u32));
 
-                        txid_index_to_block_data.insert(txid_index, Arc::clone(&block_data));
+                        txid_index_to_block_data.insert(txid_index, &block_datas_per_day);
 
-                        *block_data.outputs_len.write().unwrap() += non_zero_outputs_len as u32;
+                        block_datas_per_day.last_block().outputs_len += non_zero_outputs_len as u32;
                     }
 
                     // ---
@@ -200,12 +195,32 @@ pub fn compute_height_to_aged_datasets(
 
                             let value = value.unwrap();
 
-                            if let Some(previous_block_data) =
+                            if let Some(previous_block_data_index) =
                                 txid_index_to_block_data.get(&txtuple.txid_index)
                             {
-                                *previous_block_data.amount.write().unwrap() -= value;
+                                let (date_index, block_index) =
+                                    TxidIndexToBlockData::separate_merged_indexes(
+                                        previous_block_data_index,
+                                    );
 
-                                *previous_block_data.outputs_len.write().unwrap() -= 1;
+                                let previous_block_data = block_datas_per_day
+                                    .get_mut(date_index)
+                                    .unwrap_or_else(|| {
+                                        dbg!(
+                                            height,
+                                            &input_txid,
+                                            previous_block_data_index,
+                                            date_index
+                                        );
+                                        panic!()
+                                    })
+                                    .blocks
+                                    .get_mut(block_index)
+                                    .unwrap();
+
+                                previous_block_data.amount -= value;
+
+                                previous_block_data.outputs_len -= 1;
                             }
 
                             txtuple.outputs_len -= 1;
@@ -227,7 +242,7 @@ pub fn compute_height_to_aged_datasets(
                     });
                 });
 
-                aged_datasets.insert(&block_datas_per_day, height, block_data.price);
+                aged_datasets.insert(&block_datas_per_day, height, price);
             });
 
             current_height += blocks_len;
@@ -235,8 +250,6 @@ pub fn compute_height_to_aged_datasets(
             if (date.day() == 1 || date.day() == 14 || block_count - 1000 < current_height)
                 && current_height < block_count - NUMBER_OF_UNSAFE_BLOCKS
             {
-                retain_all(&mut block_datas_per_day);
-
                 export_all(
                     &date,
                     &aged_datasets,
@@ -276,12 +289,4 @@ fn export_all(
     txid_index_to_block_data.export()?;
 
     Ok(())
-}
-
-fn retain_all(block_datas_per_day: &mut BlockDatasPerDay) {
-    block_datas_per_day.iter().for_each(|date_data| {
-        let mut blocks = date_data.blocks.write().unwrap();
-
-        blocks.retain(|block_data| block_data.outputs_len.read().unwrap().to_owned() != 0);
-    });
 }

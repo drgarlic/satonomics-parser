@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use chrono::Datelike;
 use itertools::Itertools;
 
@@ -228,19 +226,11 @@ impl HeightToAgedDataset {
             .flat_map(|date_data| {
                 utxo_count += date_data
                     .blocks
-                    .read()
-                    .unwrap()
                     .iter()
-                    .map(|block| block.outputs_len.read().unwrap().to_owned() as usize)
+                    .map(|block| block.outputs_len as usize)
                     .sum::<usize>();
 
-                date_data
-                    .blocks
-                    .read()
-                    .unwrap()
-                    .iter()
-                    .map(Arc::clone)
-                    .collect_vec()
+                &date_data.blocks
             })
             .collect_vec();
 
@@ -250,7 +240,7 @@ impl HeightToAgedDataset {
 
         let total_supply = flat_date_dataset
             .iter()
-            .map(|block_data| block_data.amount.read().unwrap().to_owned())
+            .map(|block_data| block_data.amount)
             .sum();
 
         let mut unrealized_profit = 0.0;
@@ -283,95 +273,91 @@ impl HeightToAgedDataset {
         let mut processed_amount = 0.0;
 
         flat_date_dataset.iter().for_each(|block_data| {
-            let amount = block_data.amount.read().unwrap().to_owned();
-
-            processed_amount += amount;
+            processed_amount += block_data.amount;
 
             if block_data.price < price {
-                unrealized_profit += amount * (price - block_data.price) as f64;
-                supply_in_profit += amount;
+                unrealized_profit += block_data.amount * (price - block_data.price) as f64;
+                supply_in_profit += block_data.amount;
             } else if block_data.price > price {
-                unrealized_loss += amount * (block_data.price - price) as f64
+                unrealized_loss += block_data.amount * (block_data.price - price) as f64
             }
 
-            undivided_price_mean += amount * (block_data.price as f64);
-
-            let owned_block_data_price = block_data.price.to_owned();
+            undivided_price_mean += block_data.amount * (block_data.price as f64);
 
             if price_05p.is_none() && processed_amount >= total_supply * 0.05 {
-                price_05p.replace(owned_block_data_price);
+                price_05p.replace(block_data.price);
             }
 
             if price_10p.is_none() && processed_amount >= total_supply * 0.1 {
-                price_10p.replace(owned_block_data_price);
+                price_10p.replace(block_data.price);
             }
 
             if price_15p.is_none() && processed_amount >= total_supply * 0.15 {
-                price_15p.replace(owned_block_data_price);
+                price_15p.replace(block_data.price);
             }
 
             if price_20p.is_none() && processed_amount >= total_supply * 0.2 {
-                price_20p.replace(owned_block_data_price);
+                price_20p.replace(block_data.price);
             }
 
             if price_25p.is_none() && processed_amount >= total_supply * 0.25 {
-                price_25p.replace(owned_block_data_price);
+                price_25p.replace(block_data.price);
             }
 
             if price_30p.is_none() && processed_amount >= total_supply * 0.3 {
-                price_30p.replace(owned_block_data_price);
+                price_30p.replace(block_data.price);
             }
 
             if price_35p.is_none() && processed_amount >= total_supply * 0.35 {
-                price_35p.replace(owned_block_data_price);
+                price_35p.replace(block_data.price);
             }
 
             if price_40p.is_none() && processed_amount >= total_supply * 0.4 {
-                price_40p.replace(owned_block_data_price);
+                price_40p.replace(block_data.price);
             }
 
             if price_45p.is_none() && processed_amount >= total_supply * 0.45 {
-                price_45p.replace(owned_block_data_price);
+                price_45p.replace(block_data.price);
             }
 
             if price_median.is_none() && processed_amount >= total_supply * 0.5 {
-                price_median.replace(owned_block_data_price);
+                price_median.replace(block_data.price);
             }
 
             if price_55p.is_none() && processed_amount >= total_supply * 0.55 {
-                price_55p.replace(owned_block_data_price);
+                price_55p.replace(block_data.price);
             }
 
             if price_60p.is_none() && processed_amount >= total_supply * 0.6 {
-                price_60p.replace(owned_block_data_price);
+                price_60p.replace(block_data.price);
             }
 
             if price_65p.is_none() && processed_amount >= total_supply * 0.65 {
-                price_65p.replace(owned_block_data_price);
+                price_65p.replace(block_data.price);
             }
 
             if price_70p.is_none() && processed_amount >= total_supply * 0.7 {
-                price_70p.replace(owned_block_data_price);
+                price_70p.replace(block_data.price);
             }
 
             if price_75p.is_none() && processed_amount >= total_supply * 0.75 {
-                price_75p.replace(owned_block_data_price);
+                price_75p.replace(block_data.price);
             }
 
             if price_80p.is_none() && processed_amount >= total_supply * 0.8 {
-                price_80p.replace(owned_block_data_price);
+                price_80p.replace(block_data.price);
             }
 
             if price_85p.is_none() && processed_amount >= total_supply * 0.85 {
-                price_85p.replace(owned_block_data_price);
+                price_85p.replace(block_data.price);
             }
 
             if price_90p.is_none() && processed_amount >= total_supply * 0.9 {
-                price_90p.replace(owned_block_data_price);
+                price_90p.replace(block_data.price);
             }
 
             if price_95p.is_none() && processed_amount >= total_supply * 0.95 {
-                price_95p.replace(owned_block_data_price);
+                price_95p.replace(block_data.price);
             }
         });
 
