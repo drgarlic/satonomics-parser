@@ -5,10 +5,10 @@ use std::{collections::HashMap, path::Path};
 use itertools::Itertools;
 use serde_json::Value;
 
-use crate::utils::{import_json_map, INPUTS_FOLDER_RAW_PATH};
+use crate::utils::{import_json_map, IMPORTS_FOLDER_RAW_PATH};
 
 pub fn read_binance_har_file() -> color_eyre::Result<HashMap<u32, f32>> {
-    let path_binance_har = Path::new(INPUTS_FOLDER_RAW_PATH).join("binance.har");
+    let path_binance_har = Path::new(IMPORTS_FOLDER_RAW_PATH).join("binance.har");
 
     let json = import_json_map::<Value>(path_binance_har.as_path(), true)?;
 

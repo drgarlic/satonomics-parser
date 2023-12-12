@@ -6,7 +6,7 @@ use std::{
 
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::utils::{export_json, import_json_vec, OUTPUTS_FOLDER_RAW_PATH};
+use crate::utils::{export_json, import_json_vec, EXPORTS_FOLDER_RAW_PATH};
 
 pub const NUMBER_OF_UNSAFE_BLOCKS: usize = 100;
 
@@ -16,81 +16,52 @@ where
 {
     batch: RwLock<Vec<(usize, T)>>,
     path: PathBuf,
-    auto_save_insert: bool,
+    pub initial_first_unsafe_height: Option<usize>,
 }
 
 impl<T> HeightMap<T>
 where
     T: Clone + DeserializeOwned + Serialize,
 {
-    pub fn new(path: &str, auto_save_insert: bool) -> Self {
-        let path = Path::new(OUTPUTS_FOLDER_RAW_PATH).join(path);
+    pub fn new(path: &str) -> Self {
+        let path = Path::new(EXPORTS_FOLDER_RAW_PATH).join(path);
 
         Self {
             batch: RwLock::new(vec![]),
+            initial_first_unsafe_height: get_first_unsafe_height::<T>(&path),
             path: path.to_owned(),
-            auto_save_insert,
         }
+    }
+
+    pub fn insert(&self, height: usize, value: T) {
+        if self.initial_first_unsafe_height.unwrap_or(0) <= height {
+            self.batch.write().unwrap().push((height, value));
+        }
+    }
+
+    pub fn consume(self) -> Vec<T> {
+        self.import().expect("import in consume to work")
+    }
+
+    fn import(&self) -> color_eyre::Result<Vec<T>> {
+        import::<T>(&self.path)
     }
 
     pub fn get_last_height(&self) -> Option<usize> {
-        let len = self.import().expect("get last height to work").len();
-
-        if len == 0 {
-            None
-        } else {
-            Some(len - 1)
-        }
+        get_last_height::<T>(&self.path)
     }
-
-    // pub fn get_last_height_str(&self) -> Option<String> {
-    //     self.get_last_height().map(|i| i.to_string())
-    // }
-
-    // pub fn get_last_value(&self) -> Option<T> {
-    //     self.get_last_height_str()
-    //         .as_ref()
-    //         .map(|key| self.map.borrow().get(key).cloned().unwrap())
-    // }
 
     pub fn get_first_unsafe_height(&self) -> Option<usize> {
-        self.get_last_height().and_then(|last_height| {
-            let offset = NUMBER_OF_UNSAFE_BLOCKS - 1;
-
-            if last_height >= offset {
-                Some(last_height - offset)
-            } else {
-                None
-            }
-        })
-    }
-
-    // pub fn get_last_safe_value(&self) -> Option<T> {
-    //     self.get_first_unsafe_height().and_then(|index| {
-    //         if index > 0 {
-    //             Some(
-    //                 self.map
-    //                     .borrow()
-    //                     .get(&(index - 1).to_string())
-    //                     .cloned()
-    //                     .unwrap(),
-    //             )
-    //         } else {
-    //             None
-    //         }
-    //     })
-    // }
-
-    pub fn insert(&self, height: usize, value: T) {
-        self.batch.write().unwrap().push((height, value));
-
-        if self.auto_save_insert && self.batch.read().unwrap().len() >= 1_000 {
-            println!("Saving do not close !!");
-            self.export().expect("JSON export to work");
-        }
+        get_first_unsafe_height::<T>(&self.path)
     }
 
     pub fn export(&self) -> color_eyre::Result<()> {
+        let len = self.batch.read().unwrap().len();
+
+        if len == 0 {
+            return Ok(());
+        }
+
         let mut list = self.import()?;
 
         self.batch
@@ -121,12 +92,39 @@ where
 
         export_json(&self.path, &list, true)
     }
+}
 
-    pub fn consume(self) -> Vec<T> {
-        self.import().expect("import in consume to work")
-    }
+fn import<T>(path: &Path) -> color_eyre::Result<Vec<T>>
+where
+    T: Clone + DeserializeOwned + Serialize,
+{
+    import_json_vec::<T>(path, true)
+}
 
-    fn import(&self) -> color_eyre::Result<Vec<T>> {
-        import_json_vec::<T>(&self.path, true)
+fn get_last_height<T>(path: &Path) -> Option<usize>
+where
+    T: Clone + DeserializeOwned + Serialize,
+{
+    let len = import::<T>(path).expect("get last height to work").len();
+
+    if len == 0 {
+        None
+    } else {
+        Some(len - 1)
     }
+}
+
+fn get_first_unsafe_height<T>(path: &Path) -> Option<usize>
+where
+    T: Clone + DeserializeOwned + Serialize,
+{
+    get_last_height::<T>(path).and_then(|last_height| {
+        let offset = NUMBER_OF_UNSAFE_BLOCKS - 1;
+
+        if last_height >= offset {
+            Some(last_height - offset)
+        } else {
+            None
+        }
+    })
 }

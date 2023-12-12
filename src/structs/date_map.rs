@@ -1,15 +1,14 @@
 use std::{
     cell::RefCell,
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     path::{Path, PathBuf},
 };
 
 use chrono::{Days, NaiveDate};
-use indexmap::IndexMap;
 use itertools::Itertools;
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::utils::{export_json, import_json_map, string_to_naive_date, OUTPUTS_FOLDER_RAW_PATH};
+use crate::utils::{export_json, import_json_map, string_to_naive_date, EXPORTS_FOLDER_RAW_PATH};
 
 const NUMBER_OF_UNSAFE_DATES: usize = 2;
 
@@ -23,21 +22,13 @@ where
     T: Clone + DeserializeOwned + Serialize,
 {
     pub fn import(path: &str) -> color_eyre::Result<Self> {
-        let path = Path::new(OUTPUTS_FOLDER_RAW_PATH).join(path);
+        let path = Path::new(EXPORTS_FOLDER_RAW_PATH).join(path);
 
         import_json_map::<T>(&path, true).map(|map| Self {
             map: RefCell::new(map),
             path: path.to_owned(),
         })
     }
-
-    // pub fn borrow_map(&self) -> Ref<'_, HashMap<String, T>> {
-    //     Ref::map(self.map.borrow(), |map| map)
-    // }
-
-    // pub fn borrow_mut_map(&self) -> RefMut<'_, TxidHashMap<T>> {
-    //     RefMut::map(self.map.borrow_mut(), |map| map)
-    // }
 
     pub fn insert(&self, date: &NaiveDate, value: T) -> Option<T> {
         // TODO: Insert only if needed, check safe date, do the same in HeightMap
@@ -79,7 +70,7 @@ where
                 .to_sorted_vec()
                 .iter()
                 .map(|(key, value)| (key.to_owned(), value.to_owned()))
-                .collect::<IndexMap<_, _>>(),
+                .collect::<BTreeMap<_, _>>(),
             true,
         )
     }
@@ -99,11 +90,6 @@ where
             last_date.checked_sub_days(Days::new(offset as u64))
         })
     }
-
-    // pub fn get_first_unsafe_value(&self) -> Option<T> {
-    //     self.get_first_unsafe_date()
-    //         .and_then(|first_unsafe_date| self.get(&first_unsafe_date))
-    // }
 
     pub fn get_min_first_unsafe_date(list: &[&Self]) -> Option<NaiveDate> {
         let first_unsafe_date_opts = list

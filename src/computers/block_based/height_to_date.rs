@@ -9,7 +9,7 @@ pub fn compute_height_to_date(
 ) -> color_eyre::Result<HeightMap<NaiveDate>> {
     println!("Computing height_to_date...");
 
-    let height_to_date = HeightMap::new("height_to_date.json", true);
+    let height_to_date = HeightMap::new("height_to_date.json");
 
     let start = height_to_date.get_first_unsafe_height().unwrap_or(0);
 

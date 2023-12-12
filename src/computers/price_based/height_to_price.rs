@@ -12,7 +12,7 @@ pub fn compute_height_to_price(
     // let har_prices = read_binance_har_file()?;
     // let latest_prices = fetch_1mn_prices_from_kraken()?;
 
-    let height_to_price = HeightMap::new("height_to_price.json", true);
+    let height_to_price = HeightMap::new("height_to_price.json");
 
     // let start = height_to_price.get_first_unsafe_height().unwrap_or(0);
 

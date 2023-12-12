@@ -5,11 +5,11 @@ use std::{
 
 use crate::utils::{export_snapshot, import_snapshot_map};
 
-pub struct TxoutIndexToValue(BTreeMap<usize, f64>);
+pub struct TxoutIndexToTxoutValue(BTreeMap<usize, f64>);
 
-const SNAPSHOT_NAME: &str = "height_to_aged__txout_index_to_value";
+const SNAPSHOT_NAME: &str = "height_to_aged__txout_index_to_txout_value";
 
-impl TxoutIndexToValue {
+impl TxoutIndexToTxoutValue {
     pub fn import() -> color_eyre::Result<Self> {
         Ok(Self(
             import_snapshot_map::<f64>(SNAPSHOT_NAME, true)?
@@ -24,7 +24,7 @@ impl TxoutIndexToValue {
     }
 }
 
-impl Deref for TxoutIndexToValue {
+impl Deref for TxoutIndexToTxoutValue {
     type Target = BTreeMap<usize, f64>;
 
     fn deref(&self) -> &Self::Target {
@@ -32,7 +32,7 @@ impl Deref for TxoutIndexToValue {
     }
 }
 
-impl DerefMut for TxoutIndexToValue {
+impl DerefMut for TxoutIndexToTxoutValue {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
