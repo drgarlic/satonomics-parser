@@ -7,7 +7,7 @@ use chrono::NaiveDate;
 use itertools::Itertools;
 use rayon::prelude::*;
 
-use crate::utils::{export_snapshot, import_snapshot_vec};
+use crate::utils::{export_snapshot_json, import_snapshot_vec};
 
 use super::{BlockData, DateData, SerializedBlockData};
 
@@ -16,6 +16,10 @@ pub struct DateDataVec(Vec<DateData>);
 const BLOCKS_DATAS_PER_DAY_SNAPSHOT_NAME: &str = "height_to_aged__date_data_vec";
 
 impl DateDataVec {
+    pub fn new() -> Self {
+        Self(vec![])
+    }
+
     pub fn import(height_to_date: &[NaiveDate]) -> color_eyre::Result<Self> {
         let mut dates_set = HashSet::<&NaiveDate>::from_iter(height_to_date)
             .drain()
@@ -53,7 +57,7 @@ impl DateDataVec {
             })
             .collect::<Vec<_>>();
 
-        export_snapshot(BLOCKS_DATAS_PER_DAY_SNAPSHOT_NAME, &value, false)
+        export_snapshot_json(BLOCKS_DATAS_PER_DAY_SNAPSHOT_NAME, &value)
     }
 
     pub fn last_mut_block(&mut self) -> &mut BlockData {

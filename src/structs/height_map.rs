@@ -6,7 +6,7 @@ use std::{
 
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::utils::{export_json, import_json_vec, EXPORTS_FOLDER_RAW_PATH};
+use crate::utils::{export_pretty_json, import_json_vec, EXPORTS_FOLDER_RAW_PATH};
 
 pub const NUMBER_OF_UNSAFE_BLOCKS: usize = 100;
 
@@ -16,7 +16,7 @@ where
 {
     batch: RwLock<Vec<(usize, T)>>,
     path: PathBuf,
-    pub initial_first_unsafe_height: Option<usize>,
+    initial_first_unsafe_height: Option<usize>,
 }
 
 impl<T> HeightMap<T>
@@ -24,12 +24,12 @@ where
     T: Clone + DeserializeOwned + Serialize,
 {
     pub fn new(path: &str) -> Self {
-        let path = Path::new(EXPORTS_FOLDER_RAW_PATH).join(path);
+        let path_buf = Path::new(EXPORTS_FOLDER_RAW_PATH).join(path);
 
         Self {
             batch: RwLock::new(vec![]),
-            initial_first_unsafe_height: get_first_unsafe_height::<T>(&path),
-            path: path.to_owned(),
+            initial_first_unsafe_height: get_first_unsafe_height::<T>(&path_buf),
+            path: path_buf,
         }
     }
 
@@ -46,16 +46,35 @@ where
     fn import(&self) -> color_eyre::Result<Vec<T>> {
         import::<T>(&self.path)
     }
+}
 
-    pub fn get_last_height(&self) -> Option<usize> {
+pub trait AnyHeightMap {
+    fn get_initial_first_unsafe_height(&self) -> Option<usize>;
+
+    fn get_last_height(&self) -> Option<usize>;
+
+    fn get_first_unsafe_height(&self) -> Option<usize>;
+
+    fn export(&self) -> color_eyre::Result<()>;
+}
+
+impl<T> AnyHeightMap for HeightMap<T>
+where
+    T: Clone + DeserializeOwned + Serialize,
+{
+    fn get_initial_first_unsafe_height(&self) -> Option<usize> {
+        self.initial_first_unsafe_height
+    }
+
+    fn get_last_height(&self) -> Option<usize> {
         get_last_height::<T>(&self.path)
     }
 
-    pub fn get_first_unsafe_height(&self) -> Option<usize> {
+    fn get_first_unsafe_height(&self) -> Option<usize> {
         get_first_unsafe_height::<T>(&self.path)
     }
 
-    pub fn export(&self) -> color_eyre::Result<()> {
+    fn export(&self) -> color_eyre::Result<()> {
         let len = self.batch.read().unwrap().len();
 
         if len == 0 {
@@ -90,7 +109,7 @@ where
                 }
             });
 
-        export_json(&self.path, &list, true)
+        export_pretty_json(&self.path, &list)
     }
 }
 

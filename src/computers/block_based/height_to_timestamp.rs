@@ -1,6 +1,6 @@
 use bitcoin_explorer::{BitcoinDB, SBlock};
 
-use crate::structs::HeightMap;
+use crate::structs::{AnyHeightMap, HeightMap};
 
 pub fn compute_height_to_timestamp(
     db: &BitcoinDB,

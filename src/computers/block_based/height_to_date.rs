@@ -1,7 +1,10 @@
 use bitcoin_explorer::{BitcoinDB, SBlock};
 use chrono::NaiveDate;
 
-use crate::{structs::HeightMap, utils::timestamp_to_naive_date};
+use crate::{
+    structs::{AnyHeightMap, HeightMap},
+    utils::timestamp_to_naive_date,
+};
 
 pub fn compute_height_to_date(
     db: &BitcoinDB,

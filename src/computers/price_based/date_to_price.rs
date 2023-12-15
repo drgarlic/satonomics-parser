@@ -3,7 +3,6 @@ use crate::{
     utils::{fetch_daily_prices_from_kraken, string_to_naive_date},
 };
 
-#[allow(dead_code)]
 pub fn compute_date_to_price() -> color_eyre::Result<DateMap<f32>> {
     println!("Computing date_to_price...");
 

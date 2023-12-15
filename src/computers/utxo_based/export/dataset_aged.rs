@@ -3,10 +3,10 @@ use itertools::Itertools;
 
 use crate::{
     computers::utxo_based::{BlockData, SplitBlockPath},
-    structs::HeightMap,
+    structs::{AnyHeightMap, HeightDataset, HeightMap},
 };
 
-use super::{dataset::Dataset, DatasetInsertData};
+use super::DatasetInsertData;
 
 pub enum AgeRange {
     Full,
@@ -51,7 +51,7 @@ pub struct AgedDataset {
 }
 
 impl AgedDataset {
-    pub fn import(name: &str, range: AgeRange) -> color_eyre::Result<Self> {
+    pub fn new(name: &str, range: AgeRange) -> color_eyre::Result<Self> {
         let f = |s: &str| format!("height_to_{}_{}.json", name, s);
 
         Ok(Self {
@@ -87,7 +87,7 @@ impl AgedDataset {
     }
 }
 
-impl Dataset for AgedDataset {
+impl<'a> HeightDataset<DatasetInsertData<'a>> for AgedDataset {
     fn insert(&self, insert_data: &DatasetInsertData) {
         let &DatasetInsertData {
             date_data_vec,
@@ -452,110 +452,35 @@ impl Dataset for AgedDataset {
         }
     }
 
-    fn get_min_last_height(&self) -> Option<usize> {
-        [
-            &self.height_to_total_supply.get_last_height(),
-            &self.height_to_supply_in_profit.get_last_height(),
-            &self.height_to_mean_price.get_last_height(),
-            &self.height_to_median_price.get_last_height(),
-            &self.height_to_realized_profit.get_last_height(),
-            &self.height_to_realized_loss.get_last_height(),
-            &self.height_to_unrealized_profit.get_last_height(),
-            &self.height_to_unrealized_loss.get_last_height(),
-            &self.height_to_95p_price.get_last_height(),
-            &self.height_to_90p_price.get_last_height(),
-            &self.height_to_85p_price.get_last_height(),
-            &self.height_to_80p_price.get_last_height(),
-            &self.height_to_75p_price.get_last_height(),
-            &self.height_to_70p_price.get_last_height(),
-            &self.height_to_65p_price.get_last_height(),
-            &self.height_to_60p_price.get_last_height(),
-            &self.height_to_55p_price.get_last_height(),
-            &self.height_to_45p_price.get_last_height(),
-            &self.height_to_40p_price.get_last_height(),
-            &self.height_to_35p_price.get_last_height(),
-            &self.height_to_30p_price.get_last_height(),
-            &self.height_to_25p_price.get_last_height(),
-            &self.height_to_20p_price.get_last_height(),
-            &self.height_to_15p_price.get_last_height(),
-            &self.height_to_10p_price.get_last_height(),
-            &self.height_to_05p_price.get_last_height(),
-            &self.height_to_utxo_count.get_last_height(),
+    fn to_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
+        vec![
+            &self.height_to_total_supply,
+            &self.height_to_supply_in_profit,
+            &self.height_to_mean_price,
+            &self.height_to_median_price,
+            &self.height_to_realized_profit,
+            &self.height_to_realized_loss,
+            &self.height_to_unrealized_profit,
+            &self.height_to_unrealized_loss,
+            &self.height_to_95p_price,
+            &self.height_to_90p_price,
+            &self.height_to_85p_price,
+            &self.height_to_80p_price,
+            &self.height_to_75p_price,
+            &self.height_to_70p_price,
+            &self.height_to_65p_price,
+            &self.height_to_60p_price,
+            &self.height_to_55p_price,
+            &self.height_to_45p_price,
+            &self.height_to_40p_price,
+            &self.height_to_35p_price,
+            &self.height_to_30p_price,
+            &self.height_to_25p_price,
+            &self.height_to_20p_price,
+            &self.height_to_15p_price,
+            &self.height_to_10p_price,
+            &self.height_to_05p_price,
+            &self.height_to_utxo_count,
         ]
-        .iter()
-        .min()
-        .and_then(|opt| **opt)
-    }
-
-    fn get_min_initial_first_unsafe_height(&self) -> Option<usize> {
-        [
-            &self.height_to_total_supply.initial_first_unsafe_height,
-            &self.height_to_supply_in_profit.initial_first_unsafe_height,
-            &self.height_to_mean_price.initial_first_unsafe_height,
-            &self.height_to_median_price.initial_first_unsafe_height,
-            &self.height_to_realized_profit.initial_first_unsafe_height,
-            &self.height_to_realized_loss.initial_first_unsafe_height,
-            &self.height_to_unrealized_profit.initial_first_unsafe_height,
-            &self.height_to_unrealized_loss.initial_first_unsafe_height,
-            &self.height_to_95p_price.initial_first_unsafe_height,
-            &self.height_to_90p_price.initial_first_unsafe_height,
-            &self.height_to_85p_price.initial_first_unsafe_height,
-            &self.height_to_80p_price.initial_first_unsafe_height,
-            &self.height_to_75p_price.initial_first_unsafe_height,
-            &self.height_to_70p_price.initial_first_unsafe_height,
-            &self.height_to_65p_price.initial_first_unsafe_height,
-            &self.height_to_60p_price.initial_first_unsafe_height,
-            &self.height_to_55p_price.initial_first_unsafe_height,
-            &self.height_to_45p_price.initial_first_unsafe_height,
-            &self.height_to_40p_price.initial_first_unsafe_height,
-            &self.height_to_35p_price.initial_first_unsafe_height,
-            &self.height_to_30p_price.initial_first_unsafe_height,
-            &self.height_to_25p_price.initial_first_unsafe_height,
-            &self.height_to_20p_price.initial_first_unsafe_height,
-            &self.height_to_15p_price.initial_first_unsafe_height,
-            &self.height_to_10p_price.initial_first_unsafe_height,
-            &self.height_to_05p_price.initial_first_unsafe_height,
-            &self.height_to_utxo_count.initial_first_unsafe_height,
-        ]
-        .iter()
-        .min()
-        .and_then(|opt| **opt)
-    }
-
-    fn export(&self) -> color_eyre::Result<()> {
-        self.height_to_total_supply.export()?;
-        self.height_to_supply_in_profit.export()?;
-
-        self.height_to_mean_price.export()?;
-        self.height_to_median_price.export()?;
-
-        self.height_to_unrealized_profit.export()?;
-        self.height_to_unrealized_loss.export()?;
-
-        self.height_to_realized_profit.export()?;
-        self.height_to_realized_loss.export()?;
-
-        self.height_to_95p_price.export()?;
-        self.height_to_90p_price.export()?;
-        self.height_to_85p_price.export()?;
-        self.height_to_80p_price.export()?;
-        self.height_to_75p_price.export()?;
-        self.height_to_70p_price.export()?;
-        self.height_to_65p_price.export()?;
-        self.height_to_60p_price.export()?;
-        self.height_to_55p_price.export()?;
-        self.height_to_45p_price.export()?;
-        self.height_to_40p_price.export()?;
-        self.height_to_35p_price.export()?;
-        self.height_to_30p_price.export()?;
-        self.height_to_25p_price.export()?;
-        self.height_to_20p_price.export()?;
-        self.height_to_15p_price.export()?;
-        self.height_to_10p_price.export()?;
-        self.height_to_05p_price.export()?;
-
-        self.height_to_utxo_count.export()?;
-
-        Ok(())
     }
 }

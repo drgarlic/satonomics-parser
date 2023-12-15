@@ -8,7 +8,9 @@ use chrono::{Days, NaiveDate};
 use itertools::Itertools;
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::utils::{export_json, import_json_map, string_to_naive_date, EXPORTS_FOLDER_RAW_PATH};
+use crate::utils::{
+    export_pretty_json, import_json_map, string_to_naive_date, EXPORTS_FOLDER_RAW_PATH,
+};
 
 const NUMBER_OF_UNSAFE_DATES: usize = 2;
 
@@ -64,14 +66,13 @@ where
     }
 
     pub fn export(&self) -> color_eyre::Result<()> {
-        export_json(
+        export_pretty_json(
             &self.path,
             &self
                 .to_sorted_vec()
                 .iter()
                 .map(|(key, value)| (key.to_owned(), value.to_owned()))
                 .collect::<BTreeMap<_, _>>(),
-            true,
         )
     }
 

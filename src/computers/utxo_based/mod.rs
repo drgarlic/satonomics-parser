@@ -1,11 +1,11 @@
 use bitcoin_explorer::{BitcoinDB, FBlock, FTransaction};
-use chrono::{offset::Local, Datelike, Days, NaiveDate};
+use chrono::{offset::Local, Datelike, NaiveDate};
 use itertools::Itertools;
 
 use std::{collections::BTreeMap, ops::ControlFlow};
 
 use crate::{
-    structs::{DateMap, NUMBER_OF_UNSAFE_BLOCKS},
+    structs::{DateMap, HeightDatasets, WTxid, NUMBER_OF_UNSAFE_BLOCKS},
     utils::{
         convert_sats_to_bitcoins, create_group_blocks_by_day_closure, timestamp_to_naive_date,
     },
@@ -17,71 +17,46 @@ pub mod parse;
 use export::*;
 use parse::*;
 
-pub fn compute_height_to_aged_datasets(
+pub fn compute_utxo_based_datasets(
     db: &BitcoinDB,
     block_count: usize,
     height_to_price: &[f32],
     height_to_date: &[NaiveDate],
     date_to_first_block: &DateMap<usize>,
-) -> color_eyre::Result<Datasets> {
+) -> color_eyre::Result<UtxoDatasets> {
     println!("{:?} - Starting aged", Local::now());
 
-    let datasets = Datasets::import()?;
+    let datasets = UtxoDatasets::new()?;
 
-    let mut date_data_vec = DateDataVec::import(height_to_date)?;
+    println!("{:?} - Imported datasets", Local::now());
 
-    let mut txid_index_to_block_path = TxidIndexToBlockPath::import()?;
+    let InitiatedParsers {
+        mut date_data_vec,
+        mut txid_to_tx_data,
+        mut txout_index_counter,
+        mut txid_index_to_block_path,
+        mut txout_index_to_txout_value,
+        mut iter_height,
+    } = InitiatedParsers::init(&datasets, height_to_date, date_to_first_block)?;
 
-    let mut txid_to_tx_data = TxidToTxData::import()?;
+    println!("{:?} - Starting export", Local::now());
 
-    let mut txout_index_to_txout_value = TxoutIndexToTxoutValue::import()?;
+    txid_to_tx_data.export()?;
+    println!("{:?} - Exported txid_to_tx_data", Local::now());
 
-    let mut txout_index_counter = txout_index_to_txout_value
-        .keys()
-        .max()
-        .map(|index| *index + 1)
-        .unwrap_or(0)
-        .to_owned();
+    txout_index_to_txout_value.export()?;
+    println!("{:?} - Exported txout_index_to_txout_value", Local::now());
 
-    let snapshot_start_height = date_data_vec
-        .iter()
-        .map(|date_data| date_data.date)
-        .max()
-        .and_then(|date| date.checked_add_days(Days::new(1)))
-        .and_then(|date| {
-            date_to_first_block.get(&date).map(|snapshot_start_height| {
-                let min_last_height = datasets.get_min_last_height();
+    txid_index_to_block_path.export()?;
+    println!("{:?} - Exported txid_index_to_block_path", Local::now());
 
-                if min_last_height.unwrap_or(0) < snapshot_start_height - 1 {
-                    println!("snapshot_start_height {snapshot_start_height} > last_saved_height {min_last_height:?}");
-                    println!("Starting over...");
+    panic!("!!!");
 
-                    date_data_vec.clear();
-
-                    txid_index_to_block_path.clear();
-
-                    txid_to_tx_data.clear();
-
-                    txout_index_to_txout_value.clear();
-
-                    txout_index_counter = 0;
-
-                    return 0;
-                }
-
-                snapshot_start_height
-            })
-        });
-
-    let start_height = snapshot_start_height.unwrap_or(0);
-
-    let mut current_height = start_height;
-
-    println!("current_height {current_height}");
+    println!("current_height {iter_height}");
 
     println!("{:?} - Starting parsing", Local::now());
 
-    db.iter_block::<FBlock>(start_height, block_count)
+    db.iter_block::<FBlock>(iter_height, block_count)
         .batching(create_group_blocks_by_day_closure())
         .try_for_each(|blocks| -> color_eyre::Result<()> {
             let date = timestamp_to_naive_date(blocks.first().unwrap().header.time);
@@ -105,18 +80,18 @@ pub fn compute_height_to_aged_datasets(
                 .into_iter()
                 .enumerate()
                 .for_each(|(block_index, block)| {
-                    let height = current_height + block_index;
+                    let block_height = iter_height + block_index;
 
                     let price = height_to_price
-                        .get(height)
-                        .unwrap_or_else(|| panic!("Expect {height} to have a price"))
+                        .get(block_height)
+                        .unwrap_or_else(|| panic!("Expect {block_height} to have a price"))
                         .to_owned();
 
                     date_data_vec
                         .last_mut()
                         .unwrap()
                         .blocks
-                        .push(BlockData::new(height as u32, price));
+                        .push(BlockData::new(block_height as u32, price));
 
                     let mut coinbase = 0.0;
                     let mut inputs_sum = 0.0;
@@ -125,6 +100,7 @@ pub fn compute_height_to_aged_datasets(
                     let mut stxos = BTreeMap::new();
 
                     let mut coinblocks_destroyed = 0.0;
+                    let mut coindays_destroyed = 0.0;
 
                     block
                         .txdata
@@ -132,6 +108,7 @@ pub fn compute_height_to_aged_datasets(
                         .enumerate()
                         .for_each(|(tx_index, tx)| {
                             let txid = tx.txid;
+                            let wtxid = WTxid::wrap(txid);
 
                             let txid_index = txout_index_counter;
 
@@ -167,7 +144,7 @@ pub fn compute_height_to_aged_datasets(
 
                             if non_zero_outputs_len != 0 {
                                 txid_to_tx_data
-                                    .insert(txid, TxData::new(txid_index, non_zero_outputs_len));
+                                    .insert(wtxid, TxData::new(txid_index, non_zero_outputs_len));
 
                                 txid_index_to_block_path
                                     .insert(txid_index, BlockPath::build(date_index, block_index));
@@ -191,13 +168,14 @@ pub fn compute_height_to_aged_datasets(
                             tx.input.into_iter().try_for_each(|txin| {
                                 let outpoint = txin.previous_output;
                                 let input_txid = outpoint.txid;
+                                let input_wtxid = WTxid::wrap(input_txid);
                                 let input_vout = outpoint.vout;
 
                                 let txid_index_to_remove = {
-                                    let input_tx_data = txid_to_tx_data.get_mut(&input_txid);
+                                    let input_tx_data = txid_to_tx_data.get_mut(&input_wtxid);
 
                                     let get_value_from_db = || {
-                                        db.get_transaction::<FTransaction>(&input_txid)
+                                        db.get_transaction::<FTransaction>(&input_wtxid)
                                             .unwrap()
                                             .output
                                             .get(input_vout as usize)
@@ -209,7 +187,7 @@ pub fn compute_height_to_aged_datasets(
                                         if get_value_from_db() == 0 {
                                             return ControlFlow::Continue::<()>(());
                                         } else {
-                                            dbg!((txid, input_txid, txid_index, input_vout));
+                                            dbg!((txid, input_wtxid, txid_index, input_vout));
                                             panic!("Txid to be in txid_to_tx_data");
                                         }
                                     }
@@ -225,7 +203,7 @@ pub fn compute_height_to_aged_datasets(
                                         } else {
                                             dbg!((
                                                 txid,
-                                                input_txid,
+                                                input_wtxid,
                                                 txid_index,
                                                 &input_tx_data,
                                                 input_vout,
@@ -251,8 +229,8 @@ pub fn compute_height_to_aged_datasets(
                                             .get_mut(input_date_index)
                                             .unwrap_or_else(|| {
                                                 dbg!(
-                                                    height,
-                                                    &input_txid,
+                                                    block_height,
+                                                    &input_wtxid,
                                                     input_block_path,
                                                     input_date_index
                                                 );
@@ -276,9 +254,16 @@ pub fn compute_height_to_aged_datasets(
                                                 + input_value,
                                         );
 
-                                        coinblocks_destroyed +=
-                                            (height - input_block_data.height as usize) as f64
-                                                * input_block_data.amount;
+                                        coinblocks_destroyed += (block_height
+                                            - input_block_data.height as usize)
+                                            as f64
+                                            * input_block_data.amount;
+
+                                        coindays_destroyed += date
+                                            .signed_duration_since(input_date_data.date)
+                                            .num_days()
+                                            as f64
+                                            * input_block_data.amount;
                                     }
 
                                     input_tx_data.outputs_len -= 1;
@@ -291,7 +276,7 @@ pub fn compute_height_to_aged_datasets(
                                 };
 
                                 if let Some(txid_index_to_remove) = txid_index_to_remove {
-                                    txid_to_tx_data.remove(&input_txid);
+                                    txid_to_tx_data.remove(&input_wtxid);
 
                                     txid_index_to_block_path.remove(&txid_index_to_remove);
                                 }
@@ -304,23 +289,24 @@ pub fn compute_height_to_aged_datasets(
 
                     datasets.insert(DatasetInsertData {
                         date_data_vec: &date_data_vec,
-                        height,
+                        height: block_height,
                         price,
                         coinbase,
                         fees,
                         stxos: &stxos,
                         coinblocks_destroyed,
+                        coindays_destroyed,
                     });
                 });
 
-            current_height += blocks_len;
+            iter_height += blocks_len;
 
-            if (date.day() == 1 || block_count - 1000 < current_height)
-                && current_height < block_count - NUMBER_OF_UNSAFE_BLOCKS
+            if (date.day() == 1 || block_count - 1000 < iter_height)
+                && iter_height < block_count - NUMBER_OF_UNSAFE_BLOCKS
             {
                 export_all(
                     &date,
-                    current_height,
+                    iter_height,
                     &datasets,
                     &date_data_vec,
                     &txid_to_tx_data,
@@ -332,7 +318,7 @@ pub fn compute_height_to_aged_datasets(
             Ok(())
         })?;
 
-    datasets.export(None)?;
+    datasets.export()?;
 
     Ok(datasets)
 }

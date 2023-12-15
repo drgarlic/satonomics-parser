@@ -1,14 +1,15 @@
-use std::{collections::HashMap, fs, path::Path};
+use std::path::Path;
 
+use bincode::{Decode, Encode};
 use serde::{de::DeserializeOwned, Serialize};
 
-use super::{export_json, import_json_map, import_json_vec};
+use super::{export_binary, export_dirty_json, import_binary, import_json_vec};
 
 const SNAPSHOT_FOLDER: &str = "./snapshots";
 
 pub fn import_snapshot_vec<T>(name: &str, default: bool) -> color_eyre::Result<Vec<T>>
 where
-    T: DeserializeOwned + Serialize,
+    T: DeserializeOwned,
 {
     import_json_vec(
         Path::new(&format!("{SNAPSHOT_FOLDER}/{name}.json")),
@@ -16,25 +17,27 @@ where
     )
 }
 
-pub fn import_snapshot_map<T>(name: &str, default: bool) -> color_eyre::Result<HashMap<String, T>>
+pub fn import_snapshot_map<T>(name: &str) -> color_eyre::Result<T>
 where
-    T: DeserializeOwned + Serialize,
+    T: Decode,
 {
-    import_json_map(
-        Path::new(&format!("{SNAPSHOT_FOLDER}/{name}.json")),
-        default,
-    )
+    import_binary(Path::new(&format!("{SNAPSHOT_FOLDER}/{name}.bin")))
 }
 
-pub fn export_snapshot<T>(name: &str, value: &T, pretty: bool) -> color_eyre::Result<()>
+pub fn export_snapshot_json<T>(name: &str, value: &T) -> color_eyre::Result<()>
 where
-    T: DeserializeOwned + Serialize,
+    T: Serialize,
 {
     let path = format!("{SNAPSHOT_FOLDER}/{name}.json");
 
-    if Path::new(&path).exists() {
-        fs::copy(&path, format!("{SNAPSHOT_FOLDER}/{name}__backup.json"))?;
-    }
+    export_dirty_json(Path::new(&path), value)
+}
 
-    export_json(Path::new(&path), value, pretty)
+pub fn export_snapshot_bin<T>(name: &str, value: &T) -> color_eyre::Result<()>
+where
+    T: Encode,
+{
+    let path = format!("{SNAPSHOT_FOLDER}/{name}.bin");
+
+    export_binary(Path::new(&path), value)
 }

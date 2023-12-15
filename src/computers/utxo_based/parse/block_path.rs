@@ -1,8 +1,10 @@
 use std::ops::{Deref, DerefMut};
 
+use bincode::{Decode, Encode};
+
 const BLOCK_INDEX_SHIFT: u8 = 10;
 
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Copy)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Copy, Encode, Decode)]
 pub struct BlockPath(u32);
 
 pub struct SplitBlockPath {

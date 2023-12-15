@@ -1,49 +1,30 @@
-use std::{
-    collections::BTreeMap,
-    ops::{Deref, DerefMut},
-    str::FromStr,
-};
+use std::ops::{Deref, DerefMut};
 
-use bitcoin_explorer::Txid;
+use bincode::{Decode, Encode};
 
 use crate::{
     structs::TxidMap,
-    utils::{export_snapshot, import_snapshot_map},
+    utils::{export_snapshot_bin, import_snapshot_map},
 };
 
-use super::{SerializedTxData, TxData};
+use super::TxData;
 
+#[derive(Encode, Decode)]
 pub struct TxidToTxData(TxidMap<TxData>);
 
 const SNAPSHOT_NAME: &str = "height_to_aged__txid_to_tx_data";
 
 impl TxidToTxData {
+    pub fn new() -> Self {
+        Self(TxidMap::new())
+    }
+
     pub fn import() -> color_eyre::Result<Self> {
-        let mut child = TxidMap::new();
-
-        child.extend(
-            import_snapshot_map::<SerializedTxData>(SNAPSHOT_NAME, true)?
-                .iter()
-                .map(|(txid, serialized)| {
-                    (
-                        Txid::from_str(txid).unwrap(),
-                        TxData::deserialize(serialized),
-                    )
-                }),
-        );
-
-        Ok(Self(child))
+        import_snapshot_map::<Self>(SNAPSHOT_NAME)
     }
 
     pub fn export(&self) -> color_eyre::Result<()> {
-        export_snapshot(
-            SNAPSHOT_NAME,
-            &self
-                .iter()
-                .map(|(txid, tx_data)| (txid.to_owned(), tx_data.serialize()))
-                .collect::<BTreeMap<_, _>>(),
-            false,
-        )
+        export_snapshot_bin(SNAPSHOT_NAME, &self)
     }
 }
 

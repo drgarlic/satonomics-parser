@@ -10,4 +10,5 @@ pub struct DatasetInsertData<'a> {
     pub fees: f64,
     pub stxos: &'a BTreeMap<BlockPath, f64>,
     pub coinblocks_destroyed: f64,
+    pub coindays_destroyed: f64,
 }

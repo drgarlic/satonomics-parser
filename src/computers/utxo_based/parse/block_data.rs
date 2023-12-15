@@ -1,5 +1,7 @@
+use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
+#[derive(Encode, Decode)]
 pub struct BlockData {
     pub height: u32,
     pub price: f32,
