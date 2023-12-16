@@ -13,10 +13,6 @@ pub struct SplitBlockPath {
 }
 
 impl BlockPath {
-    pub fn new(block_path: u32) -> Self {
-        Self(block_path)
-    }
-
     pub fn build(date_index: usize, block_index: usize) -> Self {
         Self(Self::merge(date_index, block_index))
     }

@@ -6,7 +6,7 @@ use std::{
 
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::utils::{export_pretty_json, import_json_vec, EXPORTS_FOLDER_RAW_PATH};
+use crate::utils::{export_json, import_json_vec, EXPORTS_FOLDER_RAW_PATH};
 
 pub const NUMBER_OF_UNSAFE_BLOCKS: usize = 100;
 
@@ -109,7 +109,7 @@ where
                 }
             });
 
-        export_pretty_json(&self.path, &list)
+        export_json(&self.path, &list)
     }
 }
 

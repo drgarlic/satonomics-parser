@@ -16,7 +16,7 @@ use dataset_rewards::*;
 pub use datasets::*;
 pub use insert_data::*;
 
-use crate::structs::HeightDatasets;
+use crate::{structs::HeightDatasets, utils::Snapshot};
 
 use super::{DateDataVec, TxidIndexToBlockPath, TxidToTxData, TxoutIndexToTxoutValue};
 

@@ -14,7 +14,7 @@ use crate::{
         // compute_height_to_rewards,
         compute_height_to_timestamp,
         // compute_date_to_price,
-        compute_utxo_based_datasets,
+        // compute_utxo_based_datasets,
         DateToBlocks,
     },
     utils::{time, BITCOIN_DATADIR_RAW_PATH},
@@ -28,7 +28,7 @@ pub fn run() -> color_eyre::Result<usize> {
 
     time(|| compute_height_to_timestamp(&db, block_count))?;
 
-    let height_to_date = time(|| compute_height_to_date(&db, block_count))?.consume();
+    let _height_to_date = time(|| compute_height_to_date(&db, block_count))?.consume();
 
     let DateToBlocks {
         date_to_first_block,
@@ -42,21 +42,9 @@ pub fn run() -> color_eyre::Result<usize> {
 
     // let HeightToRewards { .. } = time(|| compute_height_to_rewards(&db, block_count))?;
 
-    compute_utxo_based_datasets(
-        &db,
-        block_count,
-        &height_to_price,
-        &height_to_date,
-        &date_to_first_block,
-    )?;
+    // compute_utxo_based_datasets(&db, block_count, &height_to_price, &date_to_first_block)?;
 
-    // compute_address_based_datasets(
-    //     &db,
-    //     block_count,
-    //     &height_to_price,
-    //     &height_to_date,
-    //     &date_to_first_block,
-    // )?;
+    compute_address_based_datasets(&db, block_count, &height_to_price, &date_to_first_block)?;
 
     Ok(block_count)
 }

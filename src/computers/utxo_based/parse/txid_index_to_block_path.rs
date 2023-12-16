@@ -5,7 +5,7 @@ use std::{
 
 use bincode::{Decode, Encode};
 
-use crate::utils::{export_snapshot_bin, import_snapshot_map};
+use crate::utils::Snapshot;
 
 use super::BlockPath;
 
@@ -13,19 +13,15 @@ use super::BlockPath;
 /// `txid_index` => `txout_index` at `vout` 0
 pub struct TxidIndexToBlockPath(BTreeMap<usize, BlockPath>);
 
-const SNAPSHOT_NAME: &str = "height_to_aged__txid_index_to_block_path";
-
 impl TxidIndexToBlockPath {
-    pub fn new() -> Self {
+    pub fn default() -> Self {
         Self(BTreeMap::new())
     }
+}
 
-    pub fn import() -> color_eyre::Result<Self> {
-        import_snapshot_map::<Self>(SNAPSHOT_NAME)
-    }
-
-    pub fn export(&self) -> color_eyre::Result<()> {
-        export_snapshot_bin(SNAPSHOT_NAME, &self)
+impl Snapshot<Self> for TxidIndexToBlockPath {
+    fn name<'a>() -> &'a str {
+        "height_to_aged__txid_index_to_block_path"
     }
 }
 

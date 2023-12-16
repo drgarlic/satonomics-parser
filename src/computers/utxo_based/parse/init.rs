@@ -1,10 +1,11 @@
 use std::thread;
 
-use chrono::{Days, NaiveDate};
+use chrono::Days;
 
 use crate::{
     computers::utxo_based::export::UtxoDatasets,
     structs::{DateMap, HeightDatasets},
+    utils::Snapshot,
 };
 
 use super::{DateDataVec, TxidIndexToBlockPath, TxidToTxData, TxoutIndexToTxoutValue};
@@ -21,17 +22,16 @@ pub struct InitiatedParsers {
 impl InitiatedParsers {
     pub fn init(
         datasets: &UtxoDatasets,
-        height_to_date: &[NaiveDate],
         date_to_first_block: &DateMap<usize>,
     ) -> color_eyre::Result<Self> {
         if datasets.get_min_last_height().unwrap_or(0) == 0 {
             println!("New dataset present, starting over...");
 
             Ok(Self {
-                date_data_vec: DateDataVec::new(),
-                txid_index_to_block_path: TxidIndexToBlockPath::new(),
-                txid_to_tx_data: TxidToTxData::new(),
-                txout_index_to_txout_value: TxoutIndexToTxoutValue::new(),
+                date_data_vec: DateDataVec::default(),
+                txid_index_to_block_path: TxidIndexToBlockPath::default(),
+                txid_to_tx_data: TxidToTxData::default(),
+                txout_index_to_txout_value: TxoutIndexToTxoutValue::default(),
                 txout_index_counter: 0,
                 iter_height: 0,
             })
@@ -42,26 +42,14 @@ impl InitiatedParsers {
 
             let txout_index_to_txout_value_handle = thread::spawn(TxoutIndexToTxoutValue::import);
 
-            let mut date_data_vec = DateDataVec::import(height_to_date)?;
+            let date_data_vec_handle = thread::spawn(DateDataVec::import);
 
-            let mut txid_index_to_block_path = txid_index_to_block_path_handle.join().unwrap()?;
+            let mut date_data_vec = date_data_vec_handle.join().unwrap()?;
 
-            println!(
-                "txid_index_to_block_path len {}",
-                txid_index_to_block_path.len()
-            );
-
-            let mut txid_to_tx_data = txid_to_tx_data_handle.join().unwrap()?;
-
-            println!("txid_to_tx_data len {}", txid_to_tx_data.len());
+            let max_date = date_data_vec.iter().map(|date_data| date_data.date).max();
 
             let mut txout_index_to_txout_value =
                 txout_index_to_txout_value_handle.join().unwrap()?;
-
-            println!(
-                "txout_index_to_txout_value len {}",
-                txout_index_to_txout_value.len()
-            );
 
             let mut txout_index_counter = txout_index_to_txout_value
                 .keys()
@@ -70,10 +58,11 @@ impl InitiatedParsers {
                 .unwrap_or(0)
                 .to_owned();
 
-            let snapshot_start_height = date_data_vec
-                .iter()
-                .map(|date_data| date_data.date)
-                .max()
+            let mut txid_index_to_block_path = txid_index_to_block_path_handle.join().unwrap()?;
+
+            let mut txid_to_tx_data = txid_to_tx_data_handle.join().unwrap()?;
+
+            let iter_height = max_date
                 .and_then(|date| date.checked_add_days(Days::new(1)))
                 .and_then(|date| {
                     let min_last_height = datasets.get_min_last_height();
@@ -99,9 +88,7 @@ impl InitiatedParsers {
 
                         snapshot_start_height
                     })
-                });
-
-            let iter_height = snapshot_start_height.unwrap_or(0);
+                }).unwrap_or(0);
 
             Ok(Self {
                 date_data_vec,

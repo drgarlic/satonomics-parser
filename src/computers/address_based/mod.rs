@@ -1,5 +1,5 @@
 use bitcoin_explorer::{BitcoinDB, FBlock};
-use chrono::{offset::Local, NaiveDate};
+use chrono::offset::Local;
 use itertools::Itertools;
 
 use crate::{
@@ -17,7 +17,6 @@ pub fn compute_address_based_datasets(
     db: &BitcoinDB,
     block_count: usize,
     height_to_price: &[f32],
-    height_to_date: &[NaiveDate],
     date_to_first_block: &DateMap<usize>,
 ) -> color_eyre::Result<()> {
     println!("{:?} - Starting address based", Local::now());

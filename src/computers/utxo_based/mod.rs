@@ -1,5 +1,5 @@
 use bitcoin_explorer::{BitcoinDB, FBlock, FTransaction};
-use chrono::{offset::Local, Datelike, NaiveDate};
+use chrono::{offset::Local, Datelike};
 use itertools::Itertools;
 
 use std::{collections::BTreeMap, ops::ControlFlow};
@@ -21,7 +21,6 @@ pub fn compute_utxo_based_datasets(
     db: &BitcoinDB,
     block_count: usize,
     height_to_price: &[f32],
-    height_to_date: &[NaiveDate],
     date_to_first_block: &DateMap<usize>,
 ) -> color_eyre::Result<UtxoDatasets> {
     println!("{:?} - Starting aged", Local::now());
@@ -37,22 +36,7 @@ pub fn compute_utxo_based_datasets(
         mut txid_index_to_block_path,
         mut txout_index_to_txout_value,
         mut iter_height,
-    } = InitiatedParsers::init(&datasets, height_to_date, date_to_first_block)?;
-
-    println!("{:?} - Starting export", Local::now());
-
-    txid_to_tx_data.export()?;
-    println!("{:?} - Exported txid_to_tx_data", Local::now());
-
-    txout_index_to_txout_value.export()?;
-    println!("{:?} - Exported txout_index_to_txout_value", Local::now());
-
-    txid_index_to_block_path.export()?;
-    println!("{:?} - Exported txid_index_to_block_path", Local::now());
-
-    panic!("!!!");
-
-    println!("current_height {iter_height}");
+    } = InitiatedParsers::init(&datasets, date_to_first_block)?;
 
     println!("{:?} - Starting parsing", Local::now());
 
@@ -69,10 +53,7 @@ pub fn compute_utxo_based_datasets(
                 blocks_len + 1
             );
 
-            date_data_vec.push(DateData {
-                date,
-                blocks: vec![],
-            });
+            date_data_vec.push(DateData::new(date, vec![]));
 
             let date_index = date_data_vec.len() - 1;
 
@@ -260,7 +241,7 @@ pub fn compute_utxo_based_datasets(
                                             * input_block_data.amount;
 
                                         coindays_destroyed += date
-                                            .signed_duration_since(input_date_data.date)
+                                            .signed_duration_since(*input_date_data.date)
                                             .num_days()
                                             as f64
                                             * input_block_data.amount;

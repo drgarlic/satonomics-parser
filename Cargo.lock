@@ -487,7 +487,6 @@ dependencies = [
  "postcard",
  "rayon",
  "reqwest",
- "rkyv",
  "serde",
  "serde_json",
 ]
