@@ -4,13 +4,12 @@ use bincode::{Decode, Encode};
 
 use super::{export_binary, import_binary};
 
-const SNAPSHOT_FOLDER: &str = "./snapshots";
+pub const SNAPSHOT_FOLDER: &str = "./snapshots";
 
 // https://github.com/djkoloski/rust_serialization_benchmark
-pub trait Snapshot<S>
+pub trait Snapshot
 where
-    S: Decode,
-    Self: Encode,
+    Self: Encode + Decode,
 {
     fn name<'a>() -> &'a str;
 
@@ -20,7 +19,7 @@ where
         format!("{SNAPSHOT_FOLDER}/{name}.bin")
     }
 
-    fn import() -> color_eyre::Result<S> {
+    fn import() -> color_eyre::Result<Self> {
         import_binary(Path::new(&Self::format_path_str()))
     }
 

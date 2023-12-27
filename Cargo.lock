@@ -479,6 +479,7 @@ name = "explorer"
 version = "0.1.0"
 dependencies = [
  "bincode",
+ "bitcoin",
  "bitcoin-explorer",
  "bitcoin_hashes",
  "chrono",
@@ -486,6 +487,7 @@ dependencies = [
  "itertools",
  "postcard",
  "rayon",
+ "redb",
  "reqwest",
  "serde",
  "serde_json",
@@ -1267,6 +1269,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "678054eb77286b51581ba43620cc911abf02758c91f93f479767aed0f90458b2"
 dependencies = [
  "rand_core 0.3.1",
+]
+
+[[package]]
+name = "redb"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08837f9a129bde83c51953b8c96cbb3422b940166b730caa954836106eb1dfd2"
+dependencies = [
+ "libc",
 ]
 
 [[package]]

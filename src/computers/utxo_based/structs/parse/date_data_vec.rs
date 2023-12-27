@@ -6,20 +6,16 @@ use crate::utils::Snapshot;
 
 use super::{BlockData, DateData};
 
-#[derive(Encode, Decode)]
+#[derive(Encode, Decode, Default)]
 pub struct DateDataVec(Vec<DateData>);
 
 impl DateDataVec {
-    pub fn default() -> Self {
-        Self(vec![])
-    }
-
     pub fn last_mut_block(&mut self) -> &mut BlockData {
         self.last_mut().unwrap().blocks.last_mut().unwrap()
     }
 }
 
-impl Snapshot<DateDataVec> for DateDataVec {
+impl Snapshot for DateDataVec {
     fn name<'a>() -> &'a str {
         "height_to_aged__date_data_vec"
     }

@@ -1,24 +1,26 @@
-use bitcoin_explorer::{BitcoinDB, FBlock, FTransaction};
-use chrono::{offset::Local, Datelike};
-use itertools::Itertools;
+use std::cmp::Ordering;
 
-use std::{collections::BTreeMap, ops::ControlFlow};
+use bitcoin_explorer::{BitcoinDB, FBlock};
+use chrono::{offset::Local, Datelike, NaiveDate};
+use redb::ReadableTable;
 
 use crate::{
-    structs::{DateMap, HeightDatasets, WTxid, NUMBER_OF_UNSAFE_BLOCKS},
-    utils::{
-        convert_sats_to_bitcoins, create_group_blocks_by_day_closure, timestamp_to_naive_date,
+    computers::{
+        export::{export_all, ExportData},
+        process::{process_block, ProcessData},
     },
+    structs::{DateMap, HeightDatasets, NUMBER_OF_UNSAFE_BLOCKS},
+    utils::timestamp_to_naive_date,
 };
 
 pub mod export;
-pub mod parse;
+pub mod process;
+pub mod structs;
 
-use export::*;
-use parse::*;
+use structs::*;
 
 pub fn compute_utxo_based_datasets(
-    db: &BitcoinDB,
+    bitcoin_db: &BitcoinDB,
     block_count: usize,
     height_to_price: &[f32],
     date_to_first_block: &DateMap<usize>,
@@ -30,274 +32,127 @@ pub fn compute_utxo_based_datasets(
     println!("{:?} - Imported datasets", Local::now());
 
     let InitiatedParsers {
+        mut address_index_to_address_data,
+        database,
         mut date_data_vec,
-        mut txid_to_tx_data,
-        mut txout_index_counter,
-        mut txid_index_to_block_path,
-        mut txout_index_to_txout_value,
-        mut iter_height,
-    } = InitiatedParsers::init(&datasets, date_to_first_block)?;
+        mut txid_to_tx_index,
+        mut tx_counter,
+        mut tx_index_to_tx_data,
+        mut txout_index_to_txout_data,
+        mut height,
+    } = InitiatedParsers::init(&datasets, date_to_first_block);
 
     println!("{:?} - Starting parsing", Local::now());
 
-    db.iter_block::<FBlock>(iter_height, block_count)
-        .batching(create_group_blocks_by_day_closure())
-        .try_for_each(|blocks| -> color_eyre::Result<()> {
-            let date = timestamp_to_naive_date(blocks.first().unwrap().header.time);
+    let mut block_iter = bitcoin_db.iter_block::<FBlock>(height, block_count);
 
-            let blocks_len = blocks.len();
+    let mut parsing = true;
+    let mut saved_block_opt: Option<FBlock> = None;
+    let mut last_date_opt: Option<NaiveDate> = None;
 
-            println!(
-                "{:?} - Processing {date} ({} blocks)...",
-                Local::now(),
-                blocks_len + 1
-            );
+    while parsing {
+        let writer = DatabaseWriter::begin(&database)?;
 
-            date_data_vec.push(DateData::new(date, vec![]));
+        let mut address_index_to_empty_address_data =
+            AddressIndexToEmptyAddressData::open(&writer)?;
+        let mut address_to_address_index = AddressToAddressIndex::open(&writer)?;
 
-            let date_index = date_data_vec.len() - 1;
+        let mut address_counter = address_to_address_index.len().unwrap_or(0) as u32;
 
-            blocks
-                .into_iter()
-                .enumerate()
-                .for_each(|(block_index, block)| {
-                    let block_height = iter_height + block_index;
+        'days: loop {
+            let mut block_len = 0;
 
-                    let price = height_to_price
-                        .get(block_height)
-                        .unwrap_or_else(|| panic!("Expect {block_height} to have a price"))
-                        .to_owned();
+            'blocks: loop {
+                let current_block = {
+                    let saved_block = saved_block_opt.take();
 
-                    date_data_vec
-                        .last_mut()
-                        .unwrap()
-                        .blocks
-                        .push(BlockData::new(block_height as u32, price));
+                    if saved_block.is_some() {
+                        saved_block
+                    } else {
+                        block_iter.next()
+                    }
+                };
 
-                    let mut coinbase = 0.0;
-                    let mut inputs_sum = 0.0;
-                    let mut outputs_sum = 0.0;
+                if let Some(current_block) = current_block {
+                    if last_date_opt.is_none() {
+                        let date = timestamp_to_naive_date(current_block.header.time);
 
-                    let mut stxos = BTreeMap::new();
+                        last_date_opt.replace(date);
 
-                    let mut coinblocks_destroyed = 0.0;
-                    let mut coindays_destroyed = 0.0;
+                        date_data_vec.push(DateData::new(date, vec![]));
 
-                    block
-                        .txdata
-                        .into_iter()
-                        .enumerate()
-                        .for_each(|(tx_index, tx)| {
-                            let txid = tx.txid;
-                            let wtxid = WTxid::wrap(txid);
+                        println!("{:?} - Processing {date}...", Local::now());
+                    }
 
-                            let txid_index = txout_index_counter;
+                    let last_date = last_date_opt.unwrap();
 
-                            txout_index_counter += tx.output.len();
+                    let block_date = timestamp_to_naive_date(current_block.header.time);
 
-                            // --
-                            // outputs
-                            // ---
+                    match last_date.cmp(&block_date) {
+                        Ordering::Equal | Ordering::Greater => {
+                            block_len += 1;
 
-                            // 0 sats outputs are possible and allowed !
-                            // https://mempool.space/tx/2f2442f68e38b980a6c4cec21e71851b0d8a5847d85208331a27321a9967bbd6
-                            // https://bitcoin.stackexchange.com/questions/104937/transaction-outputs-with-value-0
-                            let mut non_zero_outputs_len = 0;
-                            let mut non_zero_amount = 0.0;
+                            let block_index = block_len - 1;
 
-                            // Before `input` as some inputs can be used as later outputs
-                            tx.output
-                                .into_iter()
-                                .enumerate()
-                                .map(|(vout, txout)| (vout, txout.value))
-                                .filter(|(_, value)| value > &0)
-                                .for_each(|(vout, value)| {
-                                    non_zero_outputs_len += 1;
-
-                                    let txout_value = convert_sats_to_bitcoins(value);
-
-                                    non_zero_amount += txout_value;
-
-                                    let txout_index = txid_index + vout;
-
-                                    txout_index_to_txout_value.insert(txout_index, txout_value);
-                                });
-
-                            if non_zero_outputs_len != 0 {
-                                txid_to_tx_data
-                                    .insert(wtxid, TxData::new(txid_index, non_zero_outputs_len));
-
-                                txid_index_to_block_path
-                                    .insert(txid_index, BlockPath::build(date_index, block_index));
-
-                                let last_block = date_data_vec.last_mut_block();
-
-                                last_block.amount += non_zero_amount;
-                                last_block.outputs_len += non_zero_outputs_len;
-
-                                if tx_index == 0 {
-                                    coinbase = non_zero_amount;
-                                } else {
-                                    outputs_sum += non_zero_amount;
-                                }
-                            }
-
-                            // ---
-                            // inputs
-                            // ---
-
-                            tx.input.into_iter().try_for_each(|txin| {
-                                let outpoint = txin.previous_output;
-                                let input_txid = outpoint.txid;
-                                let input_wtxid = WTxid::wrap(input_txid);
-                                let input_vout = outpoint.vout;
-
-                                let txid_index_to_remove = {
-                                    let input_tx_data = txid_to_tx_data.get_mut(&input_wtxid);
-
-                                    let get_value_from_db = || {
-                                        db.get_transaction::<FTransaction>(&input_wtxid)
-                                            .unwrap()
-                                            .output
-                                            .get(input_vout as usize)
-                                            .unwrap()
-                                            .value
-                                    };
-
-                                    if input_tx_data.is_none() {
-                                        if get_value_from_db() == 0 {
-                                            return ControlFlow::Continue::<()>(());
-                                        } else {
-                                            dbg!((txid, input_wtxid, txid_index, input_vout));
-                                            panic!("Txid to be in txid_to_tx_data");
-                                        }
-                                    }
-
-                                    let input_tx_data = input_tx_data.unwrap();
-
-                                    let input_value = txout_index_to_txout_value
-                                        .remove(&(input_tx_data.txid_index + input_vout as usize));
-
-                                    if input_value.is_none() {
-                                        if get_value_from_db() == 0 {
-                                            return ControlFlow::Continue::<()>(());
-                                        } else {
-                                            dbg!((
-                                                txid,
-                                                input_wtxid,
-                                                txid_index,
-                                                &input_tx_data,
-                                                input_vout,
-                                                input_value
-                                            ));
-                                            panic!(
-                                                "Txout index to be in txout_index_to_txout_value"
-                                            );
-                                        }
-                                    }
-
-                                    let input_value = input_value.unwrap();
-
-                                    if let Some(input_block_path) =
-                                        txid_index_to_block_path.get(&input_tx_data.txid_index)
-                                    {
-                                        let SplitBlockPath {
-                                            date_index: input_date_index,
-                                            block_index: input_block_index,
-                                        } = input_block_path.split();
-
-                                        let input_date_data = date_data_vec
-                                            .get_mut(input_date_index)
-                                            .unwrap_or_else(|| {
-                                                dbg!(
-                                                    block_height,
-                                                    &input_wtxid,
-                                                    input_block_path,
-                                                    input_date_index
-                                                );
-                                                panic!()
-                                            });
-
-                                        let input_block_data = input_date_data
-                                            .blocks
-                                            .get_mut(input_block_index)
-                                            .unwrap();
-
-                                        input_block_data.outputs_len -= 1;
-
-                                        input_block_data.amount -= input_value;
-
-                                        inputs_sum += input_value;
-
-                                        stxos.insert(
-                                            *input_block_path,
-                                            stxos.get(input_block_path).unwrap_or(&0.0)
-                                                + input_value,
-                                        );
-
-                                        coinblocks_destroyed += (block_height
-                                            - input_block_data.height as usize)
-                                            as f64
-                                            * input_block_data.amount;
-
-                                        coindays_destroyed += date
-                                            .signed_duration_since(*input_date_data.date)
-                                            .num_days()
-                                            as f64
-                                            * input_block_data.amount;
-                                    }
-
-                                    input_tx_data.outputs_len -= 1;
-
-                                    if input_tx_data.outputs_len == 0 {
-                                        Some(input_tx_data.txid_index)
-                                    } else {
-                                        None
-                                    }
-                                };
-
-                                if let Some(txid_index_to_remove) = txid_index_to_remove {
-                                    txid_to_tx_data.remove(&input_wtxid);
-
-                                    txid_index_to_block_path.remove(&txid_index_to_remove);
-                                }
-
-                                ControlFlow::Continue(())
+                            process_block(ProcessData {
+                                bitcoin_db,
+                                block: current_block,
+                                block_index,
+                                block_height: height + block_index,
+                                date: block_date,
+                                date_data_vec: &mut date_data_vec,
+                                height_to_price,
+                                address_to_address_index: &mut address_to_address_index,
+                                address_index_to_address_data: &mut address_index_to_address_data,
+                                address_index_to_empty_address_data:
+                                    &mut address_index_to_empty_address_data,
+                                txid_to_tx_index: &mut txid_to_tx_index,
+                                tx_index_to_tx_data: &mut tx_index_to_tx_data,
+                                txout_index_to_txout_data: &mut txout_index_to_txout_data,
+                                tx_counter: &mut tx_counter,
+                                address_counter: &mut address_counter,
                             });
-                        });
+                        }
+                        Ordering::Less => {
+                            saved_block_opt.replace(current_block);
+                            last_date_opt.take();
 
-                    let fees = inputs_sum - outputs_sum;
+                            height += block_len;
 
-                    datasets.insert(DatasetInsertData {
-                        date_data_vec: &date_data_vec,
-                        height: block_height,
-                        price,
-                        coinbase,
-                        fees,
-                        stxos: &stxos,
-                        coinblocks_destroyed,
-                        coindays_destroyed,
-                    });
-                });
+                            if last_date.day() == 1
+                                || (block_count - NUMBER_OF_UNSAFE_BLOCKS * 10) < height
+                            {
+                                break 'days;
+                            } else {
+                                break 'blocks;
+                            }
+                        }
+                    }
+                } else {
+                    height += block_len;
 
-            iter_height += blocks_len;
+                    parsing = false;
 
-            if (date.day() == 1 || block_count - 1000 < iter_height)
-                && iter_height < block_count - NUMBER_OF_UNSAFE_BLOCKS
-            {
-                export_all(
-                    &date,
-                    iter_height,
-                    &datasets,
-                    &date_data_vec,
-                    &txid_to_tx_data,
-                    &txout_index_to_txout_value,
-                    &txid_index_to_block_path,
-                )?;
+                    break 'days;
+                }
             }
+        }
 
-            Ok(())
+        export_all(ExportData {
+            height,
+            datasets: &datasets,
+            address_index_to_address_data: &address_index_to_address_data,
+            date_data_vec: &date_data_vec,
+            txid_to_tx_index: &txid_to_tx_index,
+            txout_index_to_txout_data: &txout_index_to_txout_data,
+            tx_index_to_tx_data: &tx_index_to_tx_data,
         })?;
+
+        drop(address_index_to_empty_address_data);
+        drop(address_to_address_index);
+
+        writer.commit()?;
+    }
 
     datasets.export()?;
 

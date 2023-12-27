@@ -9,7 +9,7 @@ use bincode::{
 use bitcoin_explorer::Txid;
 use bitcoin_hashes::{sha256d::Hash, Hash as HashTrait};
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct WTxid(Txid);
 
 impl WTxid {

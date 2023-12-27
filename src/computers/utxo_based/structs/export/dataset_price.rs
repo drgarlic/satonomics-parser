@@ -93,7 +93,7 @@ impl<'a> HeightDataset<DatasetInsertData<'a>> for AgedDataset {
             date_data_vec,
             price,
             height,
-            stxos,
+            block_path_to_spent_value,
             ..
         } = insert_data;
 
@@ -102,7 +102,7 @@ impl<'a> HeightDataset<DatasetInsertData<'a>> for AgedDataset {
         let mut realized_profit = 0.0;
         let mut realized_loss = 0.0;
 
-        stxos
+        block_path_to_spent_value
             .iter()
             .map(|(block_path, value)| {
                 let SplitBlockPath {

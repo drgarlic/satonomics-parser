@@ -1,6 +1,6 @@
 use bincode::{Decode, Encode};
 
-#[derive(Encode, Decode)]
+#[derive(Encode, Decode, Debug)]
 pub struct BlockData {
     pub height: u32,
     pub price: f32,
