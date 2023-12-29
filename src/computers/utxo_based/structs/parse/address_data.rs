@@ -1,7 +1,9 @@
 use bincode::{Decode, Encode};
-use redb::RedbValue;
+use serde::{Deserialize, Serialize};
 
-#[derive(Encode, Decode, Default, Debug)]
+use super::empty_address_data::EmptyAddressData;
+
+#[derive(Encode, Decode, Default, Debug, Serialize, Deserialize)]
 pub struct AddressData {
     pub amount: f64,
     pub sent: f64,
@@ -41,36 +43,13 @@ impl AddressData {
     pub fn is_empty(&self) -> bool {
         self.amount == 0.0
     }
-}
 
-impl RedbValue for AddressData {
-    type SelfType<'a> = Self;
-    type AsBytes<'a> = Vec<u8> where Self: 'a;
-
-    fn fixed_width() -> Option<usize> {
-        None
-    }
-
-    fn from_bytes<'a>(data: &'a [u8]) -> Self
-    where
-        Self: 'a,
-    {
-        let config = bincode::config::standard();
-
-        bincode::borrow_decode_from_slice(data, config).unwrap().0
-    }
-
-    fn as_bytes<'a, 'b: 'a>(value: &'a Self::SelfType<'b>) -> Self::AsBytes<'a>
-    where
-        Self: 'a,
-        Self: 'b,
-    {
-        let config = bincode::config::standard();
-
-        bincode::encode_to_vec(value, config).unwrap()
-    }
-
-    fn type_name() -> redb::TypeName {
-        redb::TypeName::new(stringify!(EmptyAddress))
+    pub fn from_empty(empty: EmptyAddressData) -> Self {
+        Self {
+            amount: 0.0,
+            sent: empty.sent,
+            received: empty.received,
+            mean_price_paid: 0.0,
+        }
     }
 }

@@ -1,42 +1,38 @@
 use std::ops::{Deref, DerefMut};
 
-use redb::*;
+use heed::{
+    byteorder::NativeEndian,
+    types::{SerdeBincode, U32},
+    Database, Error, RwTxn,
+};
 
-use super::{AddressData, DatabaseWriter};
+use super::{EmptyAddressData, HeedEnv};
 
-type Key = u32;
-type Value = AddressData;
+type Key = U32<NativeEndian>;
+type Value = SerdeBincode<EmptyAddressData>;
+type DB = Database<Key, Value>;
 
-pub struct AddressIndexToEmptyAddressData<'db, 'writer>(Table<'db, 'writer, Key, Value>);
+pub struct AddressIndexToEmptyAddressData(DB);
 
-const TABLE_DEFINITION: TableDefinition<Key, Value> =
-    TableDefinition::new("address_index_to_empty_address_data");
+impl AddressIndexToEmptyAddressData {
+    pub fn open(env: &HeedEnv, writer: &mut RwTxn) -> Result<Self, Error> {
+        let db = env
+            .create_database(writer, Some("address_index_to_empty_address_data"))
+            .unwrap();
 
-impl<'db, 'writer> AddressIndexToEmptyAddressData<'db, 'writer> {
-    pub fn open(
-        writer: &'writer DatabaseWriter<'db>,
-    ) -> Result<AddressIndexToEmptyAddressData<'db, 'writer>, Error> {
-        Ok(AddressIndexToEmptyAddressData(
-            writer.open_table(TABLE_DEFINITION)?,
-        ))
-    }
-
-    pub fn clear(&mut self) -> Result<(), Error> {
-        self.drain::<Key>(..)?;
-
-        Ok(())
+        Ok(Self(db))
     }
 }
 
-impl<'db, 'writer> Deref for AddressIndexToEmptyAddressData<'db, 'writer> {
-    type Target = Table<'db, 'writer, Key, Value>;
+impl Deref for AddressIndexToEmptyAddressData {
+    type Target = DB;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl<'db, 'writer> DerefMut for AddressIndexToEmptyAddressData<'db, 'writer> {
+impl DerefMut for AddressIndexToEmptyAddressData {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }

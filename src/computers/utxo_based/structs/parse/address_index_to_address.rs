@@ -12,23 +12,23 @@ use super::HeedEnv;
 /// - mono
 /// - multi (sorted and joined)
 // type Key = &'static [u8];
-type Key = Bytes;
-type Value = U32<NativeEndian>;
+type Key = U32<NativeEndian>;
+type Value = Bytes;
 type DB = Database<Key, Value>;
 
-pub struct AddressToAddressIndex(DB);
+pub struct AddressIndexToAddress(DB);
 
-impl AddressToAddressIndex {
+impl AddressIndexToAddress {
     pub fn open(env: &HeedEnv, writer: &mut RwTxn) -> Result<Self, Error> {
         let db = env
-            .create_database(writer, Some("address_index_to_address"))
+            .create_database(writer, Some("address_to_address_index"))
             .unwrap();
 
         Ok(Self(db))
     }
 }
 
-impl Deref for AddressToAddressIndex {
+impl Deref for AddressIndexToAddress {
     type Target = DB;
 
     fn deref(&self) -> &Self::Target {
@@ -36,7 +36,7 @@ impl Deref for AddressToAddressIndex {
     }
 }
 
-impl DerefMut for AddressToAddressIndex {
+impl DerefMut for AddressIndexToAddress {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }

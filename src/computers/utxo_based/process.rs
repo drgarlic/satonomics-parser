@@ -1,8 +1,8 @@
 use std::{collections::BTreeMap, ops::ControlFlow};
 
 use bitcoin_explorer::{BitcoinDB, FBlock, FTransaction};
-use chrono::{Local, NaiveDate};
-use redb::ReadableTable;
+use chrono::NaiveDate;
+use heed::RwTxn;
 
 use crate::{
     computers::utxo_based::structs::{
@@ -13,31 +13,43 @@ use crate::{
 };
 
 use super::structs::{
-    AddressIndexToAddressData, AddressIndexToEmptyAddressData, AddressToAddressIndex, DateDataVec,
-    TxIndexToTxData, TxidToTxIndex, TxoutIndexToTxoutData,
+    // AddressIndexToAddress,
+    AddressIndexToAddressData,
+    AddressIndexToEmptyAddressData,
+    AddressToAddressIndex,
+    DateDataVec,
+    EmptyAddressData,
+    // EmptyAddressToAddressIndex,
+    TxIndexToTxData,
+    TxidToTxIndex,
+    TxoutIndexToTxoutData,
 };
 
-pub struct ProcessData<'a, 'db, 'writer> {
+pub struct ProcessData<'a, 'env> {
     pub address_counter: &'a mut u32,
+    // pub address_index_to_address: &'a mut AddressIndexToAddress,
     pub address_index_to_address_data: &'a mut AddressIndexToAddressData,
-    pub address_index_to_empty_address_data: &'a mut AddressIndexToEmptyAddressData<'db, 'writer>,
-    pub address_to_address_index: &'a mut AddressToAddressIndex<'db, 'writer>,
+    pub address_index_to_empty_address_data: &'a mut AddressIndexToEmptyAddressData,
+    pub address_to_address_index: &'a mut AddressToAddressIndex,
     pub bitcoin_db: &'a BitcoinDB,
     pub block: FBlock,
     pub block_height: usize,
     pub block_index: usize,
     pub date: NaiveDate,
     pub date_data_vec: &'a mut DateDataVec,
+    // pub empty_address_to_address_index: &'a mut EmptyAddressToAddressIndex,
     pub height_to_price: &'a [f32],
     pub tx_counter: &'a mut u32,
     pub tx_index_to_tx_data: &'a mut TxIndexToTxData,
     pub txid_to_tx_index: &'a mut TxidToTxIndex,
     pub txout_index_to_txout_data: &'a mut TxoutIndexToTxoutData,
+    pub writer: &'a mut RwTxn<'env>,
 }
 
 pub fn process_block(
     ProcessData {
         address_counter,
+        // address_index_to_address,
         address_index_to_address_data,
         address_to_address_index,
         address_index_to_empty_address_data,
@@ -47,11 +59,13 @@ pub fn process_block(
         block_index,
         date,
         date_data_vec,
+        // empty_address_to_address_index,
         height_to_price,
         tx_counter,
         tx_index_to_tx_data,
         txid_to_tx_index,
         txout_index_to_txout_data,
+        writer,
     }: ProcessData,
 ) {
     let date_index = date_data_vec.len() - 1;
@@ -123,28 +137,21 @@ pub fn process_block(
                 non_zero_amount += txout_value;
 
                 let (address_data, address_index) = {
-                    let address_index_opt = address_to_address_index.get(address_bytes).unwrap();
-
-                    if let Some(address_index) = address_index_opt {
-                        let address_index = address_index.value();
-
-                        let address_data_opt =
-                            address_index_to_address_data.get_mut(&address_index);
-
-                        if let Some(address_data) = address_data_opt {
+                    if let Some(address_index) =
+                        address_to_address_index.get(writer, address_bytes).unwrap()
+                    {
+                        if let Some(address_data) =
+                            address_index_to_address_data.get_mut(&address_index)
+                        {
                             (address_data, address_index)
                         } else {
-                            let address_data = address_index_to_empty_address_data
-                                .get(address_index)
+                            let empty_address_data = address_index_to_empty_address_data
+                                .get(writer, &address_index)
                                 .unwrap()
-                                .unwrap()
-                                .value();
+                                .unwrap();
 
-                            if !address_data.is_empty() {
-                                panic!("{address_data:?} not empty");
-                            }
-
-                            address_index_to_address_data.insert(address_index, address_data);
+                            address_index_to_address_data
+                                .insert(address_index, AddressData::from_empty(empty_address_data));
 
                             let address_data = address_index_to_address_data
                                 .get_mut(&address_index)
@@ -152,9 +159,41 @@ pub fn process_block(
 
                             (address_data, address_index)
                         }
-                    } else {
-                        drop(address_index_opt);
 
+                    // } else if let Some(address_index) = empty_address_to_address_index
+                    //     .get(writer, address_bytes)
+                    //     .unwrap()
+                    // {
+                    //     empty_address_to_address_index
+                    //         .delete(writer, address_bytes)
+                    //         .unwrap();
+
+                    //     let empty_address_data = address_index_to_empty_address_data
+                    //         .get(writer, &address_index)
+                    //         .unwrap()
+                    //         .unwrap();
+
+                    //     address_index_to_empty_address_data
+                    //         .delete(writer, &address_index)
+                    //         .unwrap();
+
+                    //     address_to_address_index
+                    //         .put(writer, address_bytes, &address_index)
+                    //         .unwrap();
+
+                    //     address_index_to_address
+                    //         .put(writer, &address_index, address_bytes)
+                    //         .unwrap();
+
+                    //     address_index_to_address_data
+                    //         .insert(address_index, AddressData::from_empty(empty_address_data));
+
+                    //     let address_data = address_index_to_address_data
+                    //         .get_mut(&address_index)
+                    //         .unwrap();
+
+                    //     (address_data, address_index)
+                    } else {
                         let address_index = *address_counter;
 
                         address_index_to_address_data.insert(address_index, AddressData::default());
@@ -162,8 +201,12 @@ pub fn process_block(
                         *address_counter += 1;
 
                         address_to_address_index
-                            .insert(address_bytes, address_index)
+                            .put(writer, address_bytes, &address_index)
                             .unwrap();
+
+                        // address_index_to_address
+                        //     .put(writer, &address_index, address_bytes)
+                        //     .unwrap();
 
                         let address_data = address_index_to_address_data
                             .get_mut(&address_index)
@@ -315,30 +358,51 @@ pub fn process_block(
                         + input_txout_value,
                 );
 
-                let remove_address_data = {
+                let move_address_to_empty = {
                     let address_data = address_index_to_address_data
                         .get_mut(&input_address_index)
                         .unwrap_or_else(|| {
+                            // let address = address_index_to_address
+                            //     .get(writer, &input_address_index)
+                            //     .unwrap();
+
+                            // dbg!(input_address_index, address);
                             dbg!(input_address_index);
                             panic!();
                         });
-
-                    if input_address_index == 5864 {
-                        dbg!(&address_data);
-                    }
 
                     address_data.spend(input_txout_value, input_block_data.price);
 
                     address_data.is_empty()
                 };
 
-                if remove_address_data {
-                    let empty_address_data = address_index_to_address_data
+                if move_address_to_empty {
+                    // let address = address_index_to_address
+                    //     .get(writer, &input_address_index)
+                    //     .unwrap()
+                    //     .unwrap()
+                    //     .to_owned();
+
+                    // address_index_to_address
+                    //     .delete(writer, &input_address_index)
+                    //     .unwrap();
+
+                    // address_to_address_index.delete(writer, &address).unwrap();
+
+                    // empty_address_to_address_index
+                    //     .put(writer, &address, &input_address_index)
+                    //     .unwrap();
+
+                    let address_data = address_index_to_address_data
                         .remove(&input_address_index)
                         .unwrap();
 
                     address_index_to_empty_address_data
-                        .insert(&input_address_index, empty_address_data)
+                        .put(
+                            writer,
+                            &input_address_index,
+                            &EmptyAddressData::from_non_empty(address_data),
+                        )
                         .unwrap();
                 }
 

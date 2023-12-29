@@ -2,7 +2,6 @@ use std::cmp::Ordering;
 
 use bitcoin_explorer::{BitcoinDB, FBlock};
 use chrono::{offset::Local, Datelike, NaiveDate};
-use redb::ReadableTable;
 
 use crate::{
     computers::{
@@ -33,7 +32,7 @@ pub fn compute_utxo_based_datasets(
 
     let InitiatedParsers {
         mut address_index_to_address_data,
-        database,
+        env,
         mut date_data_vec,
         mut txid_to_tx_index,
         mut tx_counter,
@@ -51,13 +50,17 @@ pub fn compute_utxo_based_datasets(
     let mut last_date_opt: Option<NaiveDate> = None;
 
     while parsing {
-        let writer = DatabaseWriter::begin(&database)?;
+        let mut writer = env.write_txn()?;
 
         let mut address_index_to_empty_address_data =
-            AddressIndexToEmptyAddressData::open(&writer)?;
-        let mut address_to_address_index = AddressToAddressIndex::open(&writer)?;
+            AddressIndexToEmptyAddressData::open(&env, &mut writer)?;
+        // let mut address_index_to_address = AddressIndexToAddress::open(&env, &mut writer)?;
+        let mut address_to_address_index = AddressToAddressIndex::open(&env, &mut writer)?;
+        // let mut empty_address_to_address_index =
+        // EmptyAddressToAddressIndex::open(&env, &mut writer)?;
 
-        let mut address_counter = address_to_address_index.len().unwrap_or(0) as u32;
+        let mut address_counter = address_to_address_index.len(&writer).unwrap_or(0) as u32;
+        // + empty_address_to_address_index.len(&writer).unwrap_or(0) as u32;
 
         'days: loop {
             let mut block_len = 0;
@@ -103,14 +106,17 @@ pub fn compute_utxo_based_datasets(
                                 date_data_vec: &mut date_data_vec,
                                 height_to_price,
                                 address_to_address_index: &mut address_to_address_index,
+                                // address_index_to_address: &mut address_index_to_address,
                                 address_index_to_address_data: &mut address_index_to_address_data,
                                 address_index_to_empty_address_data:
                                     &mut address_index_to_empty_address_data,
+                                // empty_address_to_address_index: &mut empty_address_to_address_index,
                                 txid_to_tx_index: &mut txid_to_tx_index,
                                 tx_index_to_tx_data: &mut tx_index_to_tx_data,
                                 txout_index_to_txout_data: &mut txout_index_to_txout_data,
                                 tx_counter: &mut tx_counter,
                                 address_counter: &mut address_counter,
+                                writer: &mut writer,
                             });
                         }
                         Ordering::Less => {
@@ -148,10 +154,9 @@ pub fn compute_utxo_based_datasets(
             tx_index_to_tx_data: &tx_index_to_tx_data,
         })?;
 
-        drop(address_index_to_empty_address_data);
-        drop(address_to_address_index);
-
         writer.commit()?;
+
+        env.force_sync()?;
     }
 
     datasets.export()?;

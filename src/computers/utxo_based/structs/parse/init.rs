@@ -9,14 +9,14 @@ use crate::{
 };
 
 use super::{
-    AddressIndexToAddressData, Database, DateDataVec, TxIndexToTxData, TxidToTxIndex,
+    AddressIndexToAddressData, DateDataVec, HeedEnv, TxIndexToTxData, TxidToTxIndex,
     TxoutIndexToTxoutData,
 };
 
 #[derive(Default)]
 pub struct InitiatedParsers {
     pub address_index_to_address_data: AddressIndexToAddressData,
-    pub database: Database,
+    pub env: HeedEnv,
     pub date_data_vec: DateDataVec,
     pub tx_index_to_tx_data: TxIndexToTxData,
     pub txid_to_tx_index: TxidToTxIndex,
@@ -38,7 +38,7 @@ impl InitiatedParsers {
 
         let address_index_to_address_data_handle = thread::spawn(AddressIndexToAddressData::import);
 
-        let database_handle = thread::spawn(Database::import);
+        let env_handle = thread::spawn(HeedEnv::import);
 
         let tx_index_to_tx_data_handle = thread::spawn(TxIndexToTxData::import);
 
@@ -56,7 +56,7 @@ impl InitiatedParsers {
 
         let mut tx_counter = txid_to_tx_index.max_index();
 
-        let database = database_handle.join().unwrap()?;
+        let mut env = env_handle.join().unwrap()?;
 
         let mut txout_index_to_txout_data = txout_index_to_txout_value_handle.join().unwrap()?;
 
@@ -76,7 +76,7 @@ impl InitiatedParsers {
                             println!("snapshot_start_height {snapshot_start_height} > last_saved_height {min_last_height:?}");
                             println!("Starting over...");
 
-                            database.clear().unwrap();
+                            env = HeedEnv::default();
 
                             address_index_to_address_data.clear();
                             date_data_vec.clear();
@@ -94,7 +94,7 @@ impl InitiatedParsers {
 
         Ok(Self {
             address_index_to_address_data,
-            database,
+            env,
             date_data_vec,
             tx_index_to_tx_data,
             txid_to_tx_index,

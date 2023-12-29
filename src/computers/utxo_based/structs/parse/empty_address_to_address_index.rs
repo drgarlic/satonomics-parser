@@ -16,19 +16,19 @@ type Key = Bytes;
 type Value = U32<NativeEndian>;
 type DB = Database<Key, Value>;
 
-pub struct AddressToAddressIndex(DB);
+pub struct EmptyAddressToAddressIndex(DB);
 
-impl AddressToAddressIndex {
+impl EmptyAddressToAddressIndex {
     pub fn open(env: &HeedEnv, writer: &mut RwTxn) -> Result<Self, Error> {
         let db = env
-            .create_database(writer, Some("address_index_to_address"))
+            .create_database(writer, Some("empty_address_to_address_index"))
             .unwrap();
 
         Ok(Self(db))
     }
 }
 
-impl Deref for AddressToAddressIndex {
+impl Deref for EmptyAddressToAddressIndex {
     type Target = DB;
 
     fn deref(&self) -> &Self::Target {
@@ -36,7 +36,7 @@ impl Deref for AddressToAddressIndex {
     }
 }
 
-impl DerefMut for AddressToAddressIndex {
+impl DerefMut for EmptyAddressToAddressIndex {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }

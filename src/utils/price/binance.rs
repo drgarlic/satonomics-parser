@@ -58,7 +58,7 @@ pub fn read_binance_har_file() -> color_eyre::Result<HashMap<u32, f32>> {
                 .map(|array| {
                     let array = array.as_array().unwrap();
 
-                    let timestamp = (array.get(0).unwrap().as_u64().unwrap() / 1000) as u32;
+                    let timestamp = (array.first().unwrap().as_u64().unwrap() / 1000) as u32;
 
                     let price = array
                         .get(4)

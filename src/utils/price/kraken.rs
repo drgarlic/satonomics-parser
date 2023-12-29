@@ -26,7 +26,7 @@ pub fn fetch_1mn_prices_from_kraken() -> color_eyre::Result<HashMap<u32, f32>> {
         .map(|value| {
             let array = value.as_array().unwrap();
 
-            let timestamp = array.get(0).unwrap().as_u64().unwrap() as u32;
+            let timestamp = array.first().unwrap().as_u64().unwrap() as u32;
 
             let price = array
                 .get(4)
@@ -61,8 +61,8 @@ pub fn fetch_daily_prices_from_kraken() -> color_eyre::Result<HashMap<String, f3
         .map(|value| {
             let array = value.as_array().unwrap();
 
-            let date =
-                timestamp_to_naive_date(array.get(0).unwrap().as_u64().unwrap() as u32).to_string();
+            let date = timestamp_to_naive_date(array.first().unwrap().as_u64().unwrap() as u32)
+                .to_string();
 
             let price = array
                 .get(4)
