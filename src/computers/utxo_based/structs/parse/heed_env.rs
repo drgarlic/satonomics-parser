@@ -6,7 +6,7 @@ use std::{
 
 use heed::{Env, EnvFlags, EnvOpenOptions};
 
-use crate::utils::SNAPSHOT_FOLDER;
+use crate::traits::SNAPSHOT_FOLDER;
 
 pub struct HeedEnv(Env);
 

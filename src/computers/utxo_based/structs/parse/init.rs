@@ -5,7 +5,7 @@ use chrono::Days;
 use crate::{
     computers::utxo_based::structs::UtxoDatasets,
     structs::{DateMap, HeightDatasets},
-    utils::Snapshot,
+    traits::Snapshot,
 };
 
 use super::{

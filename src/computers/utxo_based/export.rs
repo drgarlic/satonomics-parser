@@ -2,7 +2,7 @@ use std::thread;
 
 use chrono::Local;
 
-use crate::utils::Snapshot;
+use crate::traits::Snapshot;
 
 use super::structs::{
     AddressIndexToAddressData, DateDataVec, TxIndexToTxData, TxidToTxIndex, TxoutIndexToTxoutData,

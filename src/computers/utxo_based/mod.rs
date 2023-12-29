@@ -54,13 +54,9 @@ pub fn compute_utxo_based_datasets(
 
         let mut address_index_to_empty_address_data =
             AddressIndexToEmptyAddressData::open(&env, &mut writer)?;
-        // let mut address_index_to_address = AddressIndexToAddress::open(&env, &mut writer)?;
         let mut address_to_address_index = AddressToAddressIndex::open(&env, &mut writer)?;
-        // let mut empty_address_to_address_index =
-        // EmptyAddressToAddressIndex::open(&env, &mut writer)?;
 
         let mut address_counter = address_to_address_index.len(&writer).unwrap_or(0) as u32;
-        // + empty_address_to_address_index.len(&writer).unwrap_or(0) as u32;
 
         'days: loop {
             let mut block_len = 0;
@@ -153,6 +149,9 @@ pub fn compute_utxo_based_datasets(
             txout_index_to_txout_data: &txout_index_to_txout_data,
             tx_index_to_tx_data: &tx_index_to_tx_data,
         })?;
+
+        address_to_address_index.commit(&mut writer);
+        address_index_to_empty_address_data.commit(&mut writer);
 
         writer.commit()?;
 

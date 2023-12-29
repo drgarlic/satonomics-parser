@@ -5,7 +5,7 @@ use std::{
 
 use bincode::{Decode, Encode};
 
-use crate::utils::Snapshot;
+use crate::traits::Snapshot;
 
 use super::TxData;
 

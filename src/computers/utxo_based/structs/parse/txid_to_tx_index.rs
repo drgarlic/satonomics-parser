@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 use bincode::{Decode, Encode};
 
-use crate::{structs::TxidMap, utils::Snapshot};
+use crate::{structs::TxidMap, traits::Snapshot};
 
 #[derive(Encode, Decode, Default)]
 pub struct TxidToTxIndex(TxidMap<u32>);

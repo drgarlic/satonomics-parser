@@ -137,8 +137,7 @@ pub fn process_block(
                 non_zero_amount += txout_value;
 
                 let (address_data, address_index) = {
-                    if let Some(address_index) =
-                        address_to_address_index.get(writer, address_bytes).unwrap()
+                    if let Some(address_index) = address_to_address_index.get(writer, address_bytes)
                     {
                         if let Some(address_data) =
                             address_index_to_address_data.get_mut(&address_index)
@@ -146,12 +145,16 @@ pub fn process_block(
                             (address_data, address_index)
                         } else {
                             let empty_address_data = address_index_to_empty_address_data
-                                .get(writer, &address_index)
-                                .unwrap()
+                                .take(writer, &address_index)
                                 .unwrap();
 
-                            address_index_to_address_data
+                            let previous = address_index_to_address_data
                                 .insert(address_index, AddressData::from_empty(empty_address_data));
+
+                            if previous.is_some() {
+                                dbg!(address_index);
+                                panic!("Shouldn't be anything there");
+                            }
 
                             let address_data = address_index_to_address_data
                                 .get_mut(&address_index)
@@ -195,18 +198,11 @@ pub fn process_block(
                     //     (address_data, address_index)
                     } else {
                         let address_index = *address_counter;
-
-                        address_index_to_address_data.insert(address_index, AddressData::default());
-
                         *address_counter += 1;
 
-                        address_to_address_index
-                            .put(writer, address_bytes, &address_index)
-                            .unwrap();
+                        address_to_address_index.put(address_bytes, address_index);
 
-                        // address_index_to_address
-                        //     .put(writer, &address_index, address_bytes)
-                        //     .unwrap();
+                        address_index_to_address_data.insert(address_index, AddressData::default());
 
                         let address_data = address_index_to_address_data
                             .get_mut(&address_index)
@@ -397,13 +393,10 @@ pub fn process_block(
                         .remove(&input_address_index)
                         .unwrap();
 
-                    address_index_to_empty_address_data
-                        .put(
-                            writer,
-                            &input_address_index,
-                            &EmptyAddressData::from_non_empty(address_data),
-                        )
-                        .unwrap();
+                    address_index_to_empty_address_data.put(
+                        input_address_index,
+                        EmptyAddressData::from_non_empty(address_data),
+                    );
                 }
 
                 address_index_to_spent_value.insert(

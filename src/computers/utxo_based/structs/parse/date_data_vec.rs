@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 use bincode::{Decode, Encode};
 
-use crate::utils::Snapshot;
+use crate::traits::Snapshot;
 
 use super::{BlockData, DateData};
 

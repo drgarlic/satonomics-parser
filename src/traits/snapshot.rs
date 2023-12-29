@@ -2,7 +2,7 @@ use std::path::Path;
 
 use bincode::{Decode, Encode};
 
-use super::{export_binary, import_binary};
+use crate::utils::{export_binary, import_binary};
 
 pub const SNAPSHOT_FOLDER: &str = "./snapshots";
 
