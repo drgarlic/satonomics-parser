@@ -8,11 +8,11 @@ use heed::{Env, EnvFlags, EnvOpenOptions};
 
 use crate::traits::SNAPSHOT_FOLDER;
 
-pub struct HeedEnv(Env);
+pub struct EnvHeed(Env);
 
 const ONE_GB: usize = 1024 * 1024 * 1024;
 
-impl HeedEnv {
+impl EnvHeed {
     pub fn import() -> color_eyre::Result<Self> {
         let str = Self::path();
 
@@ -44,15 +44,15 @@ impl HeedEnv {
     }
 }
 
-impl Default for HeedEnv {
+impl Default for EnvHeed {
     fn default() -> Self {
         let _ = fs::remove_file(Self::path());
 
-        HeedEnv::import().unwrap()
+        EnvHeed::import().unwrap()
     }
 }
 
-impl Deref for HeedEnv {
+impl Deref for EnvHeed {
     type Target = Env;
 
     fn deref(&self) -> &Self::Target {
@@ -60,7 +60,7 @@ impl Deref for HeedEnv {
     }
 }
 
-impl DerefMut for HeedEnv {
+impl DerefMut for EnvHeed {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }

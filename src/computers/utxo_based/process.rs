@@ -2,7 +2,6 @@ use std::{collections::BTreeMap, ops::ControlFlow};
 
 use bitcoin_explorer::{BitcoinDB, FBlock, FTransaction};
 use chrono::NaiveDate;
-use heed::RwTxn;
 
 use crate::{
     computers::utxo_based::structs::{
@@ -13,6 +12,7 @@ use crate::{
 };
 
 use super::structs::{
+    AddressCounter,
     // AddressIndexToAddress,
     AddressIndexToAddressData,
     AddressIndexToEmptyAddressData,
@@ -25,8 +25,8 @@ use super::structs::{
     TxoutIndexToTxoutData,
 };
 
-pub struct ProcessData<'a, 'env> {
-    pub address_counter: &'a mut u32,
+pub struct ProcessData<'a> {
+    pub address_counter: &'a mut AddressCounter,
     // pub address_index_to_address: &'a mut AddressIndexToAddress,
     pub address_index_to_address_data: &'a mut AddressIndexToAddressData,
     pub address_index_to_empty_address_data: &'a mut AddressIndexToEmptyAddressData,
@@ -43,7 +43,6 @@ pub struct ProcessData<'a, 'env> {
     pub tx_index_to_tx_data: &'a mut TxIndexToTxData,
     pub txid_to_tx_index: &'a mut TxidToTxIndex,
     pub txout_index_to_txout_data: &'a mut TxoutIndexToTxoutData,
-    pub writer: &'a mut RwTxn<'env>,
 }
 
 pub fn process_block(
@@ -65,7 +64,6 @@ pub fn process_block(
         tx_index_to_tx_data,
         txid_to_tx_index,
         txout_index_to_txout_data,
-        writer,
     }: ProcessData,
 ) {
     let date_index = date_data_vec.len() - 1;
@@ -137,15 +135,14 @@ pub fn process_block(
                 non_zero_amount += txout_value;
 
                 let (address_data, address_index) = {
-                    if let Some(address_index) = address_to_address_index.get(writer, address_bytes)
-                    {
+                    if let Some(address_index) = address_to_address_index.get(address_bytes) {
                         if let Some(address_data) =
                             address_index_to_address_data.get_mut(&address_index)
                         {
                             (address_data, address_index)
                         } else {
                             let empty_address_data = address_index_to_empty_address_data
-                                .take(writer, &address_index)
+                                .take(&address_index)
                                 .unwrap();
 
                             let previous = address_index_to_address_data
@@ -162,43 +159,10 @@ pub fn process_block(
 
                             (address_data, address_index)
                         }
-
-                    // } else if let Some(address_index) = empty_address_to_address_index
-                    //     .get(writer, address_bytes)
-                    //     .unwrap()
-                    // {
-                    //     empty_address_to_address_index
-                    //         .delete(writer, address_bytes)
-                    //         .unwrap();
-
-                    //     let empty_address_data = address_index_to_empty_address_data
-                    //         .get(writer, &address_index)
-                    //         .unwrap()
-                    //         .unwrap();
-
-                    //     address_index_to_empty_address_data
-                    //         .delete(writer, &address_index)
-                    //         .unwrap();
-
-                    //     address_to_address_index
-                    //         .put(writer, address_bytes, &address_index)
-                    //         .unwrap();
-
-                    //     address_index_to_address
-                    //         .put(writer, &address_index, address_bytes)
-                    //         .unwrap();
-
-                    //     address_index_to_address_data
-                    //         .insert(address_index, AddressData::from_empty(empty_address_data));
-
-                    //     let address_data = address_index_to_address_data
-                    //         .get_mut(&address_index)
-                    //         .unwrap();
-
-                    //     (address_data, address_index)
                     } else {
-                        let address_index = *address_counter;
-                        *address_counter += 1;
+                        let address_index = **address_counter;
+
+                        **address_counter += 1;
 
                         address_to_address_index.put(address_bytes, address_index);
 
@@ -373,22 +337,6 @@ pub fn process_block(
                 };
 
                 if move_address_to_empty {
-                    // let address = address_index_to_address
-                    //     .get(writer, &input_address_index)
-                    //     .unwrap()
-                    //     .unwrap()
-                    //     .to_owned();
-
-                    // address_index_to_address
-                    //     .delete(writer, &input_address_index)
-                    //     .unwrap();
-
-                    // address_to_address_index.delete(writer, &address).unwrap();
-
-                    // empty_address_to_address_index
-                    //     .put(writer, &address, &input_address_index)
-                    //     .unwrap();
-
                     let address_data = address_index_to_address_data
                         .remove(&input_address_index)
                         .unwrap();

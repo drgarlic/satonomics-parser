@@ -1,4 +1,4 @@
-use std::cmp::Ordering;
+use std::{cmp::Ordering, thread};
 
 use bitcoin_explorer::{BitcoinDB, FBlock};
 use chrono::{offset::Local, Datelike, NaiveDate};
@@ -31,8 +31,8 @@ pub fn compute_utxo_based_datasets(
     println!("{:?} - Imported datasets", Local::now());
 
     let InitiatedParsers {
+        mut address_counter,
         mut address_index_to_address_data,
-        env,
         mut date_data_vec,
         mut txid_to_tx_index,
         mut tx_counter,
@@ -50,13 +50,8 @@ pub fn compute_utxo_based_datasets(
     let mut last_date_opt: Option<NaiveDate> = None;
 
     while parsing {
-        let mut writer = env.write_txn()?;
-
-        let mut address_index_to_empty_address_data =
-            AddressIndexToEmptyAddressData::open(&env, &mut writer)?;
-        let mut address_to_address_index = AddressToAddressIndex::open(&env, &mut writer)?;
-
-        let mut address_counter = address_to_address_index.len(&writer).unwrap_or(0) as u32;
+        let mut address_index_to_empty_address_data = AddressIndexToEmptyAddressData::open(height)?;
+        let mut address_to_address_index = AddressToAddressIndex::open(height)?;
 
         'days: loop {
             let mut block_len = 0;
@@ -112,7 +107,6 @@ pub fn compute_utxo_based_datasets(
                                 txout_index_to_txout_data: &mut txout_index_to_txout_data,
                                 tx_counter: &mut tx_counter,
                                 address_counter: &mut address_counter,
-                                writer: &mut writer,
                             });
                         }
                         Ordering::Less => {
@@ -140,22 +134,20 @@ pub fn compute_utxo_based_datasets(
             }
         }
 
+        parsing = false;
+
         export_all(ExportData {
-            height,
-            datasets: &datasets,
+            address_counter: &address_counter,
             address_index_to_address_data: &address_index_to_address_data,
+            address_index_to_empty_address_data,
+            address_to_address_index,
+            datasets: &datasets,
             date_data_vec: &date_data_vec,
+            height,
+            tx_index_to_tx_data: &tx_index_to_tx_data,
             txid_to_tx_index: &txid_to_tx_index,
             txout_index_to_txout_data: &txout_index_to_txout_data,
-            tx_index_to_tx_data: &tx_index_to_tx_data,
         })?;
-
-        address_to_address_index.commit(&mut writer);
-        address_index_to_empty_address_data.commit(&mut writer);
-
-        writer.commit()?;
-
-        env.force_sync()?;
     }
 
     datasets.export()?;

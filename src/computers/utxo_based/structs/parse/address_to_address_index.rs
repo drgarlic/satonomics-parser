@@ -1,60 +1,63 @@
 use std::collections::BTreeMap;
 
-use heed::{
-    byteorder::NativeEndian,
-    types::{Bytes, U32},
-    Database, Result, RoTxn, RwTxn,
-};
 use itertools::Itertools;
+use sanakirja::{
+    btree::{self, UDb},
+    Commit, Env, Error, MutTxn,
+};
 
-use super::HeedEnv;
-
-/// Address is the string version of either:
-/// - mono
-/// - multi (sorted and joined)
-// type Key = &'static [u8];
-type Key = Bytes;
-type Value = U32<NativeEndian>;
-type DB = Database<Key, Value>;
+use super::EnvSanakirja;
 
 pub struct AddressToAddressIndex {
     cache: BTreeMap<Vec<u8>, u32>,
-    db: DB,
+    db: UDb<[u8], u32>,
+    txn: MutTxn<Env, ()>,
 }
 
 impl AddressToAddressIndex {
-    pub fn open(env: &HeedEnv, writer: &mut RwTxn) -> Result<Self> {
-        let db = env
-            .create_database(writer, Some("address_index_to_address"))
-            .unwrap();
+    pub fn open(height: usize) -> color_eyre::Result<Self> {
+        let env = {
+            let name = "address_to_address_index";
+            if height == 0 {
+                EnvSanakirja::default(name)
+            } else {
+                EnvSanakirja::import(name)?
+            }
+        };
+
+        let mut txn = Env::mut_txn_begin(env)?;
+
+        let db = btree::create_db_(&mut txn)?;
 
         Ok(Self {
             cache: BTreeMap::default(),
             db,
+            txn,
         })
     }
 
-    pub fn get(&mut self, reader: &RoTxn, key: &[u8]) -> Option<u32> {
+    pub fn get(&mut self, key: &[u8]) -> Option<u32> {
         self.cache
             .get(key)
             .cloned()
-            .or(self.db.get(reader, key).unwrap())
+            .or(btree::get(&self.txn, &self.db, key, None)
+                .unwrap()
+                .map(|(_, v)| *v))
     }
 
     pub fn put(&mut self, key: &[u8], value: u32) {
         self.cache.insert(key.to_vec(), value);
     }
 
-    pub fn len(&self, reader: &RoTxn) -> Result<u64> {
-        self.db.len(reader)
-    }
-
-    pub fn commit(&mut self, writer: &mut RwTxn) {
+    pub fn export(mut self) -> Result<(), Error> {
         self.cache
-            .iter()
-            .sorted_unstable_by_key(|x| x.0)
-            .for_each(|(key, data)| self.db.put(writer, key, data).unwrap());
+            .into_iter()
+            .sorted_unstable_by_key(|x| x.0.clone())
+            .try_for_each(|(key, value)| -> Result<(), Error> {
+                btree::put(&mut self.txn, &mut self.db, &key, &value)?;
+                Ok(())
+            })?;
 
-        self.cache.clear();
+        self.txn.commit()
     }
 }

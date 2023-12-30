@@ -9,20 +9,20 @@ use crate::{
 };
 
 use super::{
-    AddressIndexToAddressData, DateDataVec, HeedEnv, TxIndexToTxData, TxidToTxIndex,
+    AddressCounter, AddressIndexToAddressData, DateDataVec, TxIndexToTxData, TxidToTxIndex,
     TxoutIndexToTxoutData,
 };
 
 #[derive(Default)]
 pub struct InitiatedParsers {
+    pub address_counter: AddressCounter,
     pub address_index_to_address_data: AddressIndexToAddressData,
-    pub env: HeedEnv,
     pub date_data_vec: DateDataVec,
+    pub height: usize,
+    pub tx_counter: u32,
     pub tx_index_to_tx_data: TxIndexToTxData,
     pub txid_to_tx_index: TxidToTxIndex,
     pub txout_index_to_txout_data: TxoutIndexToTxoutData,
-    pub tx_counter: u32,
-    pub height: usize,
 }
 
 impl InitiatedParsers {
@@ -38,8 +38,6 @@ impl InitiatedParsers {
 
         let address_index_to_address_data_handle = thread::spawn(AddressIndexToAddressData::import);
 
-        let env_handle = thread::spawn(HeedEnv::import);
-
         let tx_index_to_tx_data_handle = thread::spawn(TxIndexToTxData::import);
 
         let txid_to_tx_index_handle = thread::spawn(TxidToTxIndex::import);
@@ -48,6 +46,8 @@ impl InitiatedParsers {
 
         let date_data_vec_handle = thread::spawn(DateDataVec::import);
 
+        let mut address_counter = AddressCounter::import()?;
+
         let mut date_data_vec = date_data_vec_handle.join().unwrap()?;
 
         let max_date = date_data_vec.iter().map(|date_data| date_data.date).max();
@@ -55,8 +55,6 @@ impl InitiatedParsers {
         let mut txid_to_tx_index = txid_to_tx_index_handle.join().unwrap()?;
 
         let mut tx_counter = txid_to_tx_index.max_index();
-
-        let mut env = env_handle.join().unwrap()?;
 
         let mut txout_index_to_txout_data = txout_index_to_txout_value_handle.join().unwrap()?;
 
@@ -76,14 +74,13 @@ impl InitiatedParsers {
                             println!("snapshot_start_height {snapshot_start_height} > last_saved_height {min_last_height:?}");
                             println!("Starting over...");
 
-                            env = HeedEnv::default();
-
                             address_index_to_address_data.clear();
                             date_data_vec.clear();
                             tx_index_to_tx_data.clear();
                             txid_to_tx_index.clear();
                             txout_index_to_txout_data.clear();
                             tx_counter = 0;
+                            *address_counter = 0;
 
                             return 0;
                         }
@@ -93,14 +90,14 @@ impl InitiatedParsers {
                 }).unwrap_or(0);
 
         Ok(Self {
+            address_counter,
             address_index_to_address_data,
-            env,
             date_data_vec,
+            height,
+            tx_counter,
             tx_index_to_tx_data,
             txid_to_tx_index,
             txout_index_to_txout_data,
-            tx_counter,
-            height,
         })
     }
 }

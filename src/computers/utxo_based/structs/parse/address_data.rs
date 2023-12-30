@@ -47,8 +47,8 @@ impl AddressData {
     pub fn from_empty(empty: EmptyAddressData) -> Self {
         Self {
             amount: 0.0,
-            sent: empty.sent,
-            received: empty.received,
+            sent: empty.sent.0,
+            received: empty.received.0,
             mean_price_paid: 0.0,
         }
     }
