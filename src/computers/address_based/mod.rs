@@ -41,10 +41,6 @@ pub fn compute_address_based_datasets(
                         .enumerate()
                         .for_each(|(txout_index, txout)| {
                             if txout.addresses.len() > 1 {
-                                // txout.addresses[0].
-                                dbg!(tx.txid);
-                                dbg!(txout_index);
-                                dbg!(txout);
                                 panic!("!!");
                             }
                         });

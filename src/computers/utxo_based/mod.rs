@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, thread};
+use std::cmp::Ordering;
 
 use bitcoin_explorer::{BitcoinDB, FBlock};
 use chrono::{offset::Local, Datelike, NaiveDate};
@@ -8,7 +8,8 @@ use crate::{
         export::{export_all, ExportData},
         process::{process_block, ProcessData},
     },
-    structs::{DateMap, HeightDatasets, NUMBER_OF_UNSAFE_BLOCKS},
+    structs::{DateMap, NUMBER_OF_UNSAFE_BLOCKS},
+    traits::{Databases, HeightDatasets},
     utils::timestamp_to_naive_date,
 };
 
@@ -34,9 +35,9 @@ pub fn compute_utxo_based_datasets(
         mut address_counter,
         mut address_index_to_address_data,
         mut date_data_vec,
-        mut txid_to_tx_index,
         mut tx_counter,
         mut tx_index_to_tx_data,
+        mut txid_to_tx_index,
         mut txout_index_to_txout_data,
         mut height,
     } = InitiatedParsers::init(&datasets, date_to_first_block);
@@ -52,6 +53,7 @@ pub fn compute_utxo_based_datasets(
     while parsing {
         let mut address_index_to_empty_address_data = AddressIndexToEmptyAddressData::open(height)?;
         let mut address_to_address_index = AddressToAddressIndex::open(height)?;
+        // let mut txid_to_tx_index = TxidToTxIndex::open(height)?;
 
         'days: loop {
             let mut block_len = 0;
@@ -92,16 +94,14 @@ pub fn compute_utxo_based_datasets(
                                 bitcoin_db,
                                 block: current_block,
                                 block_index,
-                                block_height: height + block_index,
+                                height: height + block_index,
                                 date: block_date,
                                 date_data_vec: &mut date_data_vec,
                                 height_to_price,
                                 address_to_address_index: &mut address_to_address_index,
-                                // address_index_to_address: &mut address_index_to_address,
                                 address_index_to_address_data: &mut address_index_to_address_data,
                                 address_index_to_empty_address_data:
                                     &mut address_index_to_empty_address_data,
-                                // empty_address_to_address_index: &mut empty_address_to_address_index,
                                 txid_to_tx_index: &mut txid_to_tx_index,
                                 tx_index_to_tx_data: &mut tx_index_to_tx_data,
                                 txout_index_to_txout_data: &mut txout_index_to_txout_data,
@@ -134,8 +134,6 @@ pub fn compute_utxo_based_datasets(
             }
         }
 
-        parsing = false;
-
         export_all(ExportData {
             address_counter: &address_counter,
             address_index_to_address_data: &address_index_to_address_data,
@@ -144,6 +142,7 @@ pub fn compute_utxo_based_datasets(
             datasets: &datasets,
             date_data_vec: &date_data_vec,
             height,
+            tx_counter: &tx_counter,
             tx_index_to_tx_data: &tx_index_to_tx_data,
             txid_to_tx_index: &txid_to_tx_index,
             txout_index_to_txout_data: &txout_index_to_txout_data,

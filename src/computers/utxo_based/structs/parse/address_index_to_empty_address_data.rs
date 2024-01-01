@@ -1,73 +1,67 @@
-use std::collections::{BTreeMap, BTreeSet};
+use derive_deref::{Deref, DerefMut};
+use nohash_hasher::IntMap;
+use rayon::prelude::*;
+use sanakirja::Error;
 
-use itertools::Itertools;
-use sanakirja::{
-    btree::{self, Db},
-    Commit, Env, Error, MutTxn,
+use crate::{
+    structs::{Database, SizedDatabase},
+    traits::Databases,
 };
 
-use super::{EmptyAddressData, EnvSanakirja};
+use super::EmptyAddressData;
 
-pub struct AddressIndexToEmptyAddressData {
-    cache_put: BTreeMap<u32, EmptyAddressData>,
-    cache_delete: BTreeSet<u32>,
-    db: Db<u32, EmptyAddressData>,
-    txn: MutTxn<Env, ()>,
-}
+type Key = u32;
+type Value = EmptyAddressData;
+type Db = SizedDatabase<Key, Value>;
+
+#[derive(Deref, DerefMut, Default)]
+pub struct AddressIndexToEmptyAddressData(IntMap<usize, Db>);
+
+const DB_MAX_SIZE: usize = 100_000_000;
 
 impl AddressIndexToEmptyAddressData {
-    pub fn open(height: usize) -> color_eyre::Result<Self> {
-        let env = {
-            let name = "address_index_to_empty_address_data";
-            if height == 0 {
-                EnvSanakirja::default(name)
-            } else {
-                EnvSanakirja::import(name)?
-            }
-        };
+    pub fn insert(&mut self, key: Key, value: Value) -> Option<Value> {
+        self.open_db(&key).insert(key, value)
+    }
 
-        let mut txn = Env::mut_txn_begin(env)?;
+    pub fn take(&mut self, key: &Key) -> Option<Value> {
+        self.open_db(key).take(key)
+    }
 
-        let db = btree::create_db(&mut txn)?;
+    fn open_db(&mut self, key: &Key) -> &mut Db {
+        let db_index = Self::db_index(key);
 
-        Ok(Self {
-            cache_put: BTreeMap::default(),
-            cache_delete: BTreeSet::default(),
-            db,
-            txn,
+        self.entry(db_index).or_insert_with(|| {
+            let db_name = format!(
+                "{}/{}..{}",
+                Self::folder(),
+                db_index * DB_MAX_SIZE,
+                (db_index + 1) * DB_MAX_SIZE
+            );
+
+            Database::open(&db_name, |key| key).unwrap()
         })
     }
 
-    pub fn take(&mut self, key: &u32) -> Option<EmptyAddressData> {
-        self.cache_put.remove(key).or({
-            self.cache_delete.insert(*key);
+    fn db_index(key: &Key) -> usize {
+        *key as usize / DB_MAX_SIZE
+    }
+}
 
-            btree::get(&self.txn, &self.db, key, None)
-                .unwrap()
-                .map(|(_, v)| *v)
-        })
+impl Databases for AddressIndexToEmptyAddressData {
+    fn open(height: usize) -> color_eyre::Result<Self> {
+        if height == 0 {
+            let _ = Self::clear();
+        }
+
+        Ok(Self::default())
     }
 
-    pub fn put(&mut self, key: u32, value: EmptyAddressData) {
-        self.cache_delete.remove(&key);
-        self.cache_put.insert(key, value);
+    fn export(mut self) -> color_eyre::Result<(), Error> {
+        self.par_drain().try_for_each(|(_, db)| db.export())
     }
 
-    pub fn export(mut self) -> Result<(), Error> {
-        self.cache_put
-            .into_iter()
-            .sorted_unstable_by_key(|x| x.0.clone())
-            .for_each(|(key, value)| {
-                btree::put(&mut self.txn, &mut self.db, &key, &value).unwrap();
-            });
-
-        self.cache_delete
-            .into_iter()
-            .sorted_unstable()
-            .for_each(|key| {
-                btree::del(&mut self.txn, &mut self.db, &key, None).unwrap();
-            });
-
-        self.txn.commit()
+    fn folder<'a>() -> &'a str {
+        "address_index_to_empty_address_data"
     }
 }

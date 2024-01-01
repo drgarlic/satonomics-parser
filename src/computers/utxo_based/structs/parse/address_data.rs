@@ -1,14 +1,28 @@
 use bincode::{Decode, Encode};
-use serde::{Deserialize, Serialize};
+use ordered_float::OrderedFloat;
+use sanakirja::{direct_repr, Storable, UnsizedStorable};
 
-use super::empty_address_data::EmptyAddressData;
+use super::AddressKind;
 
-#[derive(Encode, Decode, Default, Debug, Serialize, Deserialize)]
+#[derive(Encode, Decode, Debug)]
 pub struct AddressData {
+    pub kind: AddressKind,
     pub amount: f64,
     pub sent: f64,
     pub received: f64,
     pub mean_price_paid: f32,
+}
+
+impl AddressData {
+    pub fn new(kind: AddressKind) -> Self {
+        Self {
+            kind,
+            amount: 0.0,
+            sent: 0.0,
+            received: 0.0,
+            mean_price_paid: 0.0,
+        }
+    }
 }
 
 impl AddressData {
@@ -46,10 +60,29 @@ impl AddressData {
 
     pub fn from_empty(empty: EmptyAddressData) -> Self {
         Self {
+            kind: empty.kind,
             amount: 0.0,
             sent: empty.sent.0,
             received: empty.received.0,
             mean_price_paid: 0.0,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub struct EmptyAddressData {
+    pub kind: AddressKind,
+    pub sent: OrderedFloat<f64>,
+    pub received: OrderedFloat<f64>,
+}
+direct_repr!(EmptyAddressData);
+
+impl EmptyAddressData {
+    pub fn from_non_empty(non_empty: AddressData) -> Self {
+        Self {
+            kind: non_empty.kind,
+            sent: OrderedFloat(non_empty.sent),
+            received: OrderedFloat(non_empty.received),
         }
     }
 }

@@ -4,7 +4,7 @@ use chrono::Datelike;
 use itertools::Itertools;
 use rayon::prelude::*;
 
-use crate::structs::{HeightDataset, HeightDatasets};
+use crate::traits::{HeightDataset, HeightDatasets};
 
 use super::{
     AgeRange, AgedDataset, CoinblocksDataset, CoindaysDataset, DatasetInsertData, RewardsDataset,

@@ -3,14 +3,13 @@ use std::thread;
 use chrono::Days;
 
 use crate::{
-    computers::utxo_based::structs::UtxoDatasets,
-    structs::{DateMap, HeightDatasets},
+    computers::utxo_based::structs::UtxoDatasets, structs::DateMap, traits::HeightDatasets,
     traits::Snapshot,
 };
 
 use super::{
-    AddressCounter, AddressIndexToAddressData, DateDataVec, TxIndexToTxData, TxidToTxIndex,
-    TxoutIndexToTxoutData,
+    AddressCounter, AddressIndexToAddressData, DateDataVec, TxCounter, TxIndexToTxData,
+    TxidToTxIndex, TxoutIndexToTxoutData,
 };
 
 #[derive(Default)]
@@ -19,7 +18,7 @@ pub struct InitiatedParsers {
     pub address_index_to_address_data: AddressIndexToAddressData,
     pub date_data_vec: DateDataVec,
     pub height: usize,
-    pub tx_counter: u32,
+    pub tx_counter: TxCounter,
     pub tx_index_to_tx_data: TxIndexToTxData,
     pub txid_to_tx_index: TxidToTxIndex,
     pub txout_index_to_txout_data: TxoutIndexToTxoutData,
@@ -34,27 +33,25 @@ impl InitiatedParsers {
         datasets: &UtxoDatasets,
         date_to_first_block: &DateMap<usize>,
     ) -> color_eyre::Result<Self> {
-        datasets.get_min_last_height().unwrap();
-
         let address_index_to_address_data_handle = thread::spawn(AddressIndexToAddressData::import);
 
         let tx_index_to_tx_data_handle = thread::spawn(TxIndexToTxData::import);
 
-        let txid_to_tx_index_handle = thread::spawn(TxidToTxIndex::import);
-
         let txout_index_to_txout_value_handle = thread::spawn(TxoutIndexToTxoutData::import);
+
+        let txid_to_tx_index_handle = thread::spawn(TxidToTxIndex::import);
 
         let date_data_vec_handle = thread::spawn(DateDataVec::import);
 
         let mut address_counter = AddressCounter::import()?;
+
+        let mut tx_counter = TxCounter::import()?;
 
         let mut date_data_vec = date_data_vec_handle.join().unwrap()?;
 
         let max_date = date_data_vec.iter().map(|date_data| date_data.date).max();
 
         let mut txid_to_tx_index = txid_to_tx_index_handle.join().unwrap()?;
-
-        let mut tx_counter = txid_to_tx_index.max_index();
 
         let mut txout_index_to_txout_data = txout_index_to_txout_value_handle.join().unwrap()?;
 
@@ -79,8 +76,9 @@ impl InitiatedParsers {
                             tx_index_to_tx_data.clear();
                             txid_to_tx_index.clear();
                             txout_index_to_txout_data.clear();
-                            tx_counter = 0;
+
                             *address_counter = 0;
+                            *tx_counter = 0;
 
                             return 0;
                         }

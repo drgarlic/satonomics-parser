@@ -1,7 +1,4 @@
-use std::{
-    ops::{Deref, DerefMut},
-    str::FromStr,
-};
+use std::str::FromStr;
 
 use bincode::{
     de::{BorrowDecoder, Decoder},
@@ -10,8 +7,9 @@ use bincode::{
     BorrowDecode, Decode, Encode,
 };
 use chrono::NaiveDate;
+use derive_deref::{Deref, DerefMut};
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Deref, DerefMut)]
 pub struct WNaiveDate(NaiveDate);
 
 impl WNaiveDate {
@@ -39,19 +37,5 @@ impl<'de> BorrowDecode<'de> for WNaiveDate {
         Ok(Self(
             NaiveDate::from_str(BorrowDecode::borrow_decode(decoder)?).unwrap(),
         ))
-    }
-}
-
-impl Deref for WNaiveDate {
-    type Target = NaiveDate;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for WNaiveDate {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
     }
 }

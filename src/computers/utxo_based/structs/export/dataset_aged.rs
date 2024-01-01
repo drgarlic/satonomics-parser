@@ -3,7 +3,8 @@ use itertools::Itertools;
 
 use crate::{
     computers::utxo_based::{structs::BlockPath, BlockData},
-    structs::{AnyHeightMap, HeightDataset, HeightMap},
+    structs::{AnyHeightMap, HeightMap},
+    traits::HeightDataset,
 };
 
 use super::DatasetInsertData;

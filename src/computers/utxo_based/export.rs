@@ -2,12 +2,12 @@ use std::thread;
 
 use chrono::Local;
 
-use crate::traits::Snapshot;
+use crate::traits::{Databases, Snapshot};
 
 use super::structs::{
     AddressCounter, AddressIndexToAddressData, AddressIndexToEmptyAddressData,
-    AddressToAddressIndex, DateDataVec, TxIndexToTxData, TxidToTxIndex, TxoutIndexToTxoutData,
-    UtxoDatasets,
+    AddressToAddressIndex, DateDataVec, TxCounter, TxIndexToTxData, TxidToTxIndex,
+    TxoutIndexToTxoutData, UtxoDatasets,
 };
 
 pub struct ExportData<'a> {
@@ -18,13 +18,14 @@ pub struct ExportData<'a> {
     pub datasets: &'a UtxoDatasets,
     pub date_data_vec: &'a DateDataVec,
     pub height: usize,
+    pub tx_counter: &'a TxCounter,
     pub tx_index_to_tx_data: &'a TxIndexToTxData,
     pub txid_to_tx_index: &'a TxidToTxIndex,
     pub txout_index_to_txout_data: &'a TxoutIndexToTxoutData,
 }
 
 pub fn export_all(
-    #[allow(unused_variables)] ExportData {
+    ExportData {
         address_counter,
         address_index_to_address_data,
         address_index_to_empty_address_data,
@@ -32,6 +33,7 @@ pub fn export_all(
         datasets,
         date_data_vec,
         height,
+        tx_counter,
         tx_index_to_tx_data,
         txid_to_tx_index,
         txout_index_to_txout_data,
@@ -40,16 +42,18 @@ pub fn export_all(
     println!("{:?} - Saving... (Don't close !!)", Local::now());
 
     thread::scope(|s| {
-        // s.spawn(|| datasets.export_if_needed(Some(height)));
         s.spawn(|| address_counter.export());
         s.spawn(|| address_index_to_address_data.export());
         s.spawn(|| address_index_to_empty_address_data.export());
         s.spawn(|| address_to_address_index.export());
         s.spawn(|| date_data_vec.export());
+        s.spawn(|| tx_counter.export());
         s.spawn(|| tx_index_to_tx_data.export());
         s.spawn(|| txid_to_tx_index.export());
         s.spawn(|| txout_index_to_txout_data.export());
     });
+
+    // datasets.export_if_needed(Some(height));
 
     Ok(())
 }

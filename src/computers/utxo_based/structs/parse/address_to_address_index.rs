@@ -1,63 +1,253 @@
-use std::collections::BTreeMap;
+use std::thread;
 
+use bitcoin::{
+    util::address::{Payload, WitnessVersion},
+    Address,
+};
 use itertools::Itertools;
-use sanakirja::{
-    btree::{self, UDb},
-    Commit, Env, Error, MutTxn,
+use sanakirja::Error;
+
+use crate::{
+    structs::{Database, SizedDatabase, UnsizedDatabase, U8_20, U8_32},
+    traits::Databases,
 };
 
-use super::EnvSanakirja;
+use super::AddressKind;
 
+type Value = u32;
+type DbU820 = SizedDatabase<U8_20, Value>;
+type DbU832 = SizedDatabase<U8_32, Value>;
+type DbUnsized = UnsizedDatabase<Box<[u8]>, [u8], Value>;
+
+type DbP2PKH = DbU820;
+type DbP2SH = DbU820;
+type DbP2WPKH = DbU820;
+type DbP2WSH = DbU832;
+type DbP2TR = DbU832;
+type DbUnknown = DbUnsized;
+type DbMultisig = DbUnsized;
+
+// https://unchained.com/blog/bitcoin-address-types-compared/
+#[derive(Default)]
 pub struct AddressToAddressIndex {
-    cache: BTreeMap<Vec<u8>, u32>,
-    db: UDb<[u8], u32>,
-    txn: MutTxn<Env, ()>,
+    p2pkh: Option<DbP2PKH>,
+    p2sh: Option<DbP2SH>,
+    p2wpkh: Option<DbP2WPKH>,
+    p2wsh: Option<DbP2WSH>,
+    p2tr: Option<DbP2TR>,
+    unknown: Option<DbUnknown>,
+    multisig: Option<DbMultisig>,
 }
 
 impl AddressToAddressIndex {
-    pub fn open(height: usize) -> color_eyre::Result<Self> {
-        let env = {
-            let name = "address_to_address_index";
-            if height == 0 {
-                EnvSanakirja::default(name)
-            } else {
-                EnvSanakirja::import(name)?
+    pub fn get(&mut self, addresses: &[Address]) -> Option<Value> {
+        if addresses.is_empty() {
+            panic!("Shouldn't be empty");
+        } else if addresses.len() == 1 {
+            let address = addresses.first().unwrap();
+
+            // Clone (very cheap) to satisfy the borrow checker
+            // https://github.com/rust-lang/rust/issues/54663
+            self.get_single(address).cloned().or(self
+                .open_unknown()
+                .get(&Self::address_to_payload_vec(address).into_boxed_slice())
+                .cloned())
+        } else {
+            self.open_multisig()
+                .get(&Self::concat_addresses(addresses))
+                .cloned()
+        }
+    }
+
+    fn get_single(&mut self, address: &Address) -> Option<&Value> {
+        match &address.payload {
+            Payload::PubkeyHash(hash) => {
+                if let Some(value) = self.open_p2pkh().get(&U8_20::from(&hash[..])) {
+                    return Some(value);
+                }
             }
-        };
+            Payload::ScriptHash(hash) => {
+                if let Some(value) = self.open_p2sh().get(&U8_20::from(&hash[..])) {
+                    return Some(value);
+                }
+            }
+            Payload::WitnessProgram { version, program } => {
+                let slice = program.as_slice();
 
-        let mut txn = Env::mut_txn_begin(env)?;
+                match version {
+                    WitnessVersion::V0 if program.len() == 20 => {
+                        if let Some(value) = self.open_p2wpkh().get(&U8_20::from(slice)) {
+                            return Some(value);
+                        }
+                    }
+                    WitnessVersion::V0 if program.len() == 32 => {
+                        if let Some(value) = self.open_p2wsh().get(&U8_32::from(slice)) {
+                            return Some(value);
+                        }
+                    }
+                    WitnessVersion::V1 if program.len() == 32 => {
+                        if let Some(value) = self.open_p2tr().get(&U8_32::from(slice)) {
+                            return Some(value);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
 
-        let db = btree::create_db_(&mut txn)?;
+        None
+    }
 
-        Ok(Self {
-            cache: BTreeMap::default(),
-            db,
-            txn,
+    #[allow(clippy::boxed_local)]
+    pub fn insert(
+        &mut self,
+        addresses: Box<[Address]>,
+        value: Value,
+    ) -> (AddressKind, Option<Value>) {
+        if addresses.is_empty() {
+            panic!("Shouldn't be empty");
+        } else if addresses.len() == 1 {
+            let address = addresses.first().unwrap();
+
+            match &address.payload {
+                Payload::PubkeyHash(hash) => {
+                    return (
+                        AddressKind::P2PKH,
+                        self.open_p2pkh().insert(U8_20::from(&hash[..]), value),
+                    );
+                }
+                Payload::ScriptHash(hash) => {
+                    return (
+                        AddressKind::P2SH,
+                        self.open_p2sh().insert(U8_20::from(&hash[..]), value),
+                    );
+                }
+                Payload::WitnessProgram { version, program } => {
+                    let slice = program.as_slice();
+
+                    match version {
+                        WitnessVersion::V0 if program.len() == 20 => {
+                            return (
+                                AddressKind::P2WPKH,
+                                self.open_p2wpkh().insert(U8_20::from(slice), value),
+                            );
+                        }
+                        WitnessVersion::V0 if program.len() == 32 => {
+                            return (
+                                AddressKind::P2WSH,
+                                self.open_p2wsh().insert(U8_32::from(slice), value),
+                            );
+                        }
+                        WitnessVersion::V1 if program.len() == 32 => {
+                            return (
+                                AddressKind::P2TR,
+                                self.open_p2tr().insert(U8_32::from(slice), value),
+                            );
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
+            (
+                AddressKind::Unknown,
+                self.open_unknown().insert(
+                    Self::address_to_payload_vec(address).into_boxed_slice(),
+                    value,
+                ),
+            )
+        } else {
+            (
+                AddressKind::MultiSig,
+                self.open_multisig()
+                    .insert(Self::concat_addresses(&addresses), value),
+            )
+        }
+    }
+
+    fn address_to_payload_vec(address: &Address) -> Vec<u8> {
+        match &address.payload {
+            Payload::PubkeyHash(hash) => hash.to_vec(),
+            Payload::ScriptHash(hash) => hash.to_vec(),
+            Payload::WitnessProgram { program, .. } => program.clone(),
+        }
+    }
+
+    fn concat_addresses(addresses: &[Address]) -> Box<[u8]> {
+        addresses
+            .iter()
+            .map(Self::address_to_payload_vec)
+            .sorted_unstable()
+            .concat()
+            .into_boxed_slice()
+    }
+
+    fn open_p2pkh(&mut self) -> &mut DbP2PKH {
+        self.p2pkh
+            .get_or_insert_with(|| Database::open(&Self::db_path("p2pkh"), |key| key).unwrap())
+    }
+
+    fn open_p2sh(&mut self) -> &mut DbP2SH {
+        self.p2sh
+            .get_or_insert_with(|| Database::open(&Self::db_path("p2sh"), |key| key).unwrap())
+    }
+
+    fn open_p2wpkh(&mut self) -> &mut DbP2WPKH {
+        self.p2wpkh
+            .get_or_insert_with(|| Database::open(&Self::db_path("p2wpkh"), |key| key).unwrap())
+    }
+
+    fn open_p2wsh(&mut self) -> &mut DbP2WSH {
+        self.p2wsh
+            .get_or_insert_with(|| Database::open(&Self::db_path("p2wsh"), |key| key).unwrap())
+    }
+
+    fn open_p2tr(&mut self) -> &mut DbP2TR {
+        self.p2tr
+            .get_or_insert_with(|| Database::open(&Self::db_path("p2tr"), |key| key).unwrap())
+    }
+
+    fn open_unknown(&mut self) -> &mut DbUnknown {
+        self.unknown.get_or_insert_with(|| {
+            Database::open(&Self::db_path("unknown"), |key| key as &[u8]).unwrap()
         })
     }
 
-    pub fn get(&mut self, key: &[u8]) -> Option<u32> {
-        self.cache
-            .get(key)
-            .cloned()
-            .or(btree::get(&self.txn, &self.db, key, None)
-                .unwrap()
-                .map(|(_, v)| *v))
+    fn open_multisig(&mut self) -> &mut DbMultisig {
+        self.multisig.get_or_insert_with(|| {
+            Database::open(&Self::db_path("multisig"), |key| key as &[u8]).unwrap()
+        })
     }
 
-    pub fn put(&mut self, key: &[u8], value: u32) {
-        self.cache.insert(key.to_vec(), value);
+    fn db_path(name: &str) -> String {
+        format!("{}/{name}", Self::folder())
+    }
+}
+
+impl Databases for AddressToAddressIndex {
+    fn open(height: usize) -> color_eyre::Result<Self> {
+        if height == 0 {
+            let _ = Self::clear();
+        }
+
+        Ok(Self::default())
     }
 
-    pub fn export(mut self) -> Result<(), Error> {
-        self.cache
-            .into_iter()
-            .sorted_unstable_by_key(|x| x.0.clone())
-            .try_for_each(|(key, value)| -> Result<(), Error> {
-                btree::put(&mut self.txn, &mut self.db, &key, &value)?;
-                Ok(())
-            })?;
+    fn export(self) -> color_eyre::Result<(), Error> {
+        thread::scope(|s| {
+            s.spawn(|| self.p2pkh.map(|db| db.export()));
+            s.spawn(|| self.p2sh.map(|db| db.export()));
+            s.spawn(|| self.p2wpkh.map(|db| db.export()));
+            s.spawn(|| self.p2wsh.map(|db| db.export()));
+            s.spawn(|| self.p2tr.map(|db| db.export()));
+            s.spawn(|| self.unknown.map(|db| db.export()));
+            s.spawn(|| self.multisig.map(|db| db.export()));
+        });
 
-        self.txn.commit()
+        Ok(())
+    }
+
+    fn folder<'a>() -> &'a str {
+        "address_to_address_index"
     }
 }

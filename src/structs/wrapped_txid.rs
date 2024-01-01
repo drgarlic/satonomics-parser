@@ -1,5 +1,3 @@
-use std::ops::{Deref, DerefMut};
-
 use bincode::{
     de::{BorrowDecoder, Decoder},
     enc::Encoder,
@@ -8,8 +6,9 @@ use bincode::{
 };
 use bitcoin_explorer::Txid;
 use bitcoin_hashes::{sha256d::Hash, Hash as HashTrait};
+use derive_deref::{Deref, DerefMut};
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Deref, DerefMut)]
 pub struct WTxid(Txid);
 
 impl WTxid {
@@ -41,19 +40,5 @@ impl Decode for WTxid {
 impl<'de> BorrowDecode<'de> for WTxid {
     fn borrow_decode<D: BorrowDecoder<'de>>(decoder: &mut D) -> Result<Self, DecodeError> {
         Ok(Self::from_slice(BorrowDecode::borrow_decode(decoder)?))
-    }
-}
-
-impl Deref for WTxid {
-    type Target = Txid;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for WTxid {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
     }
 }

@@ -1,12 +1,11 @@
-use std::ops::{Deref, DerefMut};
-
 use bincode::{Decode, Encode};
+use derive_deref::{Deref, DerefMut};
 
 use crate::traits::Snapshot;
 
 use super::{BlockData, DateData};
 
-#[derive(Encode, Decode, Default)]
+#[derive(Encode, Decode, Default, Deref, DerefMut)]
 pub struct DateDataVec(Vec<DateData>);
 
 impl DateDataVec {
@@ -17,20 +16,6 @@ impl DateDataVec {
 
 impl Snapshot for DateDataVec {
     fn name<'a>() -> &'a str {
-        "height_to_aged__date_data_vec"
-    }
-}
-
-impl Deref for DateDataVec {
-    type Target = Vec<DateData>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for DateDataVec {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+        "date_data_vec"
     }
 }

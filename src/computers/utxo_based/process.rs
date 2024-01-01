@@ -1,6 +1,7 @@
 use std::{collections::BTreeMap, ops::ControlFlow};
 
-use bitcoin_explorer::{BitcoinDB, FBlock, FTransaction};
+use bitcoin::Txid;
+use bitcoin_explorer::{BitcoinDB, FBlock, FTransaction, FTxOut};
 use chrono::NaiveDate;
 
 use crate::{
@@ -8,38 +9,28 @@ use crate::{
         AddressData, BlockData, BlockPath, TxData, TxoutData, TxoutIndex,
     },
     structs::WTxid,
-    utils::{addresses_to_bytes, convert_sats_to_bitcoins},
+    utils::convert_sats_to_bitcoins,
 };
 
 use super::structs::{
-    AddressCounter,
-    // AddressIndexToAddress,
-    AddressIndexToAddressData,
-    AddressIndexToEmptyAddressData,
-    AddressToAddressIndex,
-    DateDataVec,
-    EmptyAddressData,
-    // EmptyAddressToAddressIndex,
-    TxIndexToTxData,
-    TxidToTxIndex,
-    TxoutIndexToTxoutData,
+    AddressCounter, AddressIndexToAddressData, AddressIndexToEmptyAddressData,
+    AddressToAddressIndex, DateDataVec, EmptyAddressData, TxCounter, TxIndexToTxData,
+    TxidToTxIndex, TxoutIndexToTxoutData,
 };
 
 pub struct ProcessData<'a> {
     pub address_counter: &'a mut AddressCounter,
-    // pub address_index_to_address: &'a mut AddressIndexToAddress,
     pub address_index_to_address_data: &'a mut AddressIndexToAddressData,
     pub address_index_to_empty_address_data: &'a mut AddressIndexToEmptyAddressData,
     pub address_to_address_index: &'a mut AddressToAddressIndex,
     pub bitcoin_db: &'a BitcoinDB,
     pub block: FBlock,
-    pub block_height: usize,
+    pub height: usize,
     pub block_index: usize,
     pub date: NaiveDate,
     pub date_data_vec: &'a mut DateDataVec,
-    // pub empty_address_to_address_index: &'a mut EmptyAddressToAddressIndex,
     pub height_to_price: &'a [f32],
-    pub tx_counter: &'a mut u32,
+    pub tx_counter: &'a mut TxCounter,
     pub tx_index_to_tx_data: &'a mut TxIndexToTxData,
     pub txid_to_tx_index: &'a mut TxidToTxIndex,
     pub txout_index_to_txout_data: &'a mut TxoutIndexToTxoutData,
@@ -48,17 +39,15 @@ pub struct ProcessData<'a> {
 pub fn process_block(
     ProcessData {
         address_counter,
-        // address_index_to_address,
         address_index_to_address_data,
         address_to_address_index,
         address_index_to_empty_address_data,
         bitcoin_db,
         block,
-        block_height,
+        height,
         block_index,
         date,
         date_data_vec,
-        // empty_address_to_address_index,
         height_to_price,
         tx_counter,
         tx_index_to_tx_data,
@@ -69,15 +58,15 @@ pub fn process_block(
     let date_index = date_data_vec.len() - 1;
 
     let price = height_to_price
-        .get(block_height)
-        .unwrap_or_else(|| panic!("Expect {block_height} to have a price"))
+        .get(height)
+        .unwrap_or_else(|| panic!("Expect {height} to have a price"))
         .to_owned();
 
     date_data_vec
         .last_mut()
         .unwrap()
         .blocks
-        .push(BlockData::new(block_height as u32, price));
+        .push(BlockData::new(height as u32, price));
 
     let mut coinbase = 0.0;
     let mut inputs_sum = 0.0;
@@ -90,11 +79,12 @@ pub fn process_block(
     let mut coindays_destroyed = 0.0;
 
     block.txdata.into_iter().for_each(|tx| {
-        let wtxid = WTxid::wrap(tx.txid);
+        let txid = tx.txid;
+        let wtxid = WTxid::wrap(txid);
+        // let tx_version = tx.version;
+        let tx_index = **tx_counter;
 
-        let tx_index = *tx_counter;
-
-        *tx_counter += 1;
+        tx_counter.increment();
 
         // --
         // outputs
@@ -118,13 +108,9 @@ pub fn process_block(
 
                 let addresses = txout.addresses;
 
-                let address_bytes = match addresses.len() {
-                    // TODO: Count number of utxos sent to no man's land
-                    0 => return ControlFlow::Continue::<()>(()),
-                    _ => addresses_to_bytes(&addresses),
-                };
-
-                let address_bytes = address_bytes.as_slice();
+                if addresses.is_empty() {
+                    return ControlFlow::Continue::<()>(());
+                }
 
                 non_zero_outputs_len += 1;
 
@@ -135,7 +121,7 @@ pub fn process_block(
                 non_zero_amount += txout_value;
 
                 let (address_data, address_index) = {
-                    if let Some(address_index) = address_to_address_index.get(address_bytes) {
+                    if let Some(address_index) = address_to_address_index.get(&addresses) {
                         if let Some(address_data) =
                             address_index_to_address_data.get_mut(&address_index)
                         {
@@ -162,11 +148,16 @@ pub fn process_block(
                     } else {
                         let address_index = **address_counter;
 
-                        **address_counter += 1;
+                        address_counter.increment();
 
-                        address_to_address_index.put(address_bytes, address_index);
+                        let (kind, previous) =
+                            address_to_address_index.insert(addresses, address_index);
 
-                        address_index_to_address_data.insert(address_index, AddressData::default());
+                        if previous.is_some() {
+                            panic!("address #{address_index} shouldn't be present during put");
+                        }
+
+                        address_index_to_address_data.insert(address_index, AddressData::new(kind));
 
                         let address_data = address_index_to_address_data
                             .get_mut(&address_index)
@@ -213,48 +204,38 @@ pub fn process_block(
 
         tx.input.into_iter().try_for_each(|txin| {
             let outpoint = txin.previous_output;
+            let input_txid = outpoint.txid;
             let input_wtxid = WTxid::wrap(outpoint.txid);
             let input_vout = outpoint.vout;
 
             let tx_index_to_remove = {
-                let input_tx_index = txid_to_tx_index.get(&input_wtxid).cloned();
-
-                let get_txout_from_db = || {
-                    bitcoin_db
-                        .get_transaction::<FTransaction>(&input_wtxid)
-                        .unwrap()
-                        .output
-                        .get(input_vout as usize)
-                        .unwrap()
-                        .to_owned()
-                };
+                let input_tx_index = txid_to_tx_index.get(&input_wtxid);
 
                 if input_tx_index.is_none() {
-                    let txout_from_db = get_txout_from_db();
+                    let txout_from_db = get_txout_from_db(bitcoin_db, &input_txid, input_vout);
 
                     if txout_from_db.value == 0 || txout_from_db.addresses.len() == 0 {
                         return ControlFlow::Continue::<()>(());
                     } else {
-                        dbg!((wtxid, input_wtxid, tx_index, input_vout, txout_from_db));
+                        dbg!((input_txid, tx_index, input_vout, txout_from_db));
                         panic!("Txid to be in txid_to_tx_data");
                     }
                 }
 
-                let input_tx_index = input_tx_index.unwrap();
+                let input_tx_index = *input_tx_index.unwrap();
 
                 let input_txout_index = TxoutIndex::new(input_tx_index, input_vout as u16);
 
                 let input_txout_data = txout_index_to_txout_data.remove(&input_txout_index);
 
                 if input_txout_data.is_none() {
-                    let txout_from_db = get_txout_from_db();
+                    let txout_from_db = get_txout_from_db(bitcoin_db, &input_txid, input_vout);
 
                     if txout_from_db.value == 0 || txout_from_db.addresses.len() == 0 {
                         return ControlFlow::Continue::<()>(());
                     } else {
                         dbg!((
-                            wtxid,
-                            input_wtxid,
+                            input_txid,
                             tx_index,
                             input_tx_index,
                             input_vout,
@@ -281,12 +262,7 @@ pub fn process_block(
                 let input_date_data = date_data_vec
                     .get_mut(input_date_index as usize)
                     .unwrap_or_else(|| {
-                        dbg!(
-                            block_height,
-                            &input_wtxid,
-                            input_block_path,
-                            input_date_index
-                        );
+                        dbg!(height, &input_txid, input_block_path, input_date_index);
                         panic!()
                     });
 
@@ -295,8 +271,8 @@ pub fn process_block(
                     .get_mut(input_block_index as usize)
                     .unwrap_or_else(|| {
                         dbg!(
-                            block_height,
-                            &input_wtxid,
+                            height,
+                            &input_txid,
                             input_block_path,
                             input_date_index,
                             input_block_index,
@@ -341,7 +317,7 @@ pub fn process_block(
                         .remove(&input_address_index)
                         .unwrap();
 
-                    address_index_to_empty_address_data.put(
+                    address_index_to_empty_address_data.insert(
                         input_address_index,
                         EmptyAddressData::from_non_empty(address_data),
                     );
@@ -355,8 +331,8 @@ pub fn process_block(
                         + input_txout_value,
                 );
 
-                coinblocks_destroyed += (block_height - input_block_data.height as usize) as f64
-                    * input_block_data.amount;
+                coinblocks_destroyed +=
+                    (height - input_block_data.height as usize) as f64 * input_block_data.amount;
 
                 coindays_destroyed += date.signed_duration_since(*input_date_data.date).num_days()
                     as f64
@@ -394,4 +370,14 @@ pub fn process_block(
     //     block_path_to_spent_value: &block_path_to_spent_value,
     //     address_index_to_spent_value: &address_index_to_spent_value,
     // });
+}
+
+fn get_txout_from_db(bitcoin_db: &BitcoinDB, txid: &Txid, vout: u32) -> FTxOut {
+    bitcoin_db
+        .get_transaction::<FTransaction>(txid)
+        .unwrap()
+        .output
+        .get(vout as usize)
+        .unwrap()
+        .to_owned()
 }

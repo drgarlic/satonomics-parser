@@ -1,4 +1,7 @@
-use crate::structs::{AnyHeightMap, HeightDataset, HeightMap};
+use crate::{
+    structs::{AnyHeightMap, HeightMap},
+    traits::HeightDataset,
+};
 
 use super::DatasetInsertData;
 

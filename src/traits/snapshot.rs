@@ -1,10 +1,10 @@
-use std::path::Path;
+use std::{fs, path::Path};
 
 use bincode::{Decode, Encode};
 
 use crate::utils::{export_binary, import_binary};
 
-pub const SNAPSHOT_FOLDER: &str = "./snapshots";
+pub const SNAPSHOTS_FOLDER: &str = "./snapshots";
 
 // https://github.com/djkoloski/rust_serialization_benchmark
 pub trait Snapshot
@@ -16,10 +16,12 @@ where
     fn format_path_str() -> String {
         let name = Self::name();
 
-        format!("{SNAPSHOT_FOLDER}/{name}.bin")
+        format!("{SNAPSHOTS_FOLDER}/{name}.bin")
     }
 
     fn import() -> color_eyre::Result<Self> {
+        fs::create_dir_all(SNAPSHOTS_FOLDER)?;
+
         import_binary(Path::new(&Self::format_path_str()))
     }
 
