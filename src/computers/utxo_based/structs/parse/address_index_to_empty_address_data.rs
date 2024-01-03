@@ -33,13 +33,12 @@ impl AddressIndexToEmptyAddressData {
 
         self.entry(db_index).or_insert_with(|| {
             let db_name = format!(
-                "{}/{}..{}",
-                Self::folder(),
+                "{}..{}",
                 db_index * DB_MAX_SIZE,
                 (db_index + 1) * DB_MAX_SIZE
             );
 
-            Database::open(&db_name, |key| key).unwrap()
+            Database::open(Self::folder(), &db_name, |key| key).unwrap()
         })
     }
 

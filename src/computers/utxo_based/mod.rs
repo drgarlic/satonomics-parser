@@ -1,9 +1,10 @@
 use std::cmp::Ordering;
 
-use bitcoin_explorer::{BitcoinDB, FBlock};
+use bitcoin::Block;
 use chrono::{offset::Local, Datelike, NaiveDate};
 
 use crate::{
+    bitcoin::BitcoinDB,
     computers::{
         export::{export_all, ExportData},
         process::{process_block, ProcessData},
@@ -44,10 +45,10 @@ pub fn compute_utxo_based_datasets(
 
     println!("{:?} - Starting parsing", Local::now());
 
-    let mut block_iter = bitcoin_db.iter_block::<FBlock>(height, block_count);
+    let mut block_iter = bitcoin_db.iter_block(height, block_count);
 
     let mut parsing = true;
-    let mut saved_block_opt: Option<FBlock> = None;
+    let mut saved_block_opt: Option<Block> = None;
     let mut last_date_opt: Option<NaiveDate> = None;
 
     while parsing {

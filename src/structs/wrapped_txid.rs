@@ -4,7 +4,7 @@ use bincode::{
     error::{DecodeError, EncodeError},
     BorrowDecode, Decode, Encode,
 };
-use bitcoin_explorer::Txid;
+use bitcoin::Txid;
 use bitcoin_hashes::{sha256d::Hash, Hash as HashTrait};
 use derive_deref::{Deref, DerefMut};
 
@@ -17,17 +17,17 @@ impl WTxid {
     }
 
     fn from_vec(slice: Vec<u8>) -> Self {
-        Self(Txid::from_hash(Hash::from_slice(&slice).unwrap()))
+        Self(Txid::from_raw_hash(Hash::from_slice(&slice).unwrap()))
     }
 
     fn from_slice(slice: &[u8]) -> Self {
-        Self(Txid::from_hash(Hash::from_slice(slice).unwrap()))
+        Self(Txid::from_raw_hash(Hash::from_slice(slice).unwrap()))
     }
 }
 
 impl Encode for WTxid {
     fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), EncodeError> {
-        Encode::encode(&self.to_vec(), encoder)
+        Encode::encode(&self.to_byte_array(), encoder)
     }
 }
 

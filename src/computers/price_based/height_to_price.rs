@@ -1,6 +1,4 @@
-use bitcoin_explorer::BitcoinDB;
-
-use crate::structs::HeightMap;
+use crate::{bitcoin::BitcoinDB, structs::HeightMap};
 
 #[allow(dead_code)]
 pub fn compute_height_to_price(

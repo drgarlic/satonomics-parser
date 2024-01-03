@@ -1,7 +1,9 @@
-use bitcoin_explorer::{BitcoinDB, FBlock};
 use itertools::Itertools;
 
-use crate::utils::{create_group_blocks_by_day_closure, timestamp_to_naive_date};
+use crate::{
+    bitcoin::{create_group_blocks_by_day_closure, BitcoinDB},
+    utils::timestamp_to_naive_date,
+};
 
 pub mod structs;
 
@@ -21,7 +23,7 @@ pub fn compute_date_to_blocks(
         .and_then(|first_unsafe_date| date_to_blocks.date_to_first_block.get(&first_unsafe_date))
         .unwrap_or(0);
 
-    db.iter_block::<FBlock>(first_block, block_count)
+    db.iter_block(first_block, block_count)
         .batching(create_group_blocks_by_day_closure())
         .for_each(|blocks| {
             let date = timestamp_to_naive_date(blocks.first().unwrap().header.time);

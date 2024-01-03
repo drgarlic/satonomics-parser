@@ -6,14 +6,16 @@ use std::{
 
 use derive_deref::{Deref, DerefMut};
 use itertools::Itertools;
+
+// https://docs.rs/sanakirja/latest/sanakirja/index.html
+// https://pijul.org/posts/2021-02-06-rethinking-sanakirja/
+// Test: Indeed much faster than ReDB and LMDB (heed)
 use sanakirja::{
     btree::{self, page, page_unsized, BTreeMutPage, Db_},
     direct_repr, Commit, Env, Error, MutTxn, Storable, UnsizedStorable,
 };
 
 use crate::traits::SNAPSHOTS_FOLDER;
-
-// const ROOT_DB: usize = 0;
 
 pub type SizedDatabase<Key, Value> = Database<Key, Key, Value, page::Page<Key, Value>>;
 pub type UnsizedDatabase<KeyTree, KeyDB, Value> =
@@ -41,18 +43,13 @@ where
     Page: BTreeMutPage<KeyDB, Value>,
 {
     pub fn open(
+        path: &str,
         name: &str,
         key_tree_to_key_db: fn(&KeyTree) -> &KeyDB,
     ) -> color_eyre::Result<Self> {
-        let mut txn = Self::init_txn(name)?;
+        let mut txn = Self::init_txn(path, name)?;
 
-        let db: Db_<KeyDB, Value, Page> = {
-            // if height < 2544 {
-            btree::create_db_(&mut txn).unwrap()
-            // } else {
-            //     txn.root_db(ROOT_DB).unwrap()
-            // }
-        };
+        let db: Db_<KeyDB, Value, Page> = btree::create_db_(&mut txn).unwrap();
 
         Ok(Self {
             cached_puts: BTreeMap::default(),
@@ -125,32 +122,20 @@ where
         self.txn.commit()
     }
 
-    fn init_txn(name: &str) -> color_eyre::Result<MutTxn<Env, ()>> {
-        let env = Self::import_env(name)?;
+    fn init_txn(path: &str, name: &str) -> color_eyre::Result<MutTxn<Env, ()>> {
+        let complete_path = Self::complete_path(path);
+
+        fs::create_dir_all(&complete_path)?;
+
+        let env =
+            unsafe { Env::new_nolock(format!("{complete_path}/{name}"), 4096 * 256, 1).unwrap() };
 
         let txn = Env::mut_txn_begin(env)?;
 
         Ok(txn)
     }
-
-    // fn default_env(name: &str) -> Env {
-    //     let _ = fs::remove_dir_all(Self::path_str(name));
-
-    //     Self::import_env(name).unwrap()
-    // }
-
-    fn import_env(name: &str) -> color_eyre::Result<Env> {
-        let path = Self::path_str(name);
-
-        fs::create_dir_all(&path)?;
-
-        let env = unsafe { Env::new_nolock(format!("{path}/db"), 4096 * 256, 1).unwrap() };
-
-        Ok(env)
-    }
-
-    fn path_str(name: &str) -> String {
-        format!("{SNAPSHOTS_FOLDER}/{name}")
+    fn complete_path(path: &str) -> String {
+        format!("{SNAPSHOTS_FOLDER}/{path}")
     }
 }
 

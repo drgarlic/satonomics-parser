@@ -1,3 +1,4 @@
+mod bitcoin;
 mod computers;
 mod run;
 mod structs;

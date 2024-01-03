@@ -1,10 +1,11 @@
 use std::path::Path;
 
-use bitcoin_explorer::BitcoinDB;
+// use bitcoin_explorer::BitcoinDB;
 // use chrono::NaiveDate;
 // use itertools::Itertools;
 
 use crate::{
+    bitcoin::BitcoinDB,
     computers::{
         // compute_address_based_datasets,
         // HeightToRewards,

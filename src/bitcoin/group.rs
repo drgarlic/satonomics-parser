@@ -2,17 +2,18 @@
 
 use std::{cell::RefCell, cmp::Ordering};
 
-use bitcoin_explorer::{BlockIter, FBlock};
+use bitcoin::Block;
 use chrono::Datelike;
 
 use crate::{structs::NUMBER_OF_UNSAFE_BLOCKS, utils::timestamp_to_naive_date};
 
-pub fn create_group_blocks_by_day_closure() -> impl Fn(&mut BlockIter<FBlock>) -> Option<Vec<FBlock>>
-{
-    let saved_block: RefCell<Option<FBlock>> = RefCell::new(None);
+use super::BlockIter;
+
+pub fn create_group_blocks_by_day_closure() -> impl Fn(&mut BlockIter) -> Option<Vec<Block>> {
+    let saved_block: RefCell<Option<Block>> = RefCell::new(None);
 
     move |iter| {
-        let mut blocks: Vec<FBlock> = vec![];
+        let mut blocks: Vec<Block> = vec![];
 
         let mut saved_block_date = {
             if let Some(saved_block) = RefCell::take(&saved_block) {
@@ -55,13 +56,13 @@ pub fn create_group_blocks_by_day_closure() -> impl Fn(&mut BlockIter<FBlock>) -
 fn create_group_blocks_by_export_event_closure(
     start: usize,
     block_count: usize,
-) -> impl Fn(&mut BlockIter<FBlock>) -> Option<Vec<Vec<FBlock>>> {
+) -> impl Fn(&mut BlockIter) -> Option<Vec<Vec<Block>>> {
     let start = RefCell::new(start);
 
-    let saved_block: RefCell<Option<FBlock>> = RefCell::new(None);
+    let saved_block: RefCell<Option<Block>> = RefCell::new(None);
 
     move |iter| {
-        let mut group: Vec<Vec<FBlock>> = {
+        let mut group: Vec<Vec<Block>> = {
             if let Some(saved_block) = RefCell::take(&saved_block) {
                 vec![vec![saved_block]]
             } else {

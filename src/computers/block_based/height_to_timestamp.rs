@@ -1,6 +1,7 @@
-use bitcoin_explorer::{BitcoinDB, SBlock};
-
-use crate::structs::{AnyHeightMap, HeightMap};
+use crate::{
+    bitcoin::BitcoinDB,
+    structs::{AnyHeightMap, HeightMap},
+};
 
 pub fn compute_height_to_timestamp(
     db: &BitcoinDB,
@@ -12,7 +13,7 @@ pub fn compute_height_to_timestamp(
 
     let start = height_to_timestamp.get_first_unsafe_height().unwrap_or(0);
 
-    db.iter_block::<SBlock>(start, block_count)
+    db.iter_block(start, block_count)
         .enumerate()
         .for_each(|(index, block)| {
             let height = start + index;

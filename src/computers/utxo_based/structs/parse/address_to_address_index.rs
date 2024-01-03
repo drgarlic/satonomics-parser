@@ -1,9 +1,7 @@
 use std::thread;
 
-use bitcoin::{
-    util::address::{Payload, WitnessVersion},
-    Address,
-};
+use bitcoin::{address::Payload, Address, WitnessVersion};
+use bitcoin_hashes::Hash;
 use itertools::Itertools;
 use sanakirja::Error;
 
@@ -46,7 +44,7 @@ impl AddressToAddressIndex {
         } else if addresses.len() == 1 {
             let address = addresses.first().unwrap();
 
-            // Clone (very cheap) to satisfy the borrow checker
+            // Clone (very cheap) to satisfy the borrow checker, will be fixed soon
             // https://github.com/rust-lang/rust/issues/54663
             self.get_single(address).cloned().or(self
                 .open_unknown()
@@ -60,7 +58,7 @@ impl AddressToAddressIndex {
     }
 
     fn get_single(&mut self, address: &Address) -> Option<&Value> {
-        match &address.payload {
+        match address.payload() {
             Payload::PubkeyHash(hash) => {
                 if let Some(value) = self.open_p2pkh().get(&U8_20::from(&hash[..])) {
                     return Some(value);
@@ -71,8 +69,11 @@ impl AddressToAddressIndex {
                     return Some(value);
                 }
             }
-            Payload::WitnessProgram { version, program } => {
-                let slice = program.as_slice();
+            Payload::WitnessProgram(witness_program) => {
+                let program = witness_program.program();
+                let version = witness_program.version();
+
+                let slice = program.as_bytes();
 
                 match version {
                     WitnessVersion::V0 if program.len() == 20 => {
@@ -93,23 +94,19 @@ impl AddressToAddressIndex {
                     _ => {}
                 }
             }
+            &_ => unreachable!(),
         }
 
         None
     }
 
-    #[allow(clippy::boxed_local)]
-    pub fn insert(
-        &mut self,
-        addresses: Box<[Address]>,
-        value: Value,
-    ) -> (AddressKind, Option<Value>) {
+    pub fn insert(&mut self, addresses: &[Address], value: Value) -> (AddressKind, Option<Value>) {
         if addresses.is_empty() {
             panic!("Shouldn't be empty");
         } else if addresses.len() == 1 {
             let address = addresses.first().unwrap();
 
-            match &address.payload {
+            match address.payload() {
                 Payload::PubkeyHash(hash) => {
                     return (
                         AddressKind::P2PKH,
@@ -122,8 +119,11 @@ impl AddressToAddressIndex {
                         self.open_p2sh().insert(U8_20::from(&hash[..]), value),
                     );
                 }
-                Payload::WitnessProgram { version, program } => {
-                    let slice = program.as_slice();
+                Payload::WitnessProgram(witness_program) => {
+                    let program = witness_program.program();
+                    let version = witness_program.version();
+
+                    let slice = program.as_bytes();
 
                     match version {
                         WitnessVersion::V0 if program.len() == 20 => {
@@ -147,6 +147,7 @@ impl AddressToAddressIndex {
                         _ => {}
                     }
                 }
+                &_ => unreachable!(),
             }
 
             (
@@ -160,16 +161,19 @@ impl AddressToAddressIndex {
             (
                 AddressKind::MultiSig,
                 self.open_multisig()
-                    .insert(Self::concat_addresses(&addresses), value),
+                    .insert(Self::concat_addresses(addresses), value),
             )
         }
     }
 
     fn address_to_payload_vec(address: &Address) -> Vec<u8> {
-        match &address.payload {
-            Payload::PubkeyHash(hash) => hash.to_vec(),
-            Payload::ScriptHash(hash) => hash.to_vec(),
-            Payload::WitnessProgram { program, .. } => program.clone(),
+        match address.payload() {
+            Payload::PubkeyHash(hash) => hash.as_byte_array().to_vec(),
+            Payload::ScriptHash(hash) => hash.as_byte_array().to_vec(),
+            Payload::WitnessProgram(witness_program) => {
+                witness_program.program().as_bytes().to_vec()
+            }
+            _ => unreachable!(),
         }
     }
 
@@ -184,43 +188,39 @@ impl AddressToAddressIndex {
 
     fn open_p2pkh(&mut self) -> &mut DbP2PKH {
         self.p2pkh
-            .get_or_insert_with(|| Database::open(&Self::db_path("p2pkh"), |key| key).unwrap())
+            .get_or_insert_with(|| Database::open(Self::folder(), "p2pkh", |key| key).unwrap())
     }
 
     fn open_p2sh(&mut self) -> &mut DbP2SH {
         self.p2sh
-            .get_or_insert_with(|| Database::open(&Self::db_path("p2sh"), |key| key).unwrap())
+            .get_or_insert_with(|| Database::open(Self::folder(), "p2sh", |key| key).unwrap())
     }
 
     fn open_p2wpkh(&mut self) -> &mut DbP2WPKH {
         self.p2wpkh
-            .get_or_insert_with(|| Database::open(&Self::db_path("p2wpkh"), |key| key).unwrap())
+            .get_or_insert_with(|| Database::open(Self::folder(), "p2wpkh", |key| key).unwrap())
     }
 
     fn open_p2wsh(&mut self) -> &mut DbP2WSH {
         self.p2wsh
-            .get_or_insert_with(|| Database::open(&Self::db_path("p2wsh"), |key| key).unwrap())
+            .get_or_insert_with(|| Database::open(Self::folder(), "p2wsh", |key| key).unwrap())
     }
 
     fn open_p2tr(&mut self) -> &mut DbP2TR {
         self.p2tr
-            .get_or_insert_with(|| Database::open(&Self::db_path("p2tr"), |key| key).unwrap())
+            .get_or_insert_with(|| Database::open(Self::folder(), "p2tr", |key| key).unwrap())
     }
 
     fn open_unknown(&mut self) -> &mut DbUnknown {
         self.unknown.get_or_insert_with(|| {
-            Database::open(&Self::db_path("unknown"), |key| key as &[u8]).unwrap()
+            Database::open(Self::folder(), "unknown", |key| key as &[u8]).unwrap()
         })
     }
 
     fn open_multisig(&mut self) -> &mut DbMultisig {
         self.multisig.get_or_insert_with(|| {
-            Database::open(&Self::db_path("multisig"), |key| key as &[u8]).unwrap()
+            Database::open(Self::folder(), "multisig", |key| key as &[u8]).unwrap()
         })
-    }
-
-    fn db_path(name: &str) -> String {
-        format!("{}/{name}", Self::folder())
     }
 }
 
