@@ -27,7 +27,7 @@ impl WTxid {
 
 impl Encode for WTxid {
     fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), EncodeError> {
-        Encode::encode(&self.to_byte_array(), encoder)
+        Encode::encode(self.0.as_byte_array().as_slice(), encoder)
     }
 }
 

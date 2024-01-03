@@ -5,25 +5,25 @@ mod structs;
 mod traits;
 mod utils;
 
-// use crate::utils::{start_node, stop_node, wait_for_new_block, wait_node_sync};
+use crate::utils::Node;
 
 use run::run;
 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    // start_node();
+    // Node::start();
 
     // loop {
-    //     wait_node_sync()?;
+    //     Node::wait_sync()?;
 
-    //     stop_node();
+    //     Node::stop();
 
     let block_count = run()?;
 
-    //     start_node();
+    //     Node::start();
 
-    //     wait_for_new_block(block_count - 1)?;
+    //     Node::wait_for_new_block(block_count - 1)?;
     // }
 
     Ok(())

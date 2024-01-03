@@ -5,7 +5,7 @@ use crate::traits::Snapshot;
 
 use super::{BlockData, DateData};
 
-#[derive(Encode, Decode, Default, Deref, DerefMut)]
+#[derive(Encode, Decode, Default, Deref, DerefMut, Debug)]
 pub struct DateDataVec(Vec<DateData>);
 
 impl DateDataVec {

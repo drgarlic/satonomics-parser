@@ -7,10 +7,10 @@ use rayon::prelude::*;
 use crate::traits::{HeightDataset, HeightDatasets};
 
 use super::{
-    AgeRange, AgedDataset, CoinblocksDataset, CoindaysDataset, DatasetInsertData, RewardsDataset,
+    AgeRange, AgedDataset, CoinblocksDataset, CoindaysDataset, DatasetInsertedData, RewardsDataset,
 };
 
-pub struct UtxoDatasets {
+pub struct Datasets {
     height_to_1d_dataset: AgedDataset,
     height_to_7d_dataset: AgedDataset,
     height_to_1m_dataset: AgedDataset,
@@ -48,7 +48,7 @@ pub struct UtxoDatasets {
     height_to_coindays: CoindaysDataset,
 }
 
-impl UtxoDatasets {
+impl Datasets {
     pub fn new() -> color_eyre::Result<Self> {
         let height_to_1d_dataset_handle = thread::spawn(|| AgedDataset::new("1d", AgeRange::To(1)));
         let height_to_7d_dataset_handle = thread::spawn(|| AgedDataset::new("7d", AgeRange::To(7)));
@@ -156,7 +156,7 @@ impl UtxoDatasets {
     }
 }
 
-impl<'a> HeightDatasets<DatasetInsertData<'a>> for UtxoDatasets {
+impl<'a> HeightDatasets<DatasetInsertedData<'a>> for Datasets {
     fn get_min_last_height(&self) -> Option<usize> {
         self.to_vec()
             .iter()
@@ -181,8 +181,8 @@ impl<'a> HeightDatasets<DatasetInsertData<'a>> for UtxoDatasets {
             .try_for_each(|dataset| dataset.export())
     }
 
-    fn insert(&self, insert_data: DatasetInsertData) {
-        let DatasetInsertData { height, .. } = insert_data;
+    fn insert(&self, insert_data: DatasetInsertedData) {
+        let DatasetInsertedData { height, .. } = insert_data;
 
         self.to_vec()
             .par_iter()
@@ -190,8 +190,8 @@ impl<'a> HeightDatasets<DatasetInsertData<'a>> for UtxoDatasets {
             .for_each(|dataset| dataset.insert(&insert_data));
     }
 
-    fn to_vec(&self) -> Vec<&(dyn HeightDataset<DatasetInsertData<'a>> + Send + Sync)> {
-        let flat_datasets: Vec<&(dyn HeightDataset<DatasetInsertData> + Send + Sync)> = vec![
+    fn to_vec(&self) -> Vec<&(dyn HeightDataset<DatasetInsertedData<'a>> + Send + Sync)> {
+        let flat_datasets: Vec<&(dyn HeightDataset<DatasetInsertedData> + Send + Sync)> = vec![
             &self.height_to_1d_dataset,
             &self.height_to_7d_dataset,
             &self.height_to_1m_dataset,
@@ -225,7 +225,7 @@ impl<'a> HeightDatasets<DatasetInsertData<'a>> for UtxoDatasets {
         let yearly_datasets = self
             .height_to_yearly_datasets
             .iter()
-            .map(|dataset| dataset as &(dyn HeightDataset<DatasetInsertData> + Send + Sync))
+            .map(|dataset| dataset as &(dyn HeightDataset<DatasetInsertedData> + Send + Sync))
             .collect_vec();
 
         [flat_datasets, yearly_datasets]

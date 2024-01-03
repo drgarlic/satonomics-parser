@@ -1,15 +1,18 @@
-use std::{fs, path::Path};
+use std::fmt::Debug;
 
-use bincode::{Decode, Encode};
+use bincode::{
+    config::{standard, Configuration},
+    Decode, Encode,
+};
 
-use crate::utils::{export_binary, import_binary};
+use crate::utils::Binary;
 
 pub const SNAPSHOTS_FOLDER: &str = "./snapshots";
 
 // https://github.com/djkoloski/rust_serialization_benchmark
 pub trait Snapshot
 where
-    Self: Encode + Decode,
+    Self: Encode + Decode + Debug,
 {
     fn name<'a>() -> &'a str;
 
@@ -19,13 +22,15 @@ where
         format!("{SNAPSHOTS_FOLDER}/{name}.bin")
     }
 
-    fn import() -> color_eyre::Result<Self> {
-        fs::create_dir_all(SNAPSHOTS_FOLDER)?;
+    fn config() -> Configuration {
+        standard()
+    }
 
-        import_binary(Path::new(&Self::format_path_str()))
+    fn import() -> color_eyre::Result<Self> {
+        Binary::import(Self::format_path_str())
     }
 
     fn export(&self) -> color_eyre::Result<()> {
-        export_binary(Path::new(&Self::format_path_str()), &self)
+        Binary::export(Self::format_path_str(), self)
     }
 }

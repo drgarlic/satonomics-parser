@@ -4,6 +4,7 @@ use std::{
     fs,
 };
 
+use bincode::{Decode, Encode};
 use derive_deref::{Deref, DerefMut};
 use itertools::Itertools;
 
@@ -139,22 +140,39 @@ where
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deref, DerefMut, Default)]
-pub struct U8_20([u8; 20]);
-direct_repr!(U8_20);
-impl U8_20 {
-    pub fn from(slice: &[u8]) -> Self {
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deref, DerefMut, Default, Copy, Encode, Decode,
+)]
+pub struct U8_4([u8; 4]);
+direct_repr!(U8_4);
+impl From<&[u8]> for U8_4 {
+    fn from(slice: &[u8]) -> Self {
         let mut arr = Self::default();
         arr.copy_from_slice(slice);
         arr
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deref, DerefMut, Default)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deref, DerefMut, Default, Copy, Encode, Decode,
+)]
+pub struct U8_20([u8; 20]);
+direct_repr!(U8_20);
+impl From<&[u8]> for U8_20 {
+    fn from(slice: &[u8]) -> Self {
+        let mut arr = Self::default();
+        arr.copy_from_slice(slice);
+        arr
+    }
+}
+
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deref, DerefMut, Default, Copy, Encode, Decode,
+)]
 pub struct U8_32([u8; 32]);
 direct_repr!(U8_32);
-impl U8_32 {
-    pub fn from(slice: &[u8]) -> Self {
+impl From<&[u8]> for U8_32 {
+    fn from(slice: &[u8]) -> Self {
         let mut arr = Self::default();
         arr.copy_from_slice(slice);
         arr

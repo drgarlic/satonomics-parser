@@ -2,11 +2,11 @@ use bincode::{Decode, Encode};
 use ordered_float::OrderedFloat;
 use sanakirja::{direct_repr, Storable, UnsizedStorable};
 
-use super::AddressKind;
+use super::RawAddressType;
 
 #[derive(Encode, Decode, Debug)]
 pub struct AddressData {
-    pub kind: AddressKind,
+    pub address_type: RawAddressType,
     pub amount: f64,
     pub sent: f64,
     pub received: f64,
@@ -14,9 +14,9 @@ pub struct AddressData {
 }
 
 impl AddressData {
-    pub fn new(kind: AddressKind) -> Self {
+    pub fn new(address_type: RawAddressType) -> Self {
         Self {
-            kind,
+            address_type,
             amount: 0.0,
             sent: 0.0,
             received: 0.0,
@@ -60,7 +60,7 @@ impl AddressData {
 
     pub fn from_empty(empty: EmptyAddressData) -> Self {
         Self {
-            kind: empty.kind,
+            address_type: empty.address_type,
             amount: 0.0,
             sent: empty.sent.0,
             received: empty.received.0,
@@ -71,7 +71,7 @@ impl AddressData {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct EmptyAddressData {
-    pub kind: AddressKind,
+    pub address_type: RawAddressType,
     pub sent: OrderedFloat<f64>,
     pub received: OrderedFloat<f64>,
 }
@@ -80,7 +80,7 @@ direct_repr!(EmptyAddressData);
 impl EmptyAddressData {
     pub fn from_non_empty(non_empty: AddressData) -> Self {
         Self {
-            kind: non_empty.kind,
+            address_type: non_empty.address_type,
             sent: OrderedFloat(non_empty.sent),
             received: OrderedFloat(non_empty.received),
         }

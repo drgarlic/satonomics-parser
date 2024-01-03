@@ -25,8 +25,10 @@ pub fn multisig_addresses(script: &Script) -> Vec<Address> {
             unreachable!()
         }
     };
+
     // read public keys
     let mut public_keys = Vec::with_capacity(num_keys as usize);
+
     for op in ops.iter().skip(1).take(num_keys as usize) {
         if let PushBytes(data) = op {
             match PublicKey::from_slice(data.as_bytes()) {
@@ -40,6 +42,7 @@ pub fn multisig_addresses(script: &Script) -> Vec<Address> {
             unreachable!()
         }
     }
+
     public_keys
 }
 

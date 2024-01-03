@@ -7,7 +7,7 @@ use crate::traits::Snapshot;
 
 use super::AddressData;
 
-#[derive(Encode, Decode, Default, Deref, DerefMut)]
+#[derive(Encode, Decode, Default, Deref, DerefMut, Debug)]
 pub struct AddressIndexToAddressData(BTreeMap<u32, AddressData>);
 
 impl Snapshot for AddressIndexToAddressData {

@@ -7,7 +7,7 @@ use crate::{
     traits::HeightDataset,
 };
 
-use super::DatasetInsertData;
+use super::DatasetInsertedData;
 
 pub enum AgeRange {
     Full,
@@ -24,9 +24,9 @@ pub struct AgedDataset {
     height_to_supply_in_profit: HeightMap<f64>,
     height_to_unrealized_profit: HeightMap<f32>,
     height_to_unrealized_loss: HeightMap<f32>,
-    /// Fees not taken into account
+    /// NOTE: Fees not taken into account
     height_to_realized_profit: HeightMap<f32>,
-    /// Fees not taken into account
+    /// NOTE: Fees not taken into account
     height_to_realized_loss: HeightMap<f32>,
     height_to_mean_price: HeightMap<f32>,
     height_to_median_price: HeightMap<f32>,
@@ -88,9 +88,9 @@ impl AgedDataset {
     }
 }
 
-impl<'a> HeightDataset<DatasetInsertData<'a>> for AgedDataset {
-    fn insert(&self, insert_data: &DatasetInsertData) {
-        let &DatasetInsertData {
+impl<'a> HeightDataset<DatasetInsertedData<'a>> for AgedDataset {
+    fn insert(&self, insert_data: &DatasetInsertedData) {
+        let &DatasetInsertedData {
             date_data_vec,
             price,
             height,

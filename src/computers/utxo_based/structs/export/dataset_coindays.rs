@@ -3,7 +3,7 @@ use crate::{
     traits::HeightDataset,
 };
 
-use super::DatasetInsertData;
+use super::DatasetInsertedData;
 
 pub struct CoindaysDataset {
     pub height_to_coindays_destroyed: HeightMap<f64>,
@@ -17,9 +17,9 @@ impl CoindaysDataset {
     }
 }
 
-impl<'a> HeightDataset<DatasetInsertData<'a>> for CoindaysDataset {
-    fn insert(&self, insert_data: &DatasetInsertData) {
-        let &DatasetInsertData {
+impl<'a> HeightDataset<DatasetInsertedData<'a>> for CoindaysDataset {
+    fn insert(&self, insert_data: &DatasetInsertedData) {
+        let &DatasetInsertedData {
             height,
             coindays_destroyed,
             ..

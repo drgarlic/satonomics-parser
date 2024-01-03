@@ -1,4 +1,6 @@
 //!
+//! Mostly a copy pasta from bitcoin-explorer
+//!
 //! Crates APIs, essential structs, functions, methods are all here!
 //!
 //! To quickly understand how to use this crate, have a look at the
@@ -20,13 +22,26 @@
 //! ```
 //!
 
+mod blk_files;
+mod block_iter;
+mod blocks_indexes;
+mod errors;
+mod reader;
+mod txdb;
+
+use blk_files::*;
+use blocks_indexes::*;
+use errors::*;
+use reader::*;
+use txdb::*;
+
 use std::ops::Deref;
 use std::path::Path;
 use std::sync::Arc;
 
 use bitcoin::{Block, Transaction, Txid};
 
-use super::{BlkFiles, BlockIter, BlocksIndexes, OpError, OpResult, TxDB};
+pub use block_iter::BlockIter;
 
 pub struct InnerDB {
     pub blocks_indexes: BlocksIndexes,
@@ -76,7 +91,7 @@ impl BitcoinDB {
     /// ```
     pub fn new(p: &Path, tx_index: bool) -> OpResult<BitcoinDB> {
         if !p.exists() {
-            return Err(super::OpError::from("data_dir does not exist"));
+            return Err(OpError::from("data_dir does not exist"));
         }
         let blk_path = p.join("blocks");
         let index_path = blk_path.join("index");

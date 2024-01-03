@@ -12,9 +12,9 @@ pub struct DateToBlocks {
 impl DateToBlocks {
     pub fn import() -> color_eyre::Result<Self> {
         Ok(Self {
-            date_to_first_block: DateMap::import("date_to_first_block.json")?,
-            date_to_last_block: DateMap::import("date_to_last_block.json")?,
-            date_to_block_count: DateMap::import("date_to_block_count.json")?,
+            date_to_first_block: DateMap::import("date_to_first_block.json"),
+            date_to_last_block: DateMap::import("date_to_last_block.json"),
+            date_to_block_count: DateMap::import("date_to_block_count.json"),
             // date_to_total_block_count: DateMap::import("date_to_total_block_count.json")?,
         })
     }

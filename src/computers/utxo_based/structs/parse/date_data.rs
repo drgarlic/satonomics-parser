@@ -5,7 +5,7 @@ use crate::structs::WNaiveDate;
 
 use super::BlockData;
 
-#[derive(Encode, Decode)]
+#[derive(Encode, Decode, Debug)]
 pub struct DateData {
     pub date: WNaiveDate,
     pub blocks: Vec<BlockData>,

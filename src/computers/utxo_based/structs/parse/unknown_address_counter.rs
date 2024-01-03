@@ -4,10 +4,10 @@ use derive_deref::{Deref, DerefMut};
 use crate::{structs::Counter, traits::Snapshot};
 
 #[derive(Encode, Decode, Default, Deref, DerefMut, Debug)]
-pub struct AddressCounter(Counter);
+pub struct UnknownAddressCounter(Counter);
 
-impl Snapshot for AddressCounter {
+impl Snapshot for UnknownAddressCounter {
     fn name<'a>() -> &'a str {
-        "address_counter"
+        "unknown_address_counter"
     }
 }

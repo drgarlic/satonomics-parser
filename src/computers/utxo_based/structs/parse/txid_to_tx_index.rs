@@ -5,7 +5,7 @@ use derive_deref::{Deref, DerefMut};
 
 use crate::{structs::WTxid, traits::Snapshot};
 
-#[derive(Encode, Decode, Default, Deref, DerefMut)]
+#[derive(Encode, Decode, Default, Deref, DerefMut, Debug)]
 pub struct TxidToTxIndex(BTreeMap<WTxid, u32>);
 
 impl Snapshot for TxidToTxIndex {

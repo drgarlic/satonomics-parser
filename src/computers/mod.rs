@@ -1,6 +1,5 @@
 mod block_based;
 mod price_based;
-mod tx_based;
 mod utxo_based;
 
 pub use block_based::*;

@@ -5,17 +5,17 @@ use chrono::Local;
 use crate::traits::{Databases, Snapshot};
 
 use super::structs::{
-    AddressCounter, AddressIndexToAddressData, AddressIndexToEmptyAddressData,
-    AddressToAddressIndex, DateDataVec, TxCounter, TxIndexToTxData, TxidToTxIndex,
-    TxoutIndexToTxoutData, UtxoDatasets,
+    AddressCounter, AddressIndexToAddressData, AddressIndexToEmptyAddressData, Datasets,
+    DateDataVec, RawAddressToAddressIndex, TxCounter, TxIndexToTxData, TxidToTxIndex,
+    TxoutIndexToTxoutData,
 };
 
-pub struct ExportData<'a> {
+pub struct ExportedData<'a> {
     pub address_counter: &'a AddressCounter,
     pub address_index_to_address_data: &'a AddressIndexToAddressData,
     pub address_index_to_empty_address_data: AddressIndexToEmptyAddressData,
-    pub address_to_address_index: AddressToAddressIndex,
-    pub datasets: &'a UtxoDatasets,
+    pub address_to_address_index: RawAddressToAddressIndex,
+    pub datasets: &'a Datasets,
     pub date_data_vec: &'a DateDataVec,
     pub height: usize,
     pub tx_counter: &'a TxCounter,
@@ -25,7 +25,7 @@ pub struct ExportData<'a> {
 }
 
 pub fn export_all(
-    ExportData {
+    ExportedData {
         address_counter,
         address_index_to_address_data,
         address_index_to_empty_address_data,
@@ -37,7 +37,7 @@ pub fn export_all(
         tx_index_to_tx_data,
         txid_to_tx_index,
         txout_index_to_txout_data,
-    }: ExportData,
+    }: ExportedData,
 ) -> color_eyre::Result<()> {
     println!("{:?} - Saving... (Don't close !!)", Local::now());
 

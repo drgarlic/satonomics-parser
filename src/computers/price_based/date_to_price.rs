@@ -1,14 +1,14 @@
 use crate::{
     structs::DateMap,
-    utils::{fetch_daily_prices_from_kraken, string_to_naive_date},
+    utils::{string_to_naive_date, Kraken},
 };
 
 pub fn compute_date_to_price() -> color_eyre::Result<DateMap<f32>> {
     println!("Computing date_to_price...");
 
-    let date_to_price = DateMap::import("date_to_price.json")?;
+    let date_to_price = DateMap::import("date_to_price.json");
 
-    fetch_daily_prices_from_kraken()?
+    Kraken::fetch_daily_prices()?
         .iter()
         .for_each(|(date, price)| {
             println!("Date: {date}");

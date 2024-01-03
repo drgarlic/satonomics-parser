@@ -3,13 +3,13 @@ use std::thread;
 use chrono::Days;
 
 use crate::{
-    computers::utxo_based::structs::UtxoDatasets, structs::DateMap, traits::HeightDatasets,
+    computers::utxo_based::structs::Datasets, structs::DateMap, traits::HeightDatasets,
     traits::Snapshot,
 };
 
 use super::{
     AddressCounter, AddressIndexToAddressData, DateDataVec, TxCounter, TxIndexToTxData,
-    TxidToTxIndex, TxoutIndexToTxoutData,
+    TxidToTxIndex, TxoutIndexToTxoutData, UnknownAddressCounter,
 };
 
 #[derive(Default)]
@@ -22,17 +22,15 @@ pub struct InitiatedParsers {
     pub tx_index_to_tx_data: TxIndexToTxData,
     pub txid_to_tx_index: TxidToTxIndex,
     pub txout_index_to_txout_data: TxoutIndexToTxoutData,
+    pub unknown_address_counter: UnknownAddressCounter,
 }
 
 impl InitiatedParsers {
-    pub fn init(datasets: &UtxoDatasets, date_to_first_block: &DateMap<usize>) -> Self {
+    pub fn init(datasets: &Datasets, date_to_first_block: &DateMap<usize>) -> Self {
         Self::read(datasets, date_to_first_block).unwrap_or_default()
     }
 
-    fn read(
-        datasets: &UtxoDatasets,
-        date_to_first_block: &DateMap<usize>,
-    ) -> color_eyre::Result<Self> {
+    fn read(datasets: &Datasets, date_to_first_block: &DateMap<usize>) -> color_eyre::Result<Self> {
         let address_index_to_address_data_handle = thread::spawn(AddressIndexToAddressData::import);
 
         let tx_index_to_tx_data_handle = thread::spawn(TxIndexToTxData::import);
@@ -44,8 +42,8 @@ impl InitiatedParsers {
         let date_data_vec_handle = thread::spawn(DateDataVec::import);
 
         let mut address_counter = AddressCounter::import()?;
-
         let mut tx_counter = TxCounter::import()?;
+        let mut unknown_address_counter = UnknownAddressCounter::import()?;
 
         let mut date_data_vec = date_data_vec_handle.join().unwrap()?;
 
@@ -60,10 +58,14 @@ impl InitiatedParsers {
         let mut address_index_to_address_data =
             address_index_to_address_data_handle.join().unwrap()?;
 
+        println!("max {max_date:#?}");
+
         let height = max_date
                 .and_then(|date| date.checked_add_days(Days::new(1)))
                 .and_then(|date| {
                     let min_last_height = datasets.get_min_last_height();
+
+                    dbg!(min_last_height);
 
                     date_to_first_block.get(&date).map(|snapshot_start_height| {
 
@@ -77,8 +79,9 @@ impl InitiatedParsers {
                             txid_to_tx_index.clear();
                             txout_index_to_txout_data.clear();
 
-                            *address_counter = 0;
-                            *tx_counter = 0;
+                            address_counter.reset();
+                            tx_counter.reset();
+                            unknown_address_counter.reset();
 
                             return 0;
                         }
@@ -86,6 +89,8 @@ impl InitiatedParsers {
                         snapshot_start_height
                     })
                 }).unwrap_or(0);
+
+        println!("h {height}");
 
         Ok(Self {
             address_counter,
@@ -96,6 +101,7 @@ impl InitiatedParsers {
             tx_index_to_tx_data,
             txid_to_tx_index,
             txout_index_to_txout_data,
+            unknown_address_counter,
         })
     }
 }

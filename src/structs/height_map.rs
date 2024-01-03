@@ -6,9 +6,10 @@ use std::{
 
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::utils::{export_json, import_json_vec, EXPORTS_FOLDER_RAW_PATH};
-
-pub const NUMBER_OF_UNSAFE_BLOCKS: usize = 100;
+use crate::{
+    bitcoin::NUMBER_OF_UNSAFE_BLOCKS,
+    utils::{Json, EXPORTS_FOLDER_PATH},
+};
 
 pub struct HeightMap<T>
 where
@@ -24,12 +25,12 @@ where
     T: Clone + DeserializeOwned + Serialize,
 {
     pub fn new(path: &str) -> Self {
-        let path_buf = Path::new(EXPORTS_FOLDER_RAW_PATH).join(path);
+        let path = Path::new(EXPORTS_FOLDER_PATH).join(path);
 
         Self {
             batch: RwLock::new(vec![]),
-            initial_first_unsafe_height: get_first_unsafe_height::<T>(&path_buf),
-            path: path_buf,
+            initial_first_unsafe_height: get_first_unsafe_height::<T, _>(&path),
+            path,
         }
     }
 
@@ -40,11 +41,16 @@ where
     }
 
     pub fn consume(self) -> Vec<T> {
-        self.import().expect("import in consume to work")
+        self.import()
     }
 
-    fn import(&self) -> color_eyre::Result<Vec<T>> {
-        import::<T>(&self.path)
+    #[allow(unused)]
+    pub fn path(&self) -> &PathBuf {
+        &self.path
+    }
+
+    fn import(&self) -> Vec<T> {
+        Json::import_vec(&self.path)
     }
 }
 
@@ -67,11 +73,11 @@ where
     }
 
     fn get_last_height(&self) -> Option<usize> {
-        get_last_height::<T>(&self.path)
+        get_last_height::<T, _>(&self.path)
     }
 
     fn get_first_unsafe_height(&self) -> Option<usize> {
-        get_first_unsafe_height::<T>(&self.path)
+        get_first_unsafe_height::<T, _>(&self.path)
     }
 
     fn export(&self) -> color_eyre::Result<()> {
@@ -81,7 +87,7 @@ where
             return Ok(());
         }
 
-        let mut list = self.import()?;
+        let mut list = self.import();
 
         self.batch
             .write()
@@ -109,35 +115,16 @@ where
                 }
             });
 
-        export_json(&self.path, &list)
+        Json::export(&self.path, &list)
     }
 }
 
-fn import<T>(path: &Path) -> color_eyre::Result<Vec<T>>
+fn get_first_unsafe_height<T, P>(path: P) -> Option<usize>
 where
     T: Clone + DeserializeOwned + Serialize,
+    P: AsRef<Path>,
 {
-    import_json_vec::<T>(path, true)
-}
-
-fn get_last_height<T>(path: &Path) -> Option<usize>
-where
-    T: Clone + DeserializeOwned + Serialize,
-{
-    let len = import::<T>(path).expect("get last height to work").len();
-
-    if len == 0 {
-        None
-    } else {
-        Some(len - 1)
-    }
-}
-
-fn get_first_unsafe_height<T>(path: &Path) -> Option<usize>
-where
-    T: Clone + DeserializeOwned + Serialize,
-{
-    get_last_height::<T>(path).and_then(|last_height| {
+    get_last_height::<T, P>(path).and_then(|last_height| {
         let offset = NUMBER_OF_UNSAFE_BLOCKS - 1;
 
         if last_height >= offset {
@@ -146,4 +133,18 @@ where
             None
         }
     })
+}
+
+fn get_last_height<T, P>(path: P) -> Option<usize>
+where
+    T: Clone + DeserializeOwned + Serialize,
+    P: AsRef<Path>,
+{
+    let len = Json::import_vec::<T, P>(path).len();
+
+    if len == 0 {
+        None
+    } else {
+        Some(len - 1)
+    }
 }

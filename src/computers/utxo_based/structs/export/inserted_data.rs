@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::computers::utxo_based::{structs::AddressIndexToAddressData, BlockPath, DateDataVec};
 
-pub struct DatasetInsertData<'a> {
+pub struct DatasetInsertedData<'a> {
     pub address_index_to_address_data: &'a AddressIndexToAddressData,
     pub date_data_vec: &'a DateDataVec,
     pub height: usize,

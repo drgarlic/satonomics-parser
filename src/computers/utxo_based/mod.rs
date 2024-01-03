@@ -4,12 +4,12 @@ use bitcoin::Block;
 use chrono::{offset::Local, Datelike, NaiveDate};
 
 use crate::{
-    bitcoin::BitcoinDB,
+    bitcoin::{BitcoinDB, NUMBER_OF_UNSAFE_BLOCKS},
     computers::{
-        export::{export_all, ExportData},
+        export::{export_all, ExportedData},
         process::{process_block, ProcessData},
     },
-    structs::{DateMap, NUMBER_OF_UNSAFE_BLOCKS},
+    structs::DateMap,
     traits::{Databases, HeightDatasets},
     utils::timestamp_to_naive_date,
 };
@@ -18,17 +18,17 @@ pub mod export;
 pub mod process;
 pub mod structs;
 
-use structs::*;
+pub use structs::*;
 
 pub fn compute_utxo_based_datasets(
     bitcoin_db: &BitcoinDB,
     block_count: usize,
     height_to_price: &[f32],
     date_to_first_block: &DateMap<usize>,
-) -> color_eyre::Result<UtxoDatasets> {
+) -> color_eyre::Result<Datasets> {
     println!("{:?} - Starting aged", Local::now());
 
-    let datasets = UtxoDatasets::new()?;
+    let datasets = Datasets::new()?;
 
     println!("{:?} - Imported datasets", Local::now());
 
@@ -41,6 +41,7 @@ pub fn compute_utxo_based_datasets(
         mut txid_to_tx_index,
         mut txout_index_to_txout_data,
         mut height,
+        mut unknown_address_counter,
     } = InitiatedParsers::init(&datasets, date_to_first_block);
 
     println!("{:?} - Starting parsing", Local::now());
@@ -53,7 +54,7 @@ pub fn compute_utxo_based_datasets(
 
     while parsing {
         let mut address_index_to_empty_address_data = AddressIndexToEmptyAddressData::open(height)?;
-        let mut address_to_address_index = AddressToAddressIndex::open(height)?;
+        let mut raw_address_to_address_index = RawAddressToAddressIndex::open(height)?;
         // let mut txid_to_tx_index = TxidToTxIndex::open(height)?;
 
         'days: loop {
@@ -99,7 +100,7 @@ pub fn compute_utxo_based_datasets(
                                 date: block_date,
                                 date_data_vec: &mut date_data_vec,
                                 height_to_price,
-                                address_to_address_index: &mut address_to_address_index,
+                                raw_address_to_address_index: &mut raw_address_to_address_index,
                                 address_index_to_address_data: &mut address_index_to_address_data,
                                 address_index_to_empty_address_data:
                                     &mut address_index_to_empty_address_data,
@@ -108,6 +109,7 @@ pub fn compute_utxo_based_datasets(
                                 txout_index_to_txout_data: &mut txout_index_to_txout_data,
                                 tx_counter: &mut tx_counter,
                                 address_counter: &mut address_counter,
+                                unknown_address_counter: &mut unknown_address_counter,
                             });
                         }
                         Ordering::Less => {
@@ -135,11 +137,11 @@ pub fn compute_utxo_based_datasets(
             }
         }
 
-        export_all(ExportData {
+        export_all(ExportedData {
             address_counter: &address_counter,
             address_index_to_address_data: &address_index_to_address_data,
             address_index_to_empty_address_data,
-            address_to_address_index,
+            address_to_address_index: raw_address_to_address_index,
             datasets: &datasets,
             date_data_vec: &date_data_vec,
             height,

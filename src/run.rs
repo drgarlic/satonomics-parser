@@ -33,7 +33,6 @@ pub fn run() -> color_eyre::Result<usize> {
 
     let DateToBlocks {
         date_to_first_block,
-        // date_to_last_block,
         ..
     } = time(|| compute_date_to_blocks(&db, block_count))?;
 
@@ -41,11 +40,7 @@ pub fn run() -> color_eyre::Result<usize> {
 
     // let _date_to_price = time(compute_date_to_price)?;
 
-    // let HeightToRewards { .. } = time(|| compute_height_to_rewards(&db, block_count))?;
-
     compute_utxo_based_datasets(&db, block_count, &height_to_price, &date_to_first_block)?;
-
-    // compute_address_based_datasets(&db, block_count, &height_to_price, &date_to_first_block)?;
 
     Ok(block_count)
 }

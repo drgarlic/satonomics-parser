@@ -4,7 +4,7 @@ mod dataset_coindays;
 mod dataset_entity;
 mod dataset_rewards;
 mod datasets;
-mod insert_data;
+mod inserted_data;
 
 use dataset_aged::*;
 use dataset_coinblocks::*;
@@ -12,4 +12,4 @@ use dataset_coindays::*;
 use dataset_entity::*;
 use dataset_rewards::*;
 pub use datasets::*;
-pub use insert_data::*;
+pub use inserted_data::*;

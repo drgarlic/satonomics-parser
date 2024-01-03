@@ -7,7 +7,7 @@ use crate::traits::Snapshot;
 
 use super::TxData;
 
-#[derive(Encode, Decode, Default, Deref, DerefMut)]
+#[derive(Encode, Decode, Default, Deref, DerefMut, Debug)]
 pub struct TxIndexToTxData(BTreeMap<u32, TxData>);
 
 impl Snapshot for TxIndexToTxData {

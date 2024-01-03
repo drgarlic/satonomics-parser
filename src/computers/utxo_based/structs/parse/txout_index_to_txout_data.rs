@@ -7,7 +7,7 @@ use crate::traits::Snapshot;
 
 use super::{TxoutData, TxoutIndex};
 
-#[derive(Encode, Decode, Default, Deref, DerefMut)]
+#[derive(Encode, Decode, Default, Deref, DerefMut, Debug)]
 pub struct TxoutIndexToTxoutData(BTreeMap<TxoutIndex, TxoutData>);
 
 impl Snapshot for TxoutIndexToTxoutData {
