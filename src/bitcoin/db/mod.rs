@@ -1,5 +1,7 @@
 //!
-//! Mostly a copy pasta from bitcoin-explorer
+//! Mostly a stripped down copy pasta of bitcoin-explorer
+//!
+//! Huge props to https://github.com/Congyuwang
 //!
 //! Crates APIs, essential structs, functions, methods are all here!
 //!

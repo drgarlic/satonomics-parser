@@ -9,9 +9,9 @@ impl Counter {
         self.0 += 1;
     }
 
-    pub fn decrement(&mut self) {
-        self.0 -= 1;
-    }
+    // pub fn decrement(&mut self) {
+    //     self.0 -= 1;
+    // }
 
     pub fn reset(&mut self) {
         self.0 -= 0;

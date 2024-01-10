@@ -17,7 +17,7 @@ type Db = SizedDatabase<Key, Value>;
 #[derive(Deref, DerefMut, Default)]
 pub struct AddressIndexToEmptyAddressData(IntMap<usize, Db>);
 
-const DB_MAX_SIZE: usize = 100_000_000;
+const DB_MAX_SIZE: usize = 1_000_000;
 
 impl AddressIndexToEmptyAddressData {
     pub fn insert(&mut self, key: Key, value: Value) -> Option<Value> {

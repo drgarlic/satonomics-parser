@@ -33,15 +33,12 @@ pub fn compute_utxo_based_datasets(
     println!("{:?} - Imported datasets", Local::now());
 
     let InitiatedParsers {
-        mut address_counter,
         mut address_index_to_address_data,
+        mut counters,
         mut date_data_vec,
-        mut tx_counter,
         mut tx_index_to_tx_data,
-        mut txid_to_tx_index,
         mut txout_index_to_txout_data,
         mut height,
-        mut unknown_address_counter,
     } = InitiatedParsers::init(&datasets, date_to_first_block);
 
     println!("{:?} - Starting parsing", Local::now());
@@ -55,7 +52,7 @@ pub fn compute_utxo_based_datasets(
     while parsing {
         let mut address_index_to_empty_address_data = AddressIndexToEmptyAddressData::open(height)?;
         let mut raw_address_to_address_index = RawAddressToAddressIndex::open(height)?;
-        // let mut txid_to_tx_index = TxidToTxIndex::open(height)?;
+        let mut txid_to_tx_index = TxidToTxIndex::open(height)?;
 
         'days: loop {
             let mut block_len = 0;
@@ -96,6 +93,7 @@ pub fn compute_utxo_based_datasets(
                                 bitcoin_db,
                                 block: current_block,
                                 block_index,
+                                counters: &mut counters,
                                 height: height + block_index,
                                 date: block_date,
                                 date_data_vec: &mut date_data_vec,
@@ -107,9 +105,6 @@ pub fn compute_utxo_based_datasets(
                                 txid_to_tx_index: &mut txid_to_tx_index,
                                 tx_index_to_tx_data: &mut tx_index_to_tx_data,
                                 txout_index_to_txout_data: &mut txout_index_to_txout_data,
-                                tx_counter: &mut tx_counter,
-                                address_counter: &mut address_counter,
-                                unknown_address_counter: &mut unknown_address_counter,
                             });
                         }
                         Ordering::Less => {
@@ -138,16 +133,15 @@ pub fn compute_utxo_based_datasets(
         }
 
         export_all(ExportedData {
-            address_counter: &address_counter,
             address_index_to_address_data: &address_index_to_address_data,
             address_index_to_empty_address_data,
             address_to_address_index: raw_address_to_address_index,
+            counters: &counters,
             datasets: &datasets,
             date_data_vec: &date_data_vec,
             height,
-            tx_counter: &tx_counter,
             tx_index_to_tx_data: &tx_index_to_tx_data,
-            txid_to_tx_index: &txid_to_tx_index,
+            txid_to_tx_index,
             txout_index_to_txout_data: &txout_index_to_txout_data,
         })?;
     }

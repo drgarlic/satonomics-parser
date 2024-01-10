@@ -1,16 +1,18 @@
 use bincode::{Decode, Encode};
-use bitcoin::{address::Payload, ScriptBuf};
+use bitcoin::{address::Payload, TxOut};
 use bitcoin_hashes::{hash160, Hash};
 use itertools::Itertools;
 
 use crate::{
     bitcoin::multisig_addresses,
-    computers::UnknownAddressCounter,
-    structs::{U8_20, U8_32, U8_4},
+    structs::{U8x19, U8x31, SANAKIRJA_MAX_KEY_SIZE},
 };
+
+use super::Counters;
 
 #[derive(Debug, Encode, Decode, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RawAddressType {
+    Empty,
     Unknown,
     MultiSig,
     P2PK,
@@ -23,19 +25,23 @@ pub enum RawAddressType {
 
 #[derive(Encode, Decode, Debug, Clone, PartialEq, PartialOrd, Ord, Eq)]
 pub enum RawAddress {
-    Unknown(U8_4),
+    // https://mempool.space/tx/7bd54def72825008b4ca0f4aeff13e6be2c5fe0f23430629a9d484a1ac2a29b8
+    Empty(u32),
+    Unknown(u32),
+    // https://mempool.space/tx/274f8be3b7b9b1a220285f5f71f61e2691dd04df9d69bb02a8b3b85f91fb1857
     MultiSig(Box<[u8]>),
-    P2PK(U8_20),
-    P2PKH(U8_20),
-    P2SH(U8_20),
-    P2WPKH(U8_20),
-    P2WSH(U8_32),
-    P2TR(U8_32),
+    P2PK((u8, U8x19)),
+    P2PKH((u8, U8x19)),
+    P2SH((u8, U8x19)),
+    P2WPKH((u8, U8x19)),
+    P2WSH((u8, U8x31)),
+    P2TR((u8, U8x31)),
 }
 
 impl RawAddress {
     pub fn to_type(&self) -> RawAddressType {
         match self {
+            Self::Empty(_) => RawAddressType::Empty,
             Self::Unknown(_) => RawAddressType::Unknown,
             Self::MultiSig(_) => RawAddressType::MultiSig,
             Self::P2PK(_) => RawAddressType::P2PK,
@@ -47,21 +53,25 @@ impl RawAddress {
         }
     }
 
-    pub fn from(script: &ScriptBuf, unknown_counter: &mut UnknownAddressCounter) -> Self {
+    pub fn from(txout: &TxOut, counters: &mut Counters) -> Self {
+        let script = &txout.script_pubkey;
+
         match Payload::from_script(script) {
             Ok(payload) => {
-                let slice = payload_to_raw_address_slice(&payload);
+                let slice = payload_to_slice(&payload);
+                let prefix = slice[0];
+                let rest = &slice[1..];
 
                 if script.is_p2pkh() {
-                    Self::P2PKH(slice.into())
+                    Self::P2PKH((prefix, rest.into()))
                 } else if script.is_p2sh() {
-                    Self::P2SH(slice.into())
+                    Self::P2SH((prefix, rest.into()))
                 } else if script.is_p2wpkh() {
-                    Self::P2WPKH(slice.into())
+                    Self::P2WPKH((prefix, rest.into()))
                 } else if script.is_p2wsh() {
-                    Self::P2WSH(slice.into())
+                    Self::P2WSH((prefix, rest.into()))
                 } else if script.is_p2tr() {
-                    Self::P2TR(slice.into())
+                    Self::P2TR((prefix, rest.into()))
                 } else {
                     unreachable!()
                 }
@@ -76,47 +86,46 @@ impl RawAddress {
 
                     let hash = hash160::Hash::hash(pk);
 
-                    let slice = hash.as_byte_array().as_slice();
+                    let slice = &hash[..];
+                    let prefix = slice[0];
+                    let rest = &slice[1..];
 
-                    Self::P2PK(slice.into())
-                } else if script.is_op_return()
-                    || script.is_provably_unspendable()
-                    || script.is_empty()
-                {
+                    Self::P2PK((prefix, rest.into()))
+                } else if script.is_empty() {
+                    let empty_addresses_counter = &mut counters.empty_addresses;
+                    let index = empty_addresses_counter.inner();
+                    empty_addresses_counter.increment();
+                    Self::Empty(index)
+                } else if script.is_op_return() || script.is_provably_unspendable() {
                     unreachable!()
                 } else if script.is_multisig() {
-                    let addresses = multisig_addresses(script);
+                    let vec = multisig_addresses(script);
 
-                    dbg!(&addresses);
+                    if vec.is_empty() {
+                        dbg!(txout);
+                        panic!("Multisig addresses cannot be empty !");
+                    }
 
-                    Self::MultiSig(
-                        addresses
-                            .iter()
-                            .map(|address| script_to_raw_address_slice(&address.script_pubkey()))
-                            .sorted_unstable()
-                            .concat()
-                            .into(),
-                    )
+                    let mut vec = vec.into_iter().sorted_unstable().concat();
+
+                    // TODO: Terrible! Store everything instead of only the 510 first bytes
+                    if vec.len() > SANAKIRJA_MAX_KEY_SIZE {
+                        vec = vec.drain(..SANAKIRJA_MAX_KEY_SIZE).collect_vec();
+                    }
+
+                    Self::MultiSig(vec.into())
                 } else {
-                    let bytes = unknown_counter.to_le_bytes();
-
-                    unknown_counter.increment();
-
-                    Self::Unknown(bytes.as_slice().into())
+                    let unknown_addresses_counter = &mut counters.unknown_addresses;
+                    let index = unknown_addresses_counter.inner();
+                    unknown_addresses_counter.increment();
+                    Self::Unknown(index)
                 }
             }
         }
     }
 }
 
-fn script_to_raw_address_slice(script: &ScriptBuf) -> Vec<u8> {
-    match Payload::from_script(script) {
-        Ok(payload) => payload_to_raw_address_slice(&payload).to_vec(),
-        Err(_) => unreachable!(),
-    }
-}
-
-fn payload_to_raw_address_slice(payload: &Payload) -> &[u8] {
+fn payload_to_slice(payload: &Payload) -> &[u8] {
     match payload {
         Payload::PubkeyHash(hash) => &hash[..],
         Payload::ScriptHash(hash) => &hash[..],

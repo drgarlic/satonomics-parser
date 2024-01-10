@@ -3,18 +3,17 @@
 //
 
 use bitcoin::{
-    address::Payload,
     blockdata::{
         opcodes::all,
         script::Instruction::{self, Op, PushBytes},
     },
-    Address, Network, Opcode, PublicKey, Script,
+    Opcode, Script,
 };
 
 ///
 /// Obtain addresses for multisig transactions.
 ///
-pub fn multisig_addresses(script: &Script) -> Vec<Address> {
+pub fn multisig_addresses(script: &Script) -> Vec<Vec<u8>> {
     let ops: Vec<Instruction> = script.instructions().filter_map(|o| o.ok()).collect();
 
     // obtain number of keys
@@ -31,13 +30,7 @@ pub fn multisig_addresses(script: &Script) -> Vec<Address> {
 
     for op in ops.iter().skip(1).take(num_keys as usize) {
         if let PushBytes(data) = op {
-            match PublicKey::from_slice(data.as_bytes()) {
-                Ok(pk) => public_keys.push(Address::new(
-                    Network::Bitcoin,
-                    Payload::PubkeyHash(pk.pubkey_hash()),
-                )),
-                Err(_) => return Vec::new(),
-            }
+            public_keys.push(data.as_bytes().to_vec());
         } else {
             unreachable!()
         }

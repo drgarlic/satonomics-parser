@@ -47,30 +47,18 @@ where
         self.map.borrow().get(&date.to_string()).cloned()
     }
 
-    pub fn to_sorted_vec(&self) -> Vec<(String, T)> {
-        let mut vec = self
-            .map
-            .borrow()
-            .iter()
-            .map(|(key, value)| (key.to_owned(), value.to_owned()))
-            .collect_vec();
-
-        vec.sort_unstable_by(|a, b| {
-            string_to_naive_date(&a.0)
-                .partial_cmp(&string_to_naive_date(&b.0))
-                .unwrap()
-        });
-
-        vec
-    }
-
     pub fn export(&self) -> color_eyre::Result<()> {
         Json::export(
             &self.path,
             &self
-                .to_sorted_vec()
+                .map
+                .borrow()
                 .iter()
-                .map(|(key, value)| (key.to_owned(), value.to_owned()))
+                .sorted_unstable_by(|a, b| {
+                    string_to_naive_date(a.0)
+                        .partial_cmp(&string_to_naive_date(b.0))
+                        .unwrap()
+                })
                 .collect::<BTreeMap<_, _>>(),
         )
     }
