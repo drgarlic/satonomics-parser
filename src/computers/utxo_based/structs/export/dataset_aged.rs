@@ -7,7 +7,7 @@ use crate::{
     traits::HeightDataset,
 };
 
-use super::DatasetInsertedData;
+use super::ProcessedData;
 
 pub enum AgeRange {
     Full,
@@ -88,15 +88,15 @@ impl AgedDataset {
     }
 }
 
-impl<'a> HeightDataset<DatasetInsertedData<'a>> for AgedDataset {
-    fn insert(&self, insert_data: &DatasetInsertedData) {
-        let &DatasetInsertedData {
+impl<'a> HeightDataset<ProcessedData<'a>> for AgedDataset {
+    fn insert(&self, processed_data: &ProcessedData) {
+        let &ProcessedData {
             date_data_vec,
             price,
             height,
             block_path_to_spent_value,
             ..
-        } = insert_data;
+        } = processed_data;
 
         let len = date_data_vec.len();
 

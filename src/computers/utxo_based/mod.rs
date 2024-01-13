@@ -10,7 +10,7 @@ use crate::{
         process::{process_block, ProcessData},
     },
     structs::DateMap,
-    traits::{Databases, HeightDatasets},
+    traits::Databases,
     utils::timestamp_to_naive_date,
 };
 

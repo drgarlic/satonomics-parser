@@ -2,10 +2,7 @@ use std::thread;
 
 use chrono::Days;
 
-use crate::{
-    computers::utxo_based::structs::Datasets, structs::DateMap, traits::HeightDatasets,
-    traits::Snapshot,
-};
+use crate::{computers::utxo_based::structs::Datasets, structs::DateMap, traits::Snapshot};
 
 use super::{
     AddressIndexToAddressData, Counters, DateDataVec, TxIndexToTxData, TxoutIndexToTxoutData,

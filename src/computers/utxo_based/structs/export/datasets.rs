@@ -4,17 +4,21 @@ use chrono::Datelike;
 use itertools::Itertools;
 use rayon::prelude::*;
 
-use crate::traits::{HeightDataset, HeightDatasets};
+use crate::traits::HeightDataset;
 
 use super::{
-    AgeRange, AgedDataset, CoinblocksDataset, CoindaysDataset, DatasetInsertedData, RewardsDataset,
+    dataset_block_metadata::BlockMetadataDataset, AgeRange, AgedDataset, CoinblocksDataset,
+    CoindaysDataset, ProcessedData, RewardsDataset,
 };
 
 pub struct Datasets {
     height_to_1d_dataset: AgedDataset,
     height_to_7d_dataset: AgedDataset,
     height_to_1m_dataset: AgedDataset,
+    height_to_2m_dataset: AgedDataset,
     height_to_3m_dataset: AgedDataset,
+    height_to_4m_dataset: AgedDataset,
+    height_to_5m_dataset: AgedDataset,
     height_to_6m_dataset: AgedDataset,
     height_to_1y_dataset: AgedDataset,
     height_to_2y_dataset: AgedDataset,
@@ -46,6 +50,8 @@ pub struct Datasets {
     height_to_coinblocks: CoinblocksDataset,
 
     height_to_coindays: CoindaysDataset,
+
+    height_to_block_metadata: BlockMetadataDataset,
 }
 
 impl Datasets {
@@ -54,8 +60,14 @@ impl Datasets {
         let height_to_7d_dataset_handle = thread::spawn(|| AgedDataset::new("7d", AgeRange::To(7)));
         let height_to_1m_dataset_handle =
             thread::spawn(|| AgedDataset::new("1m", AgeRange::To(30)));
+        let height_to_2m_dataset_handle =
+            thread::spawn(|| AgedDataset::new("2m", AgeRange::To(2 * 30)));
         let height_to_3m_dataset_handle =
             thread::spawn(|| AgedDataset::new("3m", AgeRange::To(3 * 30)));
+        let height_to_4m_dataset_handle =
+            thread::spawn(|| AgedDataset::new("4m", AgeRange::To(4 * 30)));
+        let height_to_5m_dataset_handle =
+            thread::spawn(|| AgedDataset::new("5m", AgeRange::To(5 * 30)));
         let height_to_6m_dataset_handle =
             thread::spawn(|| AgedDataset::new("6m", AgeRange::To(6 * 30)));
         let height_to_1y_dataset_handle =
@@ -113,11 +125,16 @@ impl Datasets {
 
         let height_to_coindays_handle = thread::spawn(CoindaysDataset::import);
 
+        let height_to_block_metadata_handle = thread::spawn(BlockMetadataDataset::import);
+
         Ok(Self {
             height_to_1d_dataset: height_to_1d_dataset_handle.join().unwrap()?,
             height_to_7d_dataset: height_to_7d_dataset_handle.join().unwrap()?,
             height_to_1m_dataset: height_to_1m_dataset_handle.join().unwrap()?,
+            height_to_2m_dataset: height_to_2m_dataset_handle.join().unwrap()?,
             height_to_3m_dataset: height_to_3m_dataset_handle.join().unwrap()?,
+            height_to_4m_dataset: height_to_4m_dataset_handle.join().unwrap()?,
+            height_to_5m_dataset: height_to_5m_dataset_handle.join().unwrap()?,
             height_to_6m_dataset: height_to_6m_dataset_handle.join().unwrap()?,
             height_to_1y_dataset: height_to_1y_dataset_handle.join().unwrap()?,
             height_to_2y_dataset: height_to_2y_dataset_handle.join().unwrap()?,
@@ -152,12 +169,14 @@ impl Datasets {
             height_to_coinblocks: height_to_coinblocks_handle.join().unwrap()?,
 
             height_to_coindays: height_to_coindays_handle.join().unwrap()?,
+
+            height_to_block_metadata: height_to_block_metadata_handle.join().unwrap()?,
         })
     }
-}
+    // }
 
-impl<'a> HeightDatasets<DatasetInsertedData<'a>> for Datasets {
-    fn get_min_last_height(&self) -> Option<usize> {
+    // impl<'a> HeightDatasets<ProcessedData<'a>> for Datasets {
+    pub fn get_min_last_height(&self) -> Option<usize> {
         self.to_vec()
             .iter()
             .map(|dataset| dataset.get_min_last_height())
@@ -175,27 +194,30 @@ impl<'a> HeightDatasets<DatasetInsertedData<'a>> for Datasets {
             .try_for_each(|dataset| dataset.export())
     }
 
-    fn export(&self) -> color_eyre::Result<()> {
+    pub fn export(&self) -> color_eyre::Result<()> {
         self.to_vec()
             .par_iter()
             .try_for_each(|dataset| dataset.export())
     }
 
-    fn insert(&self, insert_data: DatasetInsertedData) {
-        let DatasetInsertedData { height, .. } = insert_data;
+    fn insert(&self, processed_data: ProcessedData) {
+        let ProcessedData { height, .. } = processed_data;
 
         self.to_vec()
             .par_iter()
             .filter(|dataset| dataset.get_min_initial_first_unsafe_height().unwrap_or(0) <= height)
-            .for_each(|dataset| dataset.insert(&insert_data));
+            .for_each(|dataset| dataset.insert(&processed_data));
     }
 
-    fn to_vec(&self) -> Vec<&(dyn HeightDataset<DatasetInsertedData<'a>> + Send + Sync)> {
-        let flat_datasets: Vec<&(dyn HeightDataset<DatasetInsertedData> + Send + Sync)> = vec![
+    fn to_vec(&self) -> Vec<&(dyn HeightDataset<ProcessedData> + Send + Sync)> {
+        let flat_datasets: Vec<&(dyn HeightDataset<ProcessedData> + Send + Sync)> = vec![
             &self.height_to_1d_dataset,
             &self.height_to_7d_dataset,
             &self.height_to_1m_dataset,
+            &self.height_to_2m_dataset,
             &self.height_to_3m_dataset,
+            &self.height_to_4m_dataset,
+            &self.height_to_5m_dataset,
             &self.height_to_6m_dataset,
             &self.height_to_1y_dataset,
             &self.height_to_2y_dataset,
@@ -220,12 +242,13 @@ impl<'a> HeightDatasets<DatasetInsertedData<'a>> for Datasets {
             &self.height_to_rewards,
             &self.height_to_coinblocks,
             &self.height_to_coindays,
+            &self.height_to_block_metadata,
         ];
 
         let yearly_datasets = self
             .height_to_yearly_datasets
             .iter()
-            .map(|dataset| dataset as &(dyn HeightDataset<DatasetInsertedData> + Send + Sync))
+            .map(|dataset| dataset as &(dyn HeightDataset<ProcessedData> + Send + Sync))
             .collect_vec();
 
         [flat_datasets, yearly_datasets]

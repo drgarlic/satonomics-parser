@@ -27,7 +27,6 @@ type DbUnknown = DbU32;
 type DbEmpty = DbU32;
 type DbMultisig = DbUnsized;
 
-// https://unchained.com/blog/bitcoin-address-types-compared/
 #[derive(Default)]
 pub struct RawAddressToAddressIndex {
     p2pk: IntMap<u8, DbP2PK>,

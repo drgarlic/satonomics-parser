@@ -10,7 +10,8 @@ use itertools::Itertools;
 
 // https://docs.rs/sanakirja/latest/sanakirja/index.html
 // https://pijul.org/posts/2021-02-06-rethinking-sanakirja/
-// Seems indeed much faster than ReDB and LMDB (heed) - Though a retest wouldn't hurt
+// Seems indeed much faster than ReDB and LMDB (heed)
+// But a lot has changed code wise between them so a retest wouldn't hurt
 use sanakirja::{
     btree::{self, page, page_unsized, BTreeMutPage, Db_},
     direct_repr, Commit, Env, Error, MutTxn, RootDb, Storable, UnsizedStorable,
@@ -24,7 +25,7 @@ pub type UnsizedDatabase<KeyTree, KeyDB, Value> =
 
 pub struct Database<KeyTree, KeyDB, Value, Page>
 where
-    KeyTree: Ord + Clone,
+    KeyTree: Ord + Clone + Debug + Encode + Decode,
     KeyDB: Ord + ?Sized + Storable,
     Value: Copy + Storable + PartialEq,
     Page: BTreeMutPage<KeyDB, Value>,
@@ -39,11 +40,11 @@ where
 
 pub const SANAKIRJA_MAX_KEY_SIZE: usize = 510;
 const ROOT_DB: usize = 0;
-const PAGE_SIZE: u64 = 4096 * 1000; // Must be a multiplier of 4096
+const PAGE_SIZE: u64 = 4096 * 256; // 1mo - Must be a multiplier of 4096
 
 impl<KeyDB, KeyTree, Value, Page> Database<KeyTree, KeyDB, Value, Page>
 where
-    KeyTree: Ord + Clone + Debug,
+    KeyTree: Ord + Clone + Debug + Encode + Decode,
     KeyDB: Ord + ?Sized + Storable,
     Value: Copy + Storable + PartialEq,
     Page: BTreeMutPage<KeyDB, Value>,
@@ -101,10 +102,6 @@ where
             self.cached_dels.insert(key.clone());
         }
     }
-
-    // pub fn iter(&mut self) -> Iter<'_, MutTxn<Env, ()>, KeyDB, Value, Page> {
-    //     btree::iter(&self.txn, &self.db, None).unwrap()
-    // }
 
     pub fn take(&mut self, key: &KeyTree) -> Option<Value> {
         if self.cached_dels.get(key).is_none() {

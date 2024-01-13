@@ -10,6 +10,7 @@ use crate::{
 
 use super::Counters;
 
+// https://unchained.com/blog/bitcoin-address-types-compared/
 #[derive(Debug, Encode, Decode, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RawAddressType {
     Empty,
@@ -108,7 +109,8 @@ impl RawAddress {
 
                     let mut vec = vec.into_iter().sorted_unstable().concat();
 
-                    // TODO: Terrible! Store everything instead of only the 510 first bytes
+                    // TODO: Terrible! Store everything instead of only the 510 first bytes but how
+                    // Sanakirja key limit is [u8; 510] and some multisig transactions have 999 keys
                     if vec.len() > SANAKIRJA_MAX_KEY_SIZE {
                         vec = vec.drain(..SANAKIRJA_MAX_KEY_SIZE).collect_vec();
                     }

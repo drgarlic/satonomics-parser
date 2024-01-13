@@ -123,13 +123,13 @@ pub fn process_block(
                     return ControlFlow::Continue::<()>(());
                 }
 
-                let raw_address = RawAddress::from(&txout, counters);
-
                 non_zero_outputs_len += 1;
 
                 let txout_index = TxoutIndex::new(tx_index, vout as u16);
 
                 non_zero_amount += txout_btc_value;
+
+                let raw_address = RawAddress::from(&txout, counters);
 
                 let (address_data, address_index) = {
                     if let Some(address_index) = raw_address_to_address_index.get(&raw_address) {
@@ -267,7 +267,6 @@ pub fn process_block(
 
                 let input_txout_data = input_txout_data.unwrap();
                 let input_txout_value = input_txout_data.value;
-                let input_address_index = input_txout_data.address_index;
 
                 let input_tx_data = tx_index_to_tx_data.get_mut(&input_tx_index).unwrap();
 
@@ -312,6 +311,8 @@ pub fn process_block(
                         .unwrap_or(&0.0)
                         + input_txout_value,
                 );
+
+                let input_address_index = input_txout_data.address_index;
 
                 let move_address_to_empty = {
                     let address_data = address_index_to_address_data
