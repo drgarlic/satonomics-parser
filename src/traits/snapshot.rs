@@ -1,9 +1,6 @@
 use std::fmt::Debug;
 
-use bincode::{
-    config::{standard, Configuration},
-    Decode, Encode,
-};
+use bincode::{Decode, Encode};
 
 use crate::utils::Binary;
 
@@ -20,10 +17,6 @@ where
         let name = Self::name();
 
         format!("{SNAPSHOTS_FOLDER}/{name}.bin")
-    }
-
-    fn config() -> Configuration {
-        standard()
     }
 
     fn import() -> color_eyre::Result<Self> {

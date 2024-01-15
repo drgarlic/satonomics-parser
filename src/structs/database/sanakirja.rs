@@ -6,7 +6,6 @@ use std::{
 
 use bincode::{Decode, Encode};
 use derive_deref::{Deref, DerefMut};
-use itertools::Itertools;
 
 // https://docs.rs/sanakirja/latest/sanakirja/index.html
 // https://pijul.org/posts/2021-02-06-rethinking-sanakirja/
@@ -19,18 +18,20 @@ use sanakirja::{
 
 use crate::traits::SNAPSHOTS_FOLDER;
 
+#[allow(unused)]
 pub type SizedDatabase<Key, Value> = Database<Key, Key, Value, page::Page<Key, Value>>;
+#[allow(unused)]
 pub type UnsizedDatabase<KeyTree, KeyDB, Value> =
     Database<KeyTree, KeyDB, Value, page_unsized::Page<KeyDB, Value>>;
 
 pub struct Database<KeyTree, KeyDB, Value, Page>
 where
-    KeyTree: Ord + Clone + Debug + Encode + Decode,
+    KeyTree: Ord + Clone + Debug,
     KeyDB: Ord + ?Sized + Storable,
     Value: Copy + Storable + PartialEq,
     Page: BTreeMutPage<KeyDB, Value>,
 {
-    cached_gets: BTreeMap<KeyTree, Value>,
+    // cached_gets: BTreeMap<KeyTree, Value>,
     cached_puts: BTreeMap<KeyTree, Value>,
     cached_dels: BTreeSet<KeyTree>,
     db: Db_<KeyDB, Value, Page>,
@@ -44,7 +45,7 @@ const PAGE_SIZE: u64 = 4096 * 256; // 1mo - Must be a multiplier of 4096
 
 impl<KeyDB, KeyTree, Value, Page> Database<KeyTree, KeyDB, Value, Page>
 where
-    KeyTree: Ord + Clone + Debug + Encode + Decode,
+    KeyTree: Ord + Clone + Debug,
     KeyDB: Ord + ?Sized + Storable,
     Value: Copy + Storable + PartialEq,
     Page: BTreeMutPage<KeyDB, Value>,
@@ -61,7 +62,7 @@ where
             .unwrap_or_else(|| btree::create_db_(&mut txn).unwrap());
 
         Ok(Self {
-            cached_gets: BTreeMap::default(),
+            // cached_gets: BTreeMap::default(),
             cached_puts: BTreeMap::default(),
             cached_dels: BTreeSet::default(),
             db,
@@ -70,7 +71,7 @@ where
         })
     }
 
-    pub fn get(&mut self, key: &KeyTree) -> Option<&Value> {
+    pub fn get(&self, key: &KeyTree) -> Option<&Value> {
         if let Some(cached_put) = self.cached_puts.get(key) {
             return Some(cached_put);
         }
@@ -78,9 +79,9 @@ where
         // Rust issue: &mut self borrow conflicting with itself
         // https://github.com/rust-lang/rust/issues/21906#issuecomment-73296543
         // Waiting for Polonius
-        if self.cached_gets.contains_key(key) {
-            return self.cached_gets.get(key);
-        }
+        // if self.cached_gets.contains_key(key) {
+        //     return self.cached_gets.get(key);
+        // }
 
         let k = (self.key_tree_to_key_db)(key);
 
@@ -88,7 +89,7 @@ where
 
         if let Some((k_found, v)) = option {
             if k == k_found {
-                self.cached_gets.insert(key.clone(), *v);
+                // self.cached_gets.insert(key.clone(), *v);
                 return Some(v);
             }
         }
@@ -98,29 +99,30 @@ where
 
     pub fn remove(&mut self, key: &KeyTree) {
         if self.cached_puts.remove(key).is_none() {
-            self.cached_gets.remove(key);
+            // self.cached_gets.remove(key);
             self.cached_dels.insert(key.clone());
         }
     }
 
     pub fn take(&mut self, key: &KeyTree) -> Option<Value> {
         if self.cached_dels.get(key).is_none() {
-            self.cached_puts.remove(key).or({
+            self.cached_puts.remove(key).or_else(|| {
                 self.cached_dels.insert(key.clone());
-                self.cached_gets.remove(key).or_else(|| {
-                    // TODO: Quasi duplicate from `get`, fix it after polonius update
-                    let k = (self.key_tree_to_key_db)(key);
+                // self.cached_gets.remove(key).or_else(|| {
 
-                    let option = btree::get(&self.txn, &self.db, k, None).unwrap();
+                // TODO: Quasi duplicate from `get`, fix it after polonius update
+                let k = (self.key_tree_to_key_db)(key);
 
-                    if let Some((k_found, v)) = option {
-                        if k == k_found {
-                            return Some(v.to_owned());
-                        }
+                let option = btree::get(&self.txn, &self.db, k, None).unwrap();
+
+                if let Some((k_found, v)) = option {
+                    if k == k_found {
+                        return Some(v.to_owned());
                     }
+                }
 
-                    None
-                })
+                None
+                // })
             })
         } else {
             dbg!(key);
@@ -136,8 +138,6 @@ where
     pub fn export(mut self) -> color_eyre::Result<(), Error> {
         self.cached_dels
             .into_iter()
-            // Faster DB actions when keys are sorted
-            .sorted_unstable()
             .try_for_each(|key| -> Result<(), Error> {
                 btree::del(
                     &mut self.txn,
@@ -151,8 +151,6 @@ where
 
         self.cached_puts
             .into_iter()
-            // Faster DB actions when keys are sorted
-            .sorted_unstable_by_key(|x| x.0.clone())
             .try_for_each(|(key, value)| -> Result<(), Error> {
                 btree::put(
                     &mut self.txn,

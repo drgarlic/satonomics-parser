@@ -7,8 +7,8 @@ use rayon::prelude::*;
 use crate::traits::HeightDataset;
 
 use super::{
-    dataset_block_metadata::BlockMetadataDataset, AgeRange, AgedDataset, CoinblocksDataset,
-    CoindaysDataset, ProcessedData, RewardsDataset,
+    AgeRange, AgedDataset, BlockMetadataDataset, CoinblocksDataset, CoindaysDataset, ProcessedData,
+    RewardsDataset,
 };
 
 pub struct Datasets {
@@ -200,7 +200,7 @@ impl Datasets {
             .try_for_each(|dataset| dataset.export())
     }
 
-    fn insert(&self, processed_data: ProcessedData) {
+    pub fn insert(&self, processed_data: ProcessedData) {
         let ProcessedData { height, .. } = processed_data;
 
         self.to_vec()

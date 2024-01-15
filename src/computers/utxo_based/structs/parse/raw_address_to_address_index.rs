@@ -2,7 +2,6 @@ use std::thread;
 
 use nohash_hasher::IntMap;
 use rayon::prelude::*;
-use sanakirja::Error;
 
 use crate::{
     structs::{Database, SizedDatabase, U8x19, U8x31, UnsizedDatabase},
@@ -29,19 +28,19 @@ type DbMultisig = DbUnsized;
 
 #[derive(Default)]
 pub struct RawAddressToAddressIndex {
-    p2pk: IntMap<u8, DbP2PK>,
-    p2pkh: IntMap<u8, DbP2PKH>,
-    p2sh: IntMap<u8, DbP2SH>,
-    p2wpkh: IntMap<u8, DbP2WPKH>,
-    p2wsh: IntMap<u8, DbP2WSH>,
-    p2tr: IntMap<u8, DbP2TR>,
+    p2pk: IntMap<u16, DbP2PK>,
+    p2pkh: IntMap<u16, DbP2PKH>,
+    p2sh: IntMap<u16, DbP2SH>,
+    p2wpkh: IntMap<u16, DbP2WPKH>,
+    p2wsh: IntMap<u16, DbP2WSH>,
+    p2tr: IntMap<u16, DbP2TR>,
     unknown: Option<DbUnknown>,
     empty: Option<DbEmpty>,
     multisig: Option<DbMultisig>,
 }
 
 impl RawAddressToAddressIndex {
-    pub fn get(&mut self, raw_address: &RawAddress) -> Option<Value> {
+    pub fn safe_get(&mut self, raw_address: &RawAddress) -> Option<Value> {
         (match raw_address {
             RawAddress::Empty(key) => self.open_empty().get(key),
             RawAddress::Unknown(key) => self.open_unknown().get(key),
@@ -52,6 +51,53 @@ impl RawAddressToAddressIndex {
             RawAddress::P2WPKH((prefix, rest)) => self.open_p2wpkh(*prefix).get(rest),
             RawAddress::P2WSH((prefix, rest)) => self.open_p2wsh(*prefix).get(rest),
             RawAddress::P2TR((prefix, rest)) => self.open_p2tr(*prefix).get(rest),
+        })
+        .cloned()
+    }
+
+    pub fn open_db(&mut self, raw_address: &RawAddress) {
+        match raw_address {
+            RawAddress::Empty(_) => {
+                self.open_empty();
+            }
+            RawAddress::Unknown(_) => {
+                self.open_unknown();
+            }
+            RawAddress::MultiSig(_) => {
+                self.open_multisig();
+            }
+            RawAddress::P2PK((prefix, _)) => {
+                self.open_p2pk(*prefix);
+            }
+            RawAddress::P2PKH((prefix, _)) => {
+                self.open_p2pkh(*prefix);
+            }
+            RawAddress::P2SH((prefix, _)) => {
+                self.open_p2sh(*prefix);
+            }
+            RawAddress::P2WPKH((prefix, _)) => {
+                self.open_p2wpkh(*prefix);
+            }
+            RawAddress::P2WSH((prefix, _)) => {
+                self.open_p2wsh(*prefix);
+            }
+            RawAddress::P2TR((prefix, _)) => {
+                self.open_p2tr(*prefix);
+            }
+        }
+    }
+
+    pub fn unsafe_get(&self, raw_address: &RawAddress) -> Option<Value> {
+        (match raw_address {
+            RawAddress::Empty(key) => self.empty.as_ref().unwrap().get(key),
+            RawAddress::Unknown(key) => self.unknown.as_ref().unwrap().get(key),
+            RawAddress::MultiSig(key) => self.multisig.as_ref().unwrap().get(key),
+            RawAddress::P2PK((prefix, rest)) => self.p2pk.get(prefix).unwrap().get(rest),
+            RawAddress::P2PKH((prefix, rest)) => self.p2pkh.get(prefix).unwrap().get(rest),
+            RawAddress::P2SH((prefix, rest)) => self.p2sh.get(prefix).unwrap().get(rest),
+            RawAddress::P2WPKH((prefix, rest)) => self.p2wpkh.get(prefix).unwrap().get(rest),
+            RawAddress::P2WSH((prefix, rest)) => self.p2wsh.get(prefix).unwrap().get(rest),
+            RawAddress::P2TR((prefix, rest)) => self.p2tr.get(prefix).unwrap().get(rest),
         })
         .cloned()
     }
@@ -70,7 +116,7 @@ impl RawAddressToAddressIndex {
         }
     }
 
-    pub fn open_p2pk(&mut self, prefix: u8) -> &mut DbP2PK {
+    pub fn open_p2pk(&mut self, prefix: u16) -> &mut DbP2PK {
         self.p2pk.entry(prefix).or_insert_with(|| {
             Database::open(
                 &format!("{}/{}", Self::folder(), "p2pk"),
@@ -81,7 +127,7 @@ impl RawAddressToAddressIndex {
         })
     }
 
-    pub fn open_p2pkh(&mut self, prefix: u8) -> &mut DbP2PKH {
+    pub fn open_p2pkh(&mut self, prefix: u16) -> &mut DbP2PKH {
         self.p2pkh.entry(prefix).or_insert_with(|| {
             Database::open(
                 &format!("{}/{}", Self::folder(), "p2pkh"),
@@ -92,7 +138,7 @@ impl RawAddressToAddressIndex {
         })
     }
 
-    pub fn open_p2sh(&mut self, prefix: u8) -> &mut DbP2SH {
+    pub fn open_p2sh(&mut self, prefix: u16) -> &mut DbP2SH {
         self.p2sh.entry(prefix).or_insert_with(|| {
             Database::open(
                 &format!("{}/{}", Self::folder(), "p2sh"),
@@ -103,7 +149,7 @@ impl RawAddressToAddressIndex {
         })
     }
 
-    pub fn open_p2wpkh(&mut self, prefix: u8) -> &mut DbP2WPKH {
+    pub fn open_p2wpkh(&mut self, prefix: u16) -> &mut DbP2WPKH {
         self.p2wpkh.entry(prefix).or_insert_with(|| {
             Database::open(
                 &format!("{}/{}", Self::folder(), "p2wpkh"),
@@ -114,7 +160,7 @@ impl RawAddressToAddressIndex {
         })
     }
 
-    pub fn open_p2wsh(&mut self, prefix: u8) -> &mut DbP2WSH {
+    pub fn open_p2wsh(&mut self, prefix: u16) -> &mut DbP2WSH {
         self.p2wsh.entry(prefix).or_insert_with(|| {
             Database::open(
                 &format!("{}/{}", Self::folder(), "p2wsh"),
@@ -125,7 +171,7 @@ impl RawAddressToAddressIndex {
         })
     }
 
-    pub fn open_p2tr(&mut self, prefix: u8) -> &mut DbP2TR {
+    pub fn open_p2tr(&mut self, prefix: u16) -> &mut DbP2TR {
         self.p2tr.entry(prefix).or_insert_with(|| {
             Database::open(
                 &format!("{}/{}", Self::folder(), "p2tr"),
@@ -162,7 +208,7 @@ impl Databases for RawAddressToAddressIndex {
         Ok(Self::default())
     }
 
-    fn export(mut self) -> color_eyre::Result<(), Error> {
+    fn export(mut self) -> color_eyre::Result<()> {
         thread::scope(|s| {
             s.spawn(|| self.p2pk.par_drain().try_for_each(|(_, db)| db.export()));
             s.spawn(|| self.p2pkh.par_drain().try_for_each(|(_, db)| db.export()));

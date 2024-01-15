@@ -1,12 +1,8 @@
 use derive_deref::{Deref, DerefMut};
 use nohash_hasher::IntMap;
 use rayon::prelude::*;
-use sanakirja::Error;
 
-use crate::{
-    structs::{Database, SizedDatabase},
-    traits::Databases,
-};
+use crate::{structs::SizedDatabase, traits::Databases};
 
 use super::EmptyAddressData;
 
@@ -38,7 +34,7 @@ impl AddressIndexToEmptyAddressData {
                 (db_index + 1) * DB_MAX_SIZE
             );
 
-            Database::open(Self::folder(), &db_name, |key| key).unwrap()
+            SizedDatabase::open(Self::folder(), &db_name, |key| key).unwrap()
         })
     }
 
@@ -56,8 +52,10 @@ impl Databases for AddressIndexToEmptyAddressData {
         Ok(Self::default())
     }
 
-    fn export(mut self) -> color_eyre::Result<(), Error> {
-        self.par_drain().try_for_each(|(_, db)| db.export())
+    fn export(mut self) -> color_eyre::Result<()> {
+        self.par_drain().try_for_each(|(_, db)| db.export())?;
+
+        Ok(())
     }
 
     fn folder<'a>() -> &'a str {

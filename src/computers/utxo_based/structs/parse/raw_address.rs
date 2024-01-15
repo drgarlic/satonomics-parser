@@ -2,6 +2,7 @@ use bincode::{Decode, Encode};
 use bitcoin::{address::Payload, TxOut};
 use bitcoin_hashes::{hash160, Hash};
 use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     bitcoin::multisig_addresses,
@@ -11,7 +12,9 @@ use crate::{
 use super::Counters;
 
 // https://unchained.com/blog/bitcoin-address-types-compared/
-#[derive(Debug, Encode, Decode, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Debug, Encode, Decode, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize,
+)]
 pub enum RawAddressType {
     Empty,
     Unknown,
@@ -31,12 +34,12 @@ pub enum RawAddress {
     Unknown(u32),
     // https://mempool.space/tx/274f8be3b7b9b1a220285f5f71f61e2691dd04df9d69bb02a8b3b85f91fb1857
     MultiSig(Box<[u8]>),
-    P2PK((u8, U8x19)),
-    P2PKH((u8, U8x19)),
-    P2SH((u8, U8x19)),
-    P2WPKH((u8, U8x19)),
-    P2WSH((u8, U8x31)),
-    P2TR((u8, U8x31)),
+    P2PK((u16, U8x19)),
+    P2PKH((u16, U8x19)),
+    P2SH((u16, U8x19)),
+    P2WPKH((u16, U8x19)),
+    P2WSH((u16, U8x31)),
+    P2TR((u16, U8x31)),
 }
 
 impl RawAddress {
@@ -59,9 +62,7 @@ impl RawAddress {
 
         match Payload::from_script(script) {
             Ok(payload) => {
-                let slice = payload_to_slice(&payload);
-                let prefix = slice[0];
-                let rest = &slice[1..];
+                let (prefix, rest) = Self::split_slice(Self::payload_to_slice(&payload));
 
                 if script.is_p2pkh() {
                     Self::P2PKH((prefix, rest.into()))
@@ -74,7 +75,8 @@ impl RawAddress {
                 } else if script.is_p2tr() {
                     Self::P2TR((prefix, rest.into()))
                 } else {
-                    unreachable!()
+                    // https://mempool.space/address/bc1zqyqs3juw9m
+                    Self::new_unknown(counters)
                 }
             }
             Err(_) => {
@@ -87,9 +89,7 @@ impl RawAddress {
 
                     let hash = hash160::Hash::hash(pk);
 
-                    let slice = &hash[..];
-                    let prefix = slice[0];
-                    let rest = &slice[1..];
+                    let (prefix, rest) = Self::split_slice(&hash[..]);
 
                     Self::P2PK((prefix, rest.into()))
                 } else if script.is_empty() {
@@ -117,21 +117,31 @@ impl RawAddress {
 
                     Self::MultiSig(vec.into())
                 } else {
-                    let unknown_addresses_counter = &mut counters.unknown_addresses;
-                    let index = unknown_addresses_counter.inner();
-                    unknown_addresses_counter.increment();
-                    Self::Unknown(index)
+                    Self::new_unknown(counters)
                 }
             }
         }
     }
-}
 
-fn payload_to_slice(payload: &Payload) -> &[u8] {
-    match payload {
-        Payload::PubkeyHash(hash) => &hash[..],
-        Payload::ScriptHash(hash) => &hash[..],
-        Payload::WitnessProgram(witness_program) => witness_program.program().as_bytes(),
-        _ => unreachable!(),
+    fn new_unknown(counters: &mut Counters) -> RawAddress {
+        let unknown_addresses_counter = &mut counters.unknown_addresses;
+        let index = unknown_addresses_counter.inner();
+        unknown_addresses_counter.increment();
+        Self::Unknown(index)
+    }
+
+    fn split_slice(slice: &[u8]) -> (u16, &[u8]) {
+        let prefix = ((slice[0] as u16) << 2) + ((slice[1] as u16) >> 6);
+        let rest = &slice[1..];
+        (prefix, rest)
+    }
+
+    fn payload_to_slice(payload: &Payload) -> &[u8] {
+        match payload {
+            Payload::PubkeyHash(hash) => &hash[..],
+            Payload::ScriptHash(hash) => &hash[..],
+            Payload::WitnessProgram(witness_program) => witness_program.program().as_bytes(),
+            _ => unreachable!(),
+        }
     }
 }

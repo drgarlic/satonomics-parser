@@ -6,8 +6,8 @@ use crate::{
 use super::ProcessedData;
 
 pub struct RewardsDataset {
-    pub height_to_fees: HeightMap<f64>,
-    pub height_to_subsidy: HeightMap<f64>,
+    pub height_to_fees: HeightMap<u64>,
+    pub height_to_subsidy: HeightMap<u64>,
 }
 
 impl RewardsDataset {

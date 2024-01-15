@@ -2,9 +2,10 @@ use std::{collections::BTreeMap, ops::ControlFlow};
 
 use bitcoin::{Block, TxOut, Txid};
 use chrono::NaiveDate;
+use ordered_float::OrderedFloat;
 
 use crate::{
-    bitcoin::BitcoinDB,
+    bitcoin::{sats_to_btc, BitcoinDB},
     computers::utxo_based::structs::{
         AddressData, BlockData, BlockPath, TxData, TxoutData, TxoutIndex,
     },
@@ -15,7 +16,7 @@ use super::{
         AddressIndexToAddressData, AddressIndexToEmptyAddressData, DateDataVec, EmptyAddressData,
         RawAddressToAddressIndex, TxIndexToTxData, TxoutIndexToTxoutData,
     },
-    Counters, RawAddress, TxidToTxIndex,
+    Counters, Datasets, ProcessedData, RawAddress, TxidToTxIndex,
 };
 
 pub struct ProcessData<'a> {
@@ -25,11 +26,13 @@ pub struct ProcessData<'a> {
     pub block: Block,
     pub block_index: usize,
     pub counters: &'a mut Counters,
+    pub datasets: &'a mut Datasets,
     pub date: NaiveDate,
     pub date_data_vec: &'a mut DateDataVec,
     pub height: usize,
     pub height_to_price: &'a [f32],
     pub raw_address_to_address_index: &'a mut RawAddressToAddressIndex,
+    pub timestamp: u32,
     pub tx_index_to_tx_data: &'a mut TxIndexToTxData,
     pub txid_to_tx_index: &'a mut TxidToTxIndex,
     pub txout_index_to_txout_data: &'a mut TxoutIndexToTxoutData,
@@ -43,11 +46,13 @@ pub fn process_block(
         block,
         block_index,
         counters,
+        datasets,
         date,
         date_data_vec,
         height,
         height_to_price,
         raw_address_to_address_index,
+        timestamp,
         tx_index_to_tx_data,
         txid_to_tx_index,
         txout_index_to_txout_data,
@@ -66,16 +71,17 @@ pub fn process_block(
         .blocks
         .push(BlockData::new(height as u32, price));
 
-    let mut coinbase = 0.0;
-    let mut inputs_sum = 0.0;
-    let mut outputs_sum = 0.0;
+    let mut coinbase = 0;
+    let mut inputs_sum = 0;
+    let mut outputs_sum = 0;
 
-    let mut block_path_to_spent_value = BTreeMap::new();
-    let mut address_index_to_spent_value = BTreeMap::new();
+    let mut block_path_to_spent_value: BTreeMap<BlockPath, u64> = BTreeMap::new();
+    let mut address_index_to_spent_value: BTreeMap<u32, BTreeMap<OrderedFloat<f32>, u64>> =
+        BTreeMap::new();
 
     let mut coinblocks_destroyed = 0.0;
     let mut coindays_destroyed = 0.0;
-    let mut provably_unspendable = 0.0;
+    let mut provably_unspendable = 0;
     let mut op_returns: usize = 0;
 
     block.txdata.into_iter().try_for_each(|tx| {
@@ -92,7 +98,7 @@ pub fn process_block(
         // https://mempool.space/tx/2f2442f68e38b980a6c4cec21e71851b0d8a5847d85208331a27321a9967bbd6
         // https://bitcoin.stackexchange.com/questions/104937/transaction-outputs-with-value-0
         let mut non_zero_outputs_len = 0;
-        let mut non_zero_amount = 0.0;
+        let mut non_zero_amount = 0;
 
         let is_coinbase = tx.is_coinbase();
 
@@ -107,11 +113,11 @@ pub fn process_block(
                 }
 
                 let script = &txout.script_pubkey;
-                let txout_btc_value = txout.value.to_btc();
+                let txout_sat_value = txout.value.to_sat();
 
                 // https://mempool.space/tx/8a68c461a2473653fe0add786f0ca6ebb99b257286166dfb00707be24716af3a#flow=&vout=0
                 if script.is_provably_unspendable() {
-                    provably_unspendable += txout_btc_value;
+                    provably_unspendable += txout_sat_value;
                     return ControlFlow::Continue::<()>(());
                 }
 
@@ -127,12 +133,13 @@ pub fn process_block(
 
                 let txout_index = TxoutIndex::new(tx_index, vout as u16);
 
-                non_zero_amount += txout_btc_value;
+                non_zero_amount += txout_sat_value;
 
                 let raw_address = RawAddress::from(&txout, counters);
 
                 let (address_data, address_index) = {
-                    if let Some(address_index) = raw_address_to_address_index.get(&raw_address) {
+                    if let Some(address_index) = raw_address_to_address_index.safe_get(&raw_address)
+                    {
                         if let Some(address_data) =
                             address_index_to_address_data.get_mut(&address_index)
                         {
@@ -183,10 +190,10 @@ pub fn process_block(
                     }
                 };
 
-                address_data.receive(txout_btc_value, price);
+                address_data.receive(txout_sat_value, price);
 
                 txout_index_to_txout_data
-                    .insert(txout_index, TxoutData::new(txout_btc_value, address_index));
+                    .insert(txout_index, TxoutData::new(txout_sat_value, address_index));
 
                 ControlFlow::Continue(())
             });
@@ -304,13 +311,9 @@ pub fn process_block(
 
                 inputs_sum += input_txout_value;
 
-                block_path_to_spent_value.insert(
-                    input_block_path,
-                    block_path_to_spent_value
-                        .get(&input_block_path)
-                        .unwrap_or(&0.0)
-                        + input_txout_value,
-                );
+                *block_path_to_spent_value
+                    .entry(input_block_path)
+                    .or_default() += input_txout_value;
 
                 let input_address_index = input_txout_data.address_index;
 
@@ -338,20 +341,18 @@ pub fn process_block(
                     );
                 }
 
-                address_index_to_spent_value.insert(
-                    input_address_index,
-                    address_index_to_spent_value
-                        .get(&input_address_index)
-                        .unwrap_or(&0.0)
-                        + input_txout_value,
-                );
+                *address_index_to_spent_value
+                    .entry(input_address_index)
+                    .or_default()
+                    .entry(OrderedFloat(input_block_data.price))
+                    .or_default() += input_txout_value;
 
-                coinblocks_destroyed +=
-                    (height - input_block_data.height as usize) as f64 * input_block_data.amount;
+                coinblocks_destroyed += (height - input_block_data.height as usize) as f64
+                    * sats_to_btc(input_block_data.amount);
 
                 coindays_destroyed += date.signed_duration_since(*input_date_data.date).num_days()
                     as f64
-                    * input_block_data.amount;
+                    * sats_to_btc(input_block_data.amount);
 
                 input_tx_data.outputs_len -= 1;
 
@@ -373,19 +374,21 @@ pub fn process_block(
         ControlFlow::Continue(())
     });
 
-    let _fees = inputs_sum - outputs_sum;
+    let fees = inputs_sum - outputs_sum;
 
-    // datasets.insert(DatasetInsertData {
-    //     date_data_vec: &date_data_vec,
+    // datasets.insert(ProcessedData {
     //     address_index_to_address_data: &address_index_to_address_data,
-    //     height: block_height,
-    //     price,
+    //     address_index_to_spent_value: &address_index_to_spent_value,
+    //     block_path_to_spent_value: &block_path_to_spent_value,
     //     coinbase,
-    //     fees,
     //     coinblocks_destroyed,
     //     coindays_destroyed,
-    //     block_path_to_spent_value: &block_path_to_spent_value,
-    //     address_index_to_spent_value: &address_index_to_spent_value,
+    //     date,
+    //     date_data_vec: &date_data_vec,
+    //     fees,
+    //     height,
+    //     price,
+    //     timestamp,
     // });
 }
 

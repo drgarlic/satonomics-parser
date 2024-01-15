@@ -4,7 +4,7 @@ use bincode::{Decode, Encode};
 pub struct BlockData {
     pub height: u32,
     pub price: f32,
-    pub amount: f64,
+    pub amount: u64,
     pub outputs_len: u32,
 }
 
@@ -13,7 +13,7 @@ impl BlockData {
         Self {
             height,
             price,
-            amount: 0.0,
+            amount: 0,
             outputs_len: 0,
         }
     }

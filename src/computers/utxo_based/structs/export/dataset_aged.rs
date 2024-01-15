@@ -2,6 +2,7 @@ use chrono::Datelike;
 use itertools::Itertools;
 
 use crate::{
+    bitcoin::sats_to_btc,
     computers::utxo_based::{structs::BlockPath, BlockData},
     structs::{AnyHeightMap, HeightMap},
     traits::HeightDataset,
@@ -20,8 +21,8 @@ pub enum AgeRange {
 pub struct AgedDataset {
     range: AgeRange,
 
-    height_to_total_supply: HeightMap<f64>,
-    height_to_supply_in_profit: HeightMap<f64>,
+    height_to_total_supply: HeightMap<u64>,
+    height_to_supply_in_profit: HeightMap<u64>,
     height_to_unrealized_profit: HeightMap<f32>,
     height_to_unrealized_loss: HeightMap<f32>,
     /// NOTE: Fees not taken into account
@@ -103,13 +104,13 @@ impl<'a> HeightDataset<ProcessedData<'a>> for AgedDataset {
         let mut realized_profit = 0.0;
         let mut realized_loss = 0.0;
 
-        block_path_to_spent_value
+        let iter = block_path_to_spent_value
             .iter()
             .map(|(block_path, value)| {
-                let BlockPath {
+                let &BlockPath {
                     date_index,
                     block_index,
-                } = *block_path;
+                } = block_path;
 
                 let date_data = date_data_vec.get(date_index as usize).unwrap();
 
@@ -126,21 +127,25 @@ impl<'a> HeightDataset<ProcessedData<'a>> for AgedDataset {
                     AgeRange::Year(year) => year == date_data.date.year() as usize,
                 }
             })
-            .for_each(|(date_data, _, block_index, value)| {
-                let &BlockData {
+            .map(|(date_data, _, block_index, value)| {
+                let BlockData {
                     price: previous_price,
                     ..
                 } = date_data.blocks.get(block_index as usize).unwrap();
 
-                let previous_dollar_amount = previous_price as f64 * value;
-                let current_dollar_amount = price as f64 * value;
-
-                if previous_dollar_amount < current_dollar_amount {
-                    realized_profit += (current_dollar_amount - previous_dollar_amount) as f32
-                } else if current_dollar_amount < previous_dollar_amount {
-                    realized_loss += (previous_dollar_amount - current_dollar_amount) as f32
-                }
+                (previous_price, value)
             });
+
+        iter.for_each(|(previous_price, value)| {
+            let previous_dollar_amount = *previous_price as f64 * sats_to_btc(*value);
+            let current_dollar_amount = price as f64 * sats_to_btc(*value);
+
+            if previous_dollar_amount < current_dollar_amount {
+                realized_profit += (current_dollar_amount - previous_dollar_amount) as f32
+            } else if current_dollar_amount < previous_dollar_amount {
+                realized_loss += (previous_dollar_amount - current_dollar_amount) as f32
+            }
+        });
 
         let sliced_date_data_vec = {
             match self.range {
@@ -180,10 +185,10 @@ impl<'a> HeightDataset<ProcessedData<'a>> for AgedDataset {
         if sliced_date_data_vec.is_empty() {
             self.height_to_utxo_count.insert(height, 0);
 
-            self.height_to_total_supply.insert(height, 0.0);
+            self.height_to_total_supply.insert(height, 0);
             self.height_to_unrealized_profit.insert(height, 0.0);
             self.height_to_unrealized_loss.insert(height, 0.0);
-            self.height_to_supply_in_profit.insert(height, 0.0);
+            self.height_to_supply_in_profit.insert(height, 0);
 
             self.height_to_realized_profit.insert(height, 0.0);
             self.height_to_realized_loss.insert(height, 0.0);
@@ -240,7 +245,7 @@ impl<'a> HeightDataset<ProcessedData<'a>> for AgedDataset {
         let mut unrealized_profit = 0.0;
         let mut unrealized_loss = 0.0;
 
-        let mut supply_in_profit = 0.0;
+        let mut supply_in_profit = 0;
 
         let mut undivided_price_mean = 0.0;
 
@@ -264,93 +269,97 @@ impl<'a> HeightDataset<ProcessedData<'a>> for AgedDataset {
         let mut price_90p = None;
         let mut price_95p = None;
 
-        let mut processed_amount = 0.0;
+        let mut processed_amount_in_btc = 0.0;
+
+        let total_supply_in_btc = sats_to_btc(total_supply);
 
         block_data_vec.iter().for_each(|block_data| {
-            processed_amount += block_data.amount;
+            processed_amount_in_btc += sats_to_btc(block_data.amount);
 
             if block_data.price < price {
-                unrealized_profit += block_data.amount * (price - block_data.price) as f64;
+                unrealized_profit +=
+                    sats_to_btc(block_data.amount) * (price - block_data.price) as f64;
                 supply_in_profit += block_data.amount;
             } else if block_data.price > price {
-                unrealized_loss += block_data.amount * (block_data.price - price) as f64
+                unrealized_loss +=
+                    sats_to_btc(block_data.amount) * (block_data.price - price) as f64
             }
 
-            undivided_price_mean += block_data.amount * (block_data.price as f64);
+            undivided_price_mean += sats_to_btc(block_data.amount) * (block_data.price as f64);
 
-            if price_05p.is_none() && processed_amount >= total_supply * 0.05 {
+            if price_05p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.05 {
                 price_05p.replace(block_data.price);
             }
 
-            if price_10p.is_none() && processed_amount >= total_supply * 0.1 {
+            if price_10p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.1 {
                 price_10p.replace(block_data.price);
             }
 
-            if price_15p.is_none() && processed_amount >= total_supply * 0.15 {
+            if price_15p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.15 {
                 price_15p.replace(block_data.price);
             }
 
-            if price_20p.is_none() && processed_amount >= total_supply * 0.2 {
+            if price_20p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.2 {
                 price_20p.replace(block_data.price);
             }
 
-            if price_25p.is_none() && processed_amount >= total_supply * 0.25 {
+            if price_25p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.25 {
                 price_25p.replace(block_data.price);
             }
 
-            if price_30p.is_none() && processed_amount >= total_supply * 0.3 {
+            if price_30p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.3 {
                 price_30p.replace(block_data.price);
             }
 
-            if price_35p.is_none() && processed_amount >= total_supply * 0.35 {
+            if price_35p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.35 {
                 price_35p.replace(block_data.price);
             }
 
-            if price_40p.is_none() && processed_amount >= total_supply * 0.4 {
+            if price_40p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.4 {
                 price_40p.replace(block_data.price);
             }
 
-            if price_45p.is_none() && processed_amount >= total_supply * 0.45 {
+            if price_45p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.45 {
                 price_45p.replace(block_data.price);
             }
 
-            if price_median.is_none() && processed_amount >= total_supply * 0.5 {
+            if price_median.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.5 {
                 price_median.replace(block_data.price);
             }
 
-            if price_55p.is_none() && processed_amount >= total_supply * 0.55 {
+            if price_55p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.55 {
                 price_55p.replace(block_data.price);
             }
 
-            if price_60p.is_none() && processed_amount >= total_supply * 0.6 {
+            if price_60p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.6 {
                 price_60p.replace(block_data.price);
             }
 
-            if price_65p.is_none() && processed_amount >= total_supply * 0.65 {
+            if price_65p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.65 {
                 price_65p.replace(block_data.price);
             }
 
-            if price_70p.is_none() && processed_amount >= total_supply * 0.7 {
+            if price_70p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.7 {
                 price_70p.replace(block_data.price);
             }
 
-            if price_75p.is_none() && processed_amount >= total_supply * 0.75 {
+            if price_75p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.75 {
                 price_75p.replace(block_data.price);
             }
 
-            if price_80p.is_none() && processed_amount >= total_supply * 0.8 {
+            if price_80p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.8 {
                 price_80p.replace(block_data.price);
             }
 
-            if price_85p.is_none() && processed_amount >= total_supply * 0.85 {
+            if price_85p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.85 {
                 price_85p.replace(block_data.price);
             }
 
-            if price_90p.is_none() && processed_amount >= total_supply * 0.9 {
+            if price_90p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.9 {
                 price_90p.replace(block_data.price);
             }
 
-            if price_95p.is_none() && processed_amount >= total_supply * 0.95 {
+            if price_95p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.95 {
                 price_95p.replace(block_data.price);
             }
         });
@@ -374,7 +383,7 @@ impl<'a> HeightDataset<ProcessedData<'a>> for AgedDataset {
         self.height_to_realized_loss.insert(height, realized_loss);
 
         self.height_to_mean_price
-            .insert(height, (undivided_price_mean / total_supply) as f32);
+            .insert(height, (undivided_price_mean / total_supply_in_btc) as f32);
 
         if let Some(price) = price_05p {
             self.height_to_05p_price.insert(height, price)

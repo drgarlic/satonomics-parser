@@ -2,16 +2,15 @@ use bitcoin::Txid;
 use derive_deref::{Deref, DerefMut};
 use nohash_hasher::IntMap;
 use rayon::prelude::*;
-use sanakirja::{btree::page, Error};
 
 use crate::{
-    structs::{Database, U8x31},
+    structs::{SizedDatabase, U8x31},
     traits::Databases,
 };
 
 type Key = U8x31;
 type Value = u32;
-type Db = Database<Key, Key, Value, page::Page<Key, Value>>;
+type Db = SizedDatabase<Key, Value>;
 
 #[derive(Deref, DerefMut, Default)]
 pub struct TxidToTxIndex(IntMap<u8, Db>);
@@ -34,7 +33,7 @@ impl TxidToTxIndex {
 
     fn open_db(&mut self, txid_prefix: u8) -> &mut Db {
         self.entry(txid_prefix).or_insert_with(|| {
-            Database::open(Self::folder(), &txid_prefix.to_string(), |key| key).unwrap()
+            SizedDatabase::open(Self::folder(), &txid_prefix.to_string(), |key| key).unwrap()
         })
     }
 
@@ -52,8 +51,10 @@ impl Databases for TxidToTxIndex {
         Ok(Self::default())
     }
 
-    fn export(mut self) -> color_eyre::Result<(), Error> {
-        self.par_drain().try_for_each(|(_, db)| db.export())
+    fn export(mut self) -> color_eyre::Result<()> {
+        self.par_drain().try_for_each(|(_, db)| db.export())?;
+
+        Ok(())
     }
 
     fn folder<'a>() -> &'a str {

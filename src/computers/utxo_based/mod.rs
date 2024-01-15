@@ -28,7 +28,7 @@ pub fn compute_utxo_based_datasets(
 ) -> color_eyre::Result<Datasets> {
     println!("{:?} - Starting aged", Local::now());
 
-    let datasets = Datasets::new()?;
+    let mut datasets = Datasets::new()?;
 
     println!("{:?} - Imported datasets", Local::now());
 
@@ -81,29 +81,33 @@ pub fn compute_utxo_based_datasets(
 
                     let last_date = last_date_opt.unwrap();
 
-                    let block_date = timestamp_to_naive_date(current_block.header.time);
+                    let timestamp = current_block.header.time;
 
-                    match last_date.cmp(&block_date) {
+                    let date = timestamp_to_naive_date(timestamp);
+
+                    match last_date.cmp(&date) {
                         Ordering::Equal | Ordering::Greater => {
                             block_len += 1;
 
                             let block_index = block_len - 1;
 
                             process_block(ProcessData {
+                                address_index_to_address_data: &mut address_index_to_address_data,
+                                address_index_to_empty_address_data:
+                                    &mut address_index_to_empty_address_data,
                                 bitcoin_db,
                                 block: current_block,
                                 block_index,
                                 counters: &mut counters,
-                                height: height + block_index,
-                                date: block_date,
+                                datasets: &mut datasets,
+                                date,
                                 date_data_vec: &mut date_data_vec,
+                                height: height + block_index,
                                 height_to_price,
                                 raw_address_to_address_index: &mut raw_address_to_address_index,
-                                address_index_to_address_data: &mut address_index_to_address_data,
-                                address_index_to_empty_address_data:
-                                    &mut address_index_to_empty_address_data,
-                                txid_to_tx_index: &mut txid_to_tx_index,
+                                timestamp,
                                 tx_index_to_tx_data: &mut tx_index_to_tx_data,
+                                txid_to_tx_index: &mut txid_to_tx_index,
                                 txout_index_to_txout_data: &mut txout_index_to_txout_data,
                             });
                         }
@@ -132,18 +136,20 @@ pub fn compute_utxo_based_datasets(
             }
         }
 
-        export_all(ExportedData {
-            address_index_to_address_data: &address_index_to_address_data,
-            address_index_to_empty_address_data,
-            address_to_address_index: raw_address_to_address_index,
-            counters: &counters,
-            datasets: &datasets,
-            date_data_vec: &date_data_vec,
-            height,
-            tx_index_to_tx_data: &tx_index_to_tx_data,
-            txid_to_tx_index,
-            txout_index_to_txout_data: &txout_index_to_txout_data,
-        })?;
+        if height < block_count - NUMBER_OF_UNSAFE_BLOCKS {
+            export_all(ExportedData {
+                address_index_to_address_data: &address_index_to_address_data,
+                address_index_to_empty_address_data,
+                address_to_address_index: raw_address_to_address_index,
+                counters: &counters,
+                datasets: &datasets,
+                date_data_vec: &date_data_vec,
+                height,
+                tx_index_to_tx_data: &tx_index_to_tx_data,
+                txid_to_tx_index,
+                txout_index_to_txout_data: &txout_index_to_txout_data,
+            })?;
+        }
     }
 
     datasets.export()?;
