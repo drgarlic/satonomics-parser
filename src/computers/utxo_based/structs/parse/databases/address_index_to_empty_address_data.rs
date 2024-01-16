@@ -2,16 +2,16 @@ use derive_deref::{Deref, DerefMut};
 use nohash_hasher::IntMap;
 use rayon::prelude::*;
 
-use crate::{structs::SizedDatabase, traits::Databases};
+use crate::{computers::EmptyAddressData, structs::SizedDatabase};
 
-use super::EmptyAddressData;
+use super::Databases;
 
 type Key = u32;
 type Value = EmptyAddressData;
-type Db = SizedDatabase<Key, Value>;
+type Database = SizedDatabase<Key, Value>;
 
 #[derive(Deref, DerefMut, Default)]
-pub struct AddressIndexToEmptyAddressData(IntMap<usize, Db>);
+pub struct AddressIndexToEmptyAddressData(IntMap<usize, Database>);
 
 const DB_MAX_SIZE: usize = 1_000_000;
 
@@ -20,11 +20,27 @@ impl AddressIndexToEmptyAddressData {
         self.open_db(&key).insert(key, value)
     }
 
-    pub fn take(&mut self, key: &Key) -> Option<Value> {
-        self.open_db(key).take(key)
+    // pub fn take(&mut self, key: &Key) -> Option<Value> {
+    //     self.open_db(key).take(key)
+    // }
+
+    pub fn remove_from_puts(&mut self, key: &Key) -> Option<Value> {
+        self.open_db(key).remove_from_puts(key)
     }
 
-    fn open_db(&mut self, key: &Key) -> &mut Db {
+    pub fn remove(&mut self, key: &Key) {
+        self.open_db(key).remove(key)
+    }
+
+    /// Doesn't check if the database is open contrary to `safe_get` which does and opens if needed
+    /// Though it makes it easy to use with rayon.
+    pub fn unsafe_get(&self, key: &Key) -> Option<&Value> {
+        let db_index = Self::db_index(key);
+
+        self.get(&db_index).unwrap().get(key)
+    }
+
+    pub fn open_db(&mut self, key: &Key) -> &mut Database {
         let db_index = Self::db_index(key);
 
         self.entry(db_index).or_insert_with(|| {
@@ -44,15 +60,7 @@ impl AddressIndexToEmptyAddressData {
 }
 
 impl Databases for AddressIndexToEmptyAddressData {
-    fn open(height: usize) -> color_eyre::Result<Self> {
-        if height == 0 {
-            let _ = Self::clear();
-        }
-
-        Ok(Self::default())
-    }
-
-    fn export(mut self) -> color_eyre::Result<()> {
+    fn drain_export(&mut self) -> color_eyre::Result<()> {
         self.par_drain().try_for_each(|(_, db)| db.export())?;
 
         Ok(())

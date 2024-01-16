@@ -1,9 +1,9 @@
 use bincode::{Decode, Encode};
 use derive_deref::{Deref, DerefMut};
 
-use crate::traits::Snapshot;
+use crate::computers::{BlockData, DateData};
 
-use super::{BlockData, DateData};
+use super::State;
 
 #[derive(Encode, Decode, Default, Deref, DerefMut, Debug)]
 pub struct DateDataVec(Vec<DateData>);
@@ -14,7 +14,7 @@ impl DateDataVec {
     }
 }
 
-impl Snapshot for DateDataVec {
+impl State for DateDataVec {
     fn name<'a>() -> &'a str {
         "date_data_vec"
     }

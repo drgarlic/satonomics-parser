@@ -1,9 +1,6 @@
-use crate::{
-    structs::{AnyHeightMap, HeightMap},
-    traits::HeightDataset,
-};
+use crate::structs::{AnyHeightMap, HeightMap};
 
-use super::ProcessedData;
+use super::{HeightDataset, ProcessedData};
 
 pub struct RewardsDataset {
     pub height_to_fees: HeightMap<u64>,

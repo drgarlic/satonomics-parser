@@ -1,3 +1,4 @@
+mod _trait;
 mod dataset_aged;
 mod dataset_block_metadata;
 mod dataset_coinblocks;
@@ -8,6 +9,7 @@ mod dataset_rewards;
 mod datasets;
 mod processed_data;
 
+use _trait::*;
 use dataset_aged::*;
 use dataset_block_metadata::*;
 use dataset_coinblocks::*;

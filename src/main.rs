@@ -2,7 +2,6 @@ mod bitcoin;
 mod computers;
 mod run;
 mod structs;
-mod traits;
 mod utils;
 
 use run::run;

@@ -1,9 +1,7 @@
 use bincode::{Decode, Encode};
 use chrono::NaiveDate;
 
-use crate::structs::WNaiveDate;
-
-use super::BlockData;
+use super::{BlockData, WNaiveDate};
 
 #[derive(Encode, Decode, Debug)]
 pub struct DateData {

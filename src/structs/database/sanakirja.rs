@@ -16,7 +16,7 @@ use sanakirja::{
     direct_repr, Commit, Env, Error, MutTxn, RootDb, Storable, UnsizedStorable,
 };
 
-use crate::traits::SNAPSHOTS_FOLDER;
+use crate::computers::SNAPSHOTS_FOLDER;
 
 #[allow(unused)]
 pub type SizedDatabase<Key, Value> = Database<Key, Key, Value, page::Page<Key, Value>>;
@@ -24,6 +24,7 @@ pub type SizedDatabase<Key, Value> = Database<Key, Key, Value, page::Page<Key, V
 pub type UnsizedDatabase<KeyTree, KeyDB, Value> =
     Database<KeyTree, KeyDB, Value, page_unsized::Page<KeyDB, Value>>;
 
+/// There is no `cached_gets` since it's much cheaper and faster to do a parallel search first using `unsafe_get` than caching gets along the way.
 pub struct Database<KeyTree, KeyDB, Value, Page>
 where
     KeyTree: Ord + Clone + Debug,
@@ -31,7 +32,6 @@ where
     Value: Copy + Storable + PartialEq,
     Page: BTreeMutPage<KeyDB, Value>,
 {
-    // cached_gets: BTreeMap<KeyTree, Value>,
     cached_puts: BTreeMap<KeyTree, Value>,
     cached_dels: BTreeSet<KeyTree>,
     db: Db_<KeyDB, Value, Page>,
@@ -62,7 +62,6 @@ where
             .unwrap_or_else(|| btree::create_db_(&mut txn).unwrap());
 
         Ok(Self {
-            // cached_gets: BTreeMap::default(),
             cached_puts: BTreeMap::default(),
             cached_dels: BTreeSet::default(),
             db,
@@ -72,62 +71,39 @@ where
     }
 
     pub fn get(&self, key: &KeyTree) -> Option<&Value> {
-        if let Some(cached_put) = self.cached_puts.get(key) {
+        if let Some(cached_put) = self.get_from_puts(key) {
             return Some(cached_put);
         }
 
-        // Rust issue: &mut self borrow conflicting with itself
-        // https://github.com/rust-lang/rust/issues/21906#issuecomment-73296543
-        // Waiting for Polonius
-        // if self.cached_gets.contains_key(key) {
-        //     return self.cached_gets.get(key);
-        // }
+        self.db_get(key)
+    }
 
-        let k = (self.key_tree_to_key_db)(key);
-
-        let option = btree::get(&self.txn, &self.db, k, None).unwrap();
-
-        if let Some((k_found, v)) = option {
-            if k == k_found {
-                // self.cached_gets.insert(key.clone(), *v);
-                return Some(v);
-            }
-        }
-
-        None
+    pub fn get_from_puts(&self, key: &KeyTree) -> Option<&Value> {
+        self.cached_puts.get(key)
     }
 
     pub fn remove(&mut self, key: &KeyTree) {
         if self.cached_puts.remove(key).is_none() {
-            // self.cached_gets.remove(key);
             self.cached_dels.insert(key.clone());
         }
     }
 
+    #[allow(unused)]
     pub fn take(&mut self, key: &KeyTree) -> Option<Value> {
         if self.cached_dels.get(key).is_none() {
-            self.cached_puts.remove(key).or_else(|| {
+            self.remove_from_puts(key).or_else(|| {
                 self.cached_dels.insert(key.clone());
-                // self.cached_gets.remove(key).or_else(|| {
 
-                // TODO: Quasi duplicate from `get`, fix it after polonius update
-                let k = (self.key_tree_to_key_db)(key);
-
-                let option = btree::get(&self.txn, &self.db, k, None).unwrap();
-
-                if let Some((k_found, v)) = option {
-                    if k == k_found {
-                        return Some(v.to_owned());
-                    }
-                }
-
-                None
-                // })
+                self.db_get(key).cloned()
             })
         } else {
             dbg!(key);
             panic!("Can't take twice");
         }
+    }
+
+    pub fn remove_from_puts(&mut self, key: &KeyTree) -> Option<Value> {
+        self.cached_puts.remove(key)
     }
 
     pub fn insert(&mut self, key: KeyTree, value: Value) -> Option<Value> {
@@ -165,6 +141,20 @@ where
         self.txn.set_root(ROOT_DB, self.db.db);
 
         self.txn.commit()
+    }
+
+    fn db_get(&self, key: &KeyTree) -> Option<&Value> {
+        let k = (self.key_tree_to_key_db)(key);
+
+        let option = btree::get(&self.txn, &self.db, k, None).unwrap();
+
+        if let Some((k_found, v)) = option {
+            if k == k_found {
+                return Some(v);
+            }
+        }
+
+        None
     }
 
     fn init_txn(folder: &str, file: &str) -> color_eyre::Result<MutTxn<Env, ()>> {

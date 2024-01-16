@@ -7,7 +7,7 @@ use crate::utils::Binary;
 pub const SNAPSHOTS_FOLDER: &str = "./snapshots";
 
 // https://github.com/djkoloski/rust_serialization_benchmark
-pub trait Snapshot
+pub trait State
 where
     Self: Encode + Decode + Debug,
 {

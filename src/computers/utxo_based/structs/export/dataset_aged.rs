@@ -5,10 +5,9 @@ use crate::{
     bitcoin::sats_to_btc,
     computers::utxo_based::{structs::BlockPath, BlockData},
     structs::{AnyHeightMap, HeightMap},
-    traits::HeightDataset,
 };
 
-use super::ProcessedData;
+use super::{HeightDataset, ProcessedData};
 
 pub enum AgeRange {
     Full,

@@ -1,6 +1,8 @@
 use bincode::{Decode, Encode};
 
-use crate::{structs::Counter, traits::Snapshot};
+use crate::structs::Counter;
+
+use super::State;
 
 #[derive(Encode, Decode, Default, Debug)]
 pub struct Counters {
@@ -19,7 +21,7 @@ impl Counters {
     }
 }
 
-impl Snapshot for Counters {
+impl State for Counters {
     fn name<'a>() -> &'a str {
         "counters"
     }

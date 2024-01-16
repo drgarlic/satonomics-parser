@@ -6,10 +6,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     bitcoin::multisig_addresses,
+    computers::Counters,
     structs::{U8x19, U8x31, SANAKIRJA_MAX_KEY_SIZE},
 };
-
-use super::Counters;
 
 // https://unchained.com/blog/bitcoin-address-types-compared/
 #[derive(

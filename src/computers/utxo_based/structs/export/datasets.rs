@@ -4,11 +4,9 @@ use chrono::Datelike;
 use itertools::Itertools;
 use rayon::prelude::*;
 
-use crate::traits::HeightDataset;
-
 use super::{
-    AgeRange, AgedDataset, BlockMetadataDataset, CoinblocksDataset, CoindaysDataset, ProcessedData,
-    RewardsDataset,
+    AgeRange, AgedDataset, BlockMetadataDataset, CoinblocksDataset, CoindaysDataset, HeightDataset,
+    ProcessedData, RewardsDataset,
 };
 
 pub struct Datasets {

@@ -1,9 +1,6 @@
-use crate::{
-    structs::{AnyHeightMap, HeightMap},
-    traits::HeightDataset,
-};
+use crate::structs::{AnyHeightMap, HeightMap};
 
-use super::ProcessedData;
+use super::{HeightDataset, ProcessedData};
 
 pub struct CoindaysDataset {
     pub height_to_coindays_destroyed: HeightMap<f64>,

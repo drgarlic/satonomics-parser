@@ -2,11 +2,10 @@ use chrono::NaiveDate;
 
 use crate::{
     structs::{AnyHeightMap, HeightMap},
-    traits::HeightDataset,
     utils::timestamp_to_naive_date,
 };
 
-use super::ProcessedData;
+use super::{HeightDataset, ProcessedData};
 
 pub struct BlockMetadataDataset {
     pub height_to_date: HeightMap<NaiveDate>,
