@@ -16,13 +16,12 @@ use crate::{
 
 use super::{
     structs::EmptyAddressData, Databases, Datasets, PartialTxoutData, ProcessedData, RawAddress,
-    Snapshots, States,
+    States,
 };
 
 pub struct ParseData<'a> {
     pub bitcoin_db: &'a BitcoinDB,
     pub block: Block,
-    pub block_count: usize,
     pub block_index: usize,
     pub databases: &'a mut Databases,
     pub datasets: &'a mut Datasets,
@@ -30,7 +29,6 @@ pub struct ParseData<'a> {
     pub height: usize,
     pub height_to_price: &'a [f32],
     pub timestamp: u32,
-    pub snapshots: &'a Snapshots,
     pub states: &'a mut States,
 }
 
@@ -38,7 +36,6 @@ pub fn parse_block(
     ParseData {
         bitcoin_db,
         block,
-        block_count,
         block_index,
         databases,
         datasets,
@@ -46,7 +43,6 @@ pub fn parse_block(
         height,
         height_to_price,
         timestamp,
-        snapshots,
         states,
     }: ParseData,
 ) {
@@ -79,22 +75,15 @@ pub fn parse_block(
         mut partial_txout_data_vec,
         op_returns,
         provably_unspendable,
-    } = parse_txouts(height, block_count, &block, states, databases, snapshots);
+    } = parse_txouts(&block, states, databases);
 
-    let mut cached_address_index_to_empty_address_data = query_address_index_to_empty_address_data(
-        height,
-        block_count,
-        states,
-        databases,
-        snapshots,
-        &partial_txout_data_vec,
-    );
+    let mut empty_address_index_to_empty_address_data =
+        query_empty_address_index_to_empty_address_data(states, databases, &partial_txout_data_vec);
 
     // Reverse to get in order via pop later
     partial_txout_data_vec.reverse();
 
-    let mut txin_ordered_tx_indexes =
-        query_txin_ordered_tx_indexes(height, block_count, &block, databases, snapshots);
+    let mut txin_ordered_tx_indexes = query_txin_ordered_tx_indexes(&block, databases);
 
     // Reverse to get in order via pop later
     txin_ordered_tx_indexes.reverse();
@@ -154,7 +143,7 @@ pub fn parse_block(
                         {
                             (address_data, address_index)
                         } else {
-                            let empty_address_data = cached_address_index_to_empty_address_data
+                            let empty_address_data = empty_address_index_to_empty_address_data
                                 .remove(&address_index)
                                 .or_else(|| {
                                     databases
@@ -441,12 +430,9 @@ pub struct TxoutsParsingResults {
 }
 
 fn parse_txouts(
-    #[allow(unused_variables)] height: usize,
-    #[allow(unused_variables)] block_count: usize,
     block: &Block,
     states: &mut States,
     databases: &mut Databases,
-    #[allow(unused_variables)] snapshots: &Snapshots,
 ) -> TxoutsParsingResults {
     let raw_address_to_address_index = &mut databases.raw_address_to_address_index;
 
@@ -490,56 +476,19 @@ fn parse_txouts(
         })
         .collect_vec();
 
-    // let txout_ordered_address_indexes_snapshot =
-    //     snapshots.txout_ordered_address_indexes.import(height);
-
     let partial_txout_data_vec = incomplete_txout_data_vec
         .into_par_iter()
         // .enumerate()
         .map(|opt| {
             opt.map(|(raw_address, value)| {
-                let address_index_opt = {
-                    // if let Ok(txout_ordered_address_indexes_snapshot) =
-                    //     &txout_ordered_address_indexes_snapshot
-                    // {
-                    //     txout_ordered_address_indexes_snapshot
-                    //         .get(index)
-                    //         .unwrap_or_else(|| {
-                    //             dbg!(
-                    //                 &txout_ordered_address_indexes_snapshot,
-                    //                 index,
-                    //                 &txout_ordered_address_indexes_snapshot.len()
-                    //             );
-                    //             panic!();
-                    //         })
-                    //         .to_owned()
-                    // } else {
-                    raw_address_to_address_index
-                        .unsafe_get(&raw_address)
-                        .cloned()
-                    // }
-                };
+                let address_index_opt = raw_address_to_address_index
+                    .unsafe_get(&raw_address)
+                    .cloned();
 
                 PartialTxoutData::new(raw_address, value, address_index_opt)
             })
         })
         .collect::<Vec<_>>();
-
-    // if txout_ordered_address_indexes_snapshot.is_err() && check_if_height_safe(height, block_count)
-    // {
-    //     let txout_ordered_address_indexes = partial_txout_data_vec
-    //         .iter()
-    //         .map(|partial_txout_data_opt| {
-    //             partial_txout_data_opt
-    //                 .as_ref()
-    //                 .and_then(|partial_txout_data| partial_txout_data.address_index_opt)
-    //         })
-    //         .collect_vec();
-
-    //     let _ = snapshots
-    //         .txout_ordered_address_indexes
-    //         .export(height, &txout_ordered_address_indexes);
-    // }
 
     TxoutsParsingResults {
         partial_txout_data_vec,
@@ -548,12 +497,9 @@ fn parse_txouts(
     }
 }
 
-fn query_address_index_to_empty_address_data(
-    #[allow(unused_variables)] height: usize,
-    #[allow(unused_variables)] block_count: usize,
+fn query_empty_address_index_to_empty_address_data(
     states: &mut States,
     databases: &mut Databases,
-    #[allow(unused_variables)] snapshots: &Snapshots,
     partial_txout_data_vec: &[Option<PartialTxoutData>],
 ) -> BTreeMap<u32, EmptyAddressData> {
     let address_index_to_empty_address_data = &mut databases.address_index_to_empty_address_data;
@@ -574,38 +520,16 @@ fn query_address_index_to_empty_address_data(
         })
         .collect::<IntSet<_>>();
 
-    // let empty_address_index_to_empty_address_data_snapshot = snapshots
-    //     .empty_address_index_to_empty_address_data
-    //     .import(height);
-
     let cached_address_index_to_empty_address_data = empty_address_indexes
         .into_par_iter()
         .map(|address_index| {
-            let empty_address = {
-                // if let Ok(empty_address_index_to_empty_address_data_snapshot) =
-                //     &empty_address_index_to_empty_address_data_snapshot
-                // {
-                //     empty_address_index_to_empty_address_data_snapshot
-                //         .get(&address_index)
-                //         .unwrap()
-                // } else {
-                address_index_to_empty_address_data
-                    .unsafe_get(&address_index)
-                    .unwrap()
-                // }
-            };
+            let empty_address = address_index_to_empty_address_data
+                .unsafe_get(&address_index)
+                .unwrap();
 
             (address_index.to_owned(), empty_address.to_owned())
         })
         .collect::<BTreeMap<_, _>>();
-
-    // if empty_address_index_to_empty_address_data_snapshot.is_err()
-    //     && check_if_height_safe(height, block_count)
-    // {
-    //     let _ = snapshots
-    //         .empty_address_index_to_empty_address_data
-    //         .export(height, &cached_address_index_to_empty_address_data);
-    // }
 
     // Parallel unsafe_get + Linear remove = Parallel-ish take
     cached_address_index_to_empty_address_data
@@ -617,16 +541,9 @@ fn query_address_index_to_empty_address_data(
     cached_address_index_to_empty_address_data
 }
 
-fn query_txin_ordered_tx_indexes(
-    #[allow(unused_variables)] height: usize,
-    #[allow(unused_variables)] block_count: usize,
-    block: &Block,
-    databases: &mut Databases,
-    #[allow(unused_variables)] snapshots: &Snapshots,
-) -> Vec<Option<u32>> {
+fn query_txin_ordered_tx_indexes(block: &Block, databases: &mut Databases) -> Vec<Option<u32>> {
     let txid_to_tx_index = &mut databases.txid_to_tx_index;
 
-    // let txins =
     block
         .txdata
         .iter()
@@ -635,40 +552,17 @@ fn query_txin_ordered_tx_indexes(
         .flat_map(|tx| &tx.input)
         .for_each(|txin| {
             txid_to_tx_index.open_db(&txin.previous_output.txid);
-            // txin
         });
-    // .collect_vec();
 
-    // let txin_ordered_tx_indexes_snapshot = snapshots.txin_ordered_tx_indexes.import(height);
-
-    let txin_ordered_tx_indexes = block
+    block
         .txdata
-        .iter()
-        // Skip coinbase transaction
+        .par_iter()
         .skip(1)
         .flat_map(|tx| &tx.input)
-        // txins
-        // .par_iter()
-        // .enumerate()
         .map(|txin| {
-            // if let Ok(txin_ordered_tx_indexes_snapshot) = &txin_ordered_tx_indexes_snapshot {
-            //     txin_ordered_tx_indexes_snapshot
-            //         .get(index)
-            //         .unwrap()
-            //         .to_owned()
-            // } else {
             txid_to_tx_index
                 .unsafe_get(&txin.previous_output.txid)
                 .cloned()
-            // }
         })
-        .collect::<Vec<_>>();
-
-    // if txin_ordered_tx_indexes_snapshot.is_err() && check_if_height_safe(height, block_count) {
-    //     let _ = snapshots
-    //         .txin_ordered_tx_indexes
-    //         .export(height, &txin_ordered_tx_indexes);
-    // }
-
-    txin_ordered_tx_indexes
+        .collect::<Vec<_>>()
 }

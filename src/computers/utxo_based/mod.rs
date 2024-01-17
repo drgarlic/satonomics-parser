@@ -14,7 +14,6 @@ mod datasets;
 mod export_all;
 mod min_height;
 mod parse_block;
-mod snapshots;
 mod states;
 mod structs;
 
@@ -25,7 +24,6 @@ use export_all::*;
 use min_height::*;
 use parse_block::*;
 use parse_block::*;
-use snapshots::*;
 use states::*;
 use structs::*;
 
@@ -42,7 +40,6 @@ pub fn compute_utxo_based_datasets(
     println!("{:?} - Imported datasets", Local::now());
 
     let mut databases = Databases::default();
-    let snapshots = Snapshots::init()?;
     let mut states = States::import().unwrap_or_default();
 
     let mut height = min_height(&mut states, &datasets, date_to_first_block);
@@ -98,7 +95,6 @@ pub fn compute_utxo_based_datasets(
                             parse_block(ParseData {
                                 bitcoin_db,
                                 block: current_block,
-                                block_count,
                                 block_index,
                                 databases: &mut databases,
                                 datasets: &mut datasets,
@@ -106,7 +102,6 @@ pub fn compute_utxo_based_datasets(
                                 height: height + block_index,
                                 height_to_price,
                                 timestamp,
-                                snapshots: &snapshots,
                                 states: &mut states,
                             });
                         }
