@@ -1,7 +1,5 @@
 use bincode::{Decode, Encode};
 
-use super::RawAddress;
-
 #[derive(Encode, Decode, Debug)]
 pub struct TxoutData {
     pub value: u64,

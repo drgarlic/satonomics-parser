@@ -16,7 +16,7 @@ use sanakirja::{
     direct_repr, Commit, Env, Error, MutTxn, RootDb, Storable, UnsizedStorable,
 };
 
-use crate::computers::SNAPSHOTS_FOLDER;
+use crate::utils::OUTPUTS_FOLDER_PATH;
 
 #[allow(unused)]
 pub type SizedDatabase<Key, Value> = Database<Key, Key, Value, page::Page<Key, Value>>;
@@ -158,13 +158,7 @@ where
     }
 
     fn init_txn(folder: &str, file: &str) -> color_eyre::Result<MutTxn<Env, ()>> {
-        let path = {
-            if folder.is_empty() {
-                SNAPSHOTS_FOLDER.to_owned()
-            } else {
-                format!("{SNAPSHOTS_FOLDER}/{folder}")
-            }
-        };
+        let path = format!("{OUTPUTS_FOLDER_PATH}/databases/{folder}");
 
         fs::create_dir_all(&path)?;
 

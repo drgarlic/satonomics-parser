@@ -1,4 +1,4 @@
-use std::cmp::Ordering;
+use std::{cmp::Ordering, time::Instant};
 
 use bitcoin::Block;
 use chrono::{offset::Local, Datelike, NaiveDate};
@@ -9,14 +9,25 @@ use crate::{
     utils::timestamp_to_naive_date,
 };
 
+mod databases;
+mod datasets;
 mod export_all;
+mod min_height;
 mod parse_block;
-pub mod structs;
+mod snapshots;
+mod states;
+mod structs;
 
+use databases::*;
+use datasets::*;
 use export_all::*;
+use export_all::*;
+use min_height::*;
 use parse_block::*;
-
-pub use structs::*;
+use parse_block::*;
+use snapshots::*;
+use states::*;
+use structs::*;
 
 pub fn compute_utxo_based_datasets(
     bitcoin_db: &BitcoinDB,
@@ -30,14 +41,11 @@ pub fn compute_utxo_based_datasets(
 
     println!("{:?} - Imported datasets", Local::now());
 
-    let InitiatedParsers {
-        mut address_index_to_address_data,
-        mut counters,
-        mut date_data_vec,
-        mut tx_index_to_tx_data,
-        mut txout_index_to_txout_data,
-        mut height,
-    } = InitiatedParsers::init(&datasets, date_to_first_block);
+    let mut databases = Databases::default();
+    let snapshots = Snapshots::init()?;
+    let mut states = States::import().unwrap_or_default();
+
+    let mut height = min_height(&mut states, &datasets, date_to_first_block);
 
     println!("{:?} - Starting parsing", Local::now());
 
@@ -47,11 +55,9 @@ pub fn compute_utxo_based_datasets(
     let mut saved_block_opt: Option<Block> = None;
     let mut last_date_opt: Option<NaiveDate> = None;
 
-    let mut address_index_to_empty_address_data = AddressIndexToEmptyAddressData::default();
-    let mut raw_address_to_address_index = RawAddressToAddressIndex::default();
-    let mut txid_to_tx_index = TxidToTxIndex::default();
-
     while parsing {
+        let time = Instant::now();
+
         'days: loop {
             let mut block_len = 0;
 
@@ -72,7 +78,7 @@ pub fn compute_utxo_based_datasets(
 
                         last_date_opt.replace(date);
 
-                        date_data_vec.push(DateData::new(date, vec![]));
+                        states.date_data_vec.push(DateData::new(date, vec![]));
 
                         println!("{:?} - Processing {date}...", Local::now());
                     }
@@ -90,23 +96,18 @@ pub fn compute_utxo_based_datasets(
                             let block_index = block_len - 1;
 
                             parse_block(ParseData {
-                                address_index_to_address_data: &mut address_index_to_address_data,
-                                address_index_to_empty_address_data:
-                                    &mut address_index_to_empty_address_data,
                                 bitcoin_db,
                                 block: current_block,
+                                block_count,
                                 block_index,
-                                counters: &mut counters,
+                                databases: &mut databases,
                                 datasets: &mut datasets,
                                 date,
-                                date_data_vec: &mut date_data_vec,
                                 height: height + block_index,
                                 height_to_price,
-                                raw_address_to_address_index: &mut raw_address_to_address_index,
                                 timestamp,
-                                tx_index_to_tx_data: &mut tx_index_to_tx_data,
-                                txid_to_tx_index: &mut txid_to_tx_index,
-                                txout_index_to_txout_data: &mut txout_index_to_txout_data,
+                                snapshots: &snapshots,
+                                states: &mut states,
                             });
                         }
                         Ordering::Less => {
@@ -134,18 +135,17 @@ pub fn compute_utxo_based_datasets(
             }
         }
 
+        println!(
+            "Parsing month took {} seconds\n",
+            time.elapsed().as_secs_f32()
+        );
+
         export_all(ExportedData {
-            address_index_to_address_data: &address_index_to_address_data,
-            address_index_to_empty_address_data: &mut address_index_to_empty_address_data,
-            raw_address_to_address_index: &mut raw_address_to_address_index,
+            databases: &mut databases,
             block_count,
-            counters: &counters,
             datasets: &datasets,
-            date_data_vec: &date_data_vec,
             height,
-            tx_index_to_tx_data: &tx_index_to_tx_data,
-            txid_to_tx_index: &mut txid_to_tx_index,
-            txout_index_to_txout_data: &txout_index_to_txout_data,
+            states: &states,
         })?;
     }
 

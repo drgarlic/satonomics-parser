@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use bincode::{Decode, Encode};
 use derive_deref::{Deref, DerefMut};
 
-use crate::computers::{TxoutData, TxoutIndex};
+use crate::computers::utxo_based::{TxoutData, TxoutIndex};
 
 use super::State;
 

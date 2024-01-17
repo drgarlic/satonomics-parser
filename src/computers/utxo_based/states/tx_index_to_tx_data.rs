@@ -3,15 +3,15 @@ use std::collections::BTreeMap;
 use bincode::{Decode, Encode};
 use derive_deref::{Deref, DerefMut};
 
-use crate::computers::AddressData;
+use crate::computers::utxo_based::TxData;
 
 use super::State;
 
 #[derive(Encode, Decode, Default, Deref, DerefMut, Debug)]
-pub struct AddressIndexToAddressData(BTreeMap<u32, AddressData>);
+pub struct TxIndexToTxData(BTreeMap<u32, TxData>);
 
-impl State for AddressIndexToAddressData {
+impl State for TxIndexToTxData {
     fn name<'a>() -> &'a str {
-        "address_index_to_address_data"
+        "tx_index_to_tx_data"
     }
 }

@@ -2,9 +2,9 @@ use derive_deref::{Deref, DerefMut};
 use nohash_hasher::IntMap;
 use rayon::prelude::*;
 
-use crate::{computers::EmptyAddressData, structs::SizedDatabase};
+use crate::{computers::utxo_based::EmptyAddressData, structs::SizedDatabase};
 
-use super::Databases;
+use super::DatabaseGroup;
 
 type Key = u32;
 type Value = EmptyAddressData;
@@ -19,10 +19,6 @@ impl AddressIndexToEmptyAddressData {
     pub fn insert(&mut self, key: Key, value: Value) -> Option<Value> {
         self.open_db(&key).insert(key, value)
     }
-
-    // pub fn take(&mut self, key: &Key) -> Option<Value> {
-    //     self.open_db(key).take(key)
-    // }
 
     pub fn remove_from_puts(&mut self, key: &Key) -> Option<Value> {
         self.open_db(key).remove_from_puts(key)
@@ -59,7 +55,7 @@ impl AddressIndexToEmptyAddressData {
     }
 }
 
-impl Databases for AddressIndexToEmptyAddressData {
+impl DatabaseGroup for AddressIndexToEmptyAddressData {
     fn drain_export(&mut self) -> color_eyre::Result<()> {
         self.par_drain().try_for_each(|(_, db)| db.export())?;
 

@@ -5,7 +5,7 @@ use rayon::prelude::*;
 
 use crate::structs::{SizedDatabase, U8x31};
 
-use super::Databases;
+use super::DatabaseGroup;
 
 type Key = U8x31;
 type Value = u32;
@@ -62,7 +62,7 @@ impl TxidToTxIndex {
     }
 }
 
-impl Databases for TxidToTxIndex {
+impl DatabaseGroup for TxidToTxIndex {
     fn drain_export(&mut self) -> color_eyre::Result<()> {
         self.par_drain().try_for_each(|(_, db)| db.export())?;
 

@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
-    fs::{self},
+    fs::{self, File},
+    io::{BufReader, BufWriter},
     path::Path,
 };
 
@@ -30,7 +31,11 @@ impl Json {
         T: DeserializeOwned,
         P: AsRef<Path>,
     {
-        Ok(serde_json::from_slice(&fs::read(path)?)?)
+        let file = File::open(path)?;
+
+        let reader = BufReader::new(file);
+
+        Ok(serde_json::from_reader(reader)?)
     }
 
     pub fn export<T, P>(path: &P, value: &T) -> color_eyre::Result<()>
@@ -38,9 +43,11 @@ impl Json {
         T: serde::Serialize,
         P: AsRef<Path>,
     {
-        let contents = serde_json::to_string_pretty(value)?;
+        let file = File::create(path)?;
 
-        fs::write(path, contents)?;
+        let mut writer = BufWriter::new(file);
+
+        serde_json::to_writer_pretty(&mut writer, value)?;
 
         Ok(())
     }

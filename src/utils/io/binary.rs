@@ -1,11 +1,14 @@
 use std::{
     fmt::Debug,
-    fs::{self, File},
-    io::Read,
+    fs::File,
+    io::{BufReader, BufWriter},
     path::Path,
 };
 
-use bincode::{config, decode_from_slice, encode_to_vec, Decode, Encode};
+use bincode::{
+    config::{self},
+    decode_from_std_read, encode_into_std_write, Decode, Encode,
+};
 
 pub struct Binary;
 
@@ -17,13 +20,11 @@ impl Binary {
     {
         let config = config::standard();
 
-        let mut file = File::open(path)?;
+        let file = File::open(path)?;
 
-        let mut buffer: Vec<u8> = Vec::new();
+        let mut reader = BufReader::new(file);
 
-        file.read_to_end(&mut buffer)?;
-
-        let decoded = decode_from_slice(&buffer, config)?.0;
+        let decoded = decode_from_std_read(&mut reader, config)?;
 
         Ok(decoded)
     }
@@ -35,9 +36,11 @@ impl Binary {
     {
         let config = config::standard();
 
-        let encoded = encode_to_vec(value, config)?;
+        let file = File::create(path)?;
 
-        fs::write(path, encoded)?;
+        let mut writer = BufWriter::new(file);
+
+        encode_into_std_write(value, &mut writer, config)?;
 
         Ok(())
     }

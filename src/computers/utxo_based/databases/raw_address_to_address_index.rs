@@ -4,11 +4,11 @@ use nohash_hasher::IntMap;
 use rayon::prelude::*;
 
 use crate::{
-    computers::RawAddress,
+    computers::utxo_based::RawAddress,
     structs::{Database, SizedDatabase, U8x19, U8x31, UnsizedDatabase as _UnsizedDatabase},
 };
 
-use super::Databases;
+use super::DatabaseGroup;
 
 type Value = u32;
 type U8x19Database = SizedDatabase<U8x19, Value>;
@@ -216,7 +216,7 @@ impl RawAddressToAddressIndex {
     }
 }
 
-impl Databases for RawAddressToAddressIndex {
+impl DatabaseGroup for RawAddressToAddressIndex {
     fn drain_export(&mut self) -> color_eyre::Result<()> {
         thread::scope(|s| {
             s.spawn(|| self.p2pk.par_drain().try_for_each(|(_, db)| db.export()));

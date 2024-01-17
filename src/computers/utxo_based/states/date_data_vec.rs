@@ -1,7 +1,7 @@
 use bincode::{Decode, Encode};
 use derive_deref::{Deref, DerefMut};
 
-use crate::computers::{BlockData, DateData};
+use crate::computers::utxo_based::{BlockData, DateData};
 
 use super::State;
 

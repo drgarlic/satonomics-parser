@@ -91,12 +91,14 @@ impl AgedDataset {
 impl<'a> HeightDataset<ProcessedData<'a>> for AgedDataset {
     fn insert(&self, processed_data: &ProcessedData) {
         let &ProcessedData {
-            date_data_vec,
+            states,
             price,
             height,
             block_path_to_spent_value,
             ..
         } = processed_data;
+
+        let date_data_vec = &states.date_data_vec;
 
         let len = date_data_vec.len();
 

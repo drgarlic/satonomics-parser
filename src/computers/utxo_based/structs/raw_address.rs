@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     bitcoin::multisig_addresses,
-    computers::Counters,
+    computers::utxo_based::States,
     structs::{U8x19, U8x31, SANAKIRJA_MAX_KEY_SIZE},
 };
 
@@ -56,7 +56,7 @@ impl RawAddress {
         }
     }
 
-    pub fn from(txout: &TxOut, counters: &mut Counters) -> Self {
+    pub fn from(txout: &TxOut, states: &mut States) -> Self {
         let script = &txout.script_pubkey;
 
         match Payload::from_script(script) {
@@ -75,7 +75,7 @@ impl RawAddress {
                     Self::P2TR((prefix, rest.into()))
                 } else {
                     // https://mempool.space/address/bc1zqyqs3juw9m
-                    Self::new_unknown(counters)
+                    Self::new_unknown(states)
                 }
             }
             Err(_) => {
@@ -92,7 +92,7 @@ impl RawAddress {
 
                     Self::P2PK((prefix, rest.into()))
                 } else if script.is_empty() {
-                    let empty_addresses_counter = &mut counters.empty_addresses;
+                    let empty_addresses_counter = &mut states.counters.empty_addresses;
                     let index = empty_addresses_counter.inner();
                     empty_addresses_counter.increment();
                     Self::Empty(index)
@@ -116,14 +116,14 @@ impl RawAddress {
 
                     Self::MultiSig(vec.into())
                 } else {
-                    Self::new_unknown(counters)
+                    Self::new_unknown(states)
                 }
             }
         }
     }
 
-    fn new_unknown(counters: &mut Counters) -> RawAddress {
-        let unknown_addresses_counter = &mut counters.unknown_addresses;
+    fn new_unknown(states: &mut States) -> RawAddress {
+        let unknown_addresses_counter = &mut states.counters.unknown_addresses;
         let index = unknown_addresses_counter.inner();
         unknown_addresses_counter.increment();
         Self::Unknown(index)

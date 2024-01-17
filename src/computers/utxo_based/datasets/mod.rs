@@ -1,13 +1,44 @@
+use std::collections::BTreeMap;
 use std::thread;
 
-use chrono::Datelike;
+use chrono::{Datelike, NaiveDate};
 use itertools::Itertools;
+use ordered_float::OrderedFloat;
 use rayon::prelude::*;
 
-use super::{
-    AgeRange, AgedDataset, BlockMetadataDataset, CoinblocksDataset, CoindaysDataset, HeightDataset,
-    ProcessedData, RewardsDataset,
-};
+use crate::computers::utxo_based::{BlockPath, States};
+
+mod _trait;
+mod aged;
+mod block_metadata;
+mod coinblocks;
+mod coindays;
+// mod entity;
+// mod price;
+mod rewards;
+
+use _trait::*;
+use aged::*;
+use block_metadata::*;
+use coinblocks::*;
+use coindays::*;
+// use entity::*;
+// use price::*;
+use rewards::*;
+
+pub struct ProcessedData<'a> {
+    pub address_index_to_spent_value: &'a BTreeMap<u32, BTreeMap<OrderedFloat<f32>, u64>>,
+    pub block_path_to_spent_value: &'a BTreeMap<BlockPath, u64>,
+    pub coinbase: u64,
+    pub coinblocks_destroyed: f64,
+    pub coindays_destroyed: f64,
+    pub date: NaiveDate,
+    pub states: &'a States,
+    pub fees: u64,
+    pub height: usize,
+    pub price: f32,
+    pub timestamp: u32,
+}
 
 pub struct Datasets {
     height_to_1d_dataset: AgedDataset,
