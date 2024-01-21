@@ -1,4 +1,4 @@
-use std::thread;
+use std::{io, thread};
 
 mod _trait;
 mod address_index_to_empty_address_data;
@@ -18,12 +18,20 @@ pub struct Databases {
 }
 
 impl Databases {
-    pub fn drain_export(&mut self) -> color_eyre::Result<()> {
+    pub fn export(&mut self) -> color_eyre::Result<()> {
         thread::scope(|s| {
-            s.spawn(|| self.address_index_to_empty_address_data.drain_export());
-            s.spawn(|| self.raw_address_to_address_index.drain_export());
-            s.spawn(|| self.txid_to_tx_index.drain_export());
+            s.spawn(|| self.address_index_to_empty_address_data.export());
+            s.spawn(|| self.raw_address_to_address_index.export());
+            s.spawn(|| self.txid_to_tx_index.export());
         });
+
+        Ok(())
+    }
+
+    pub fn clear(&self) -> color_eyre::Result<(), io::Error> {
+        self.address_index_to_empty_address_data.clear()?;
+        self.raw_address_to_address_index.clear()?;
+        self.txid_to_tx_index.clear()?;
 
         Ok(())
     }

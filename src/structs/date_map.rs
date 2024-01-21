@@ -1,21 +1,20 @@
 use std::{
     cell::RefCell,
     collections::{BTreeMap, HashMap},
-    path::{Path, PathBuf},
 };
 
 use chrono::{Days, NaiveDate};
 use itertools::Itertools;
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::utils::{string_to_naive_date, Json, EXPORTS_FOLDER_PATH};
+use crate::utils::{string_to_naive_date, Json};
 
 // Should use number of unsafe blocks instead of avoid useless re-computation
 const NUMBER_OF_UNSAFE_DATES: usize = 2;
 
 pub struct DateMap<T> {
     map: RefCell<HashMap<String, T>>,
-    path: PathBuf,
+    path: String,
 }
 
 impl<T> DateMap<T>
@@ -23,11 +22,9 @@ where
     T: Clone + DeserializeOwned + Serialize,
 {
     pub fn import(path: &str) -> Self {
-        let path = Path::new(EXPORTS_FOLDER_PATH).join(path);
-
         Self {
-            map: RefCell::new(Json::import_map(&path)),
-            path: path.to_owned(),
+            map: RefCell::new(Json::import_map(path)),
+            path: path.to_string(),
         }
     }
 

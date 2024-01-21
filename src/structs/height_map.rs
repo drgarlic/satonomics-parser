@@ -1,36 +1,27 @@
-use std::{
-    cmp::Ordering,
-    path::{Path, PathBuf},
-    sync::RwLock,
-};
+use std::{cmp::Ordering, path::Path, sync::RwLock};
 
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::{
-    bitcoin::NUMBER_OF_UNSAFE_BLOCKS,
-    utils::{Json, EXPORTS_FOLDER_PATH},
-};
+use crate::{bitcoin::NUMBER_OF_UNSAFE_BLOCKS, utils::Json};
 
 pub struct HeightMap<T>
 where
     T: Clone,
 {
     batch: RwLock<Vec<(usize, T)>>,
-    path: PathBuf,
+    path: String,
     initial_first_unsafe_height: Option<usize>,
 }
 
 impl<T> HeightMap<T>
 where
-    T: Clone + DeserializeOwned + Serialize,
+    T: Clone + DeserializeOwned + Serialize + Default,
 {
     pub fn new(path: &str) -> Self {
-        let path = Path::new(EXPORTS_FOLDER_PATH).join(path);
-
         Self {
             batch: RwLock::new(vec![]),
             initial_first_unsafe_height: get_first_unsafe_height::<T, _>(&path),
-            path,
+            path: path.to_string(),
         }
     }
 
@@ -40,13 +31,12 @@ where
         }
     }
 
-    pub fn consume(self) -> Vec<T> {
-        self.import()
+    pub fn insert_default(&self, height: usize) {
+        self.insert(height, T::default())
     }
 
-    #[allow(unused)]
-    pub fn path(&self) -> &PathBuf {
-        &self.path
+    pub fn consume(self) -> Vec<T> {
+        self.import()
     }
 
     fn import(&self) -> Vec<T> {
@@ -66,7 +56,7 @@ pub trait AnyHeightMap {
 
 impl<T> AnyHeightMap for HeightMap<T>
 where
-    T: Clone + DeserializeOwned + Serialize,
+    T: Clone + DeserializeOwned + Serialize + Default,
 {
     fn get_initial_first_unsafe_height(&self) -> Option<usize> {
         self.initial_first_unsafe_height

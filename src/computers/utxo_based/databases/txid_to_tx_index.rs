@@ -63,7 +63,7 @@ impl TxidToTxIndex {
 }
 
 impl DatabaseGroup for TxidToTxIndex {
-    fn drain_export(&mut self) -> color_eyre::Result<()> {
+    fn export(&mut self) -> color_eyre::Result<()> {
         self.par_drain().try_for_each(|(_, db)| db.export())?;
 
         Ok(())

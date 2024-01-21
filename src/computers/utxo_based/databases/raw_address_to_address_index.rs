@@ -217,7 +217,7 @@ impl RawAddressToAddressIndex {
 }
 
 impl DatabaseGroup for RawAddressToAddressIndex {
-    fn drain_export(&mut self) -> color_eyre::Result<()> {
+    fn export(&mut self) -> color_eyre::Result<()> {
         thread::scope(|s| {
             s.spawn(|| self.p2pk.par_drain().try_for_each(|(_, db)| db.export()));
             s.spawn(|| self.p2pkh.par_drain().try_for_each(|(_, db)| db.export()));

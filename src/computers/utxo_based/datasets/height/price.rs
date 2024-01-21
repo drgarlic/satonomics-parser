@@ -1,13 +1,21 @@
-use chrono::Datelike;
-use itertools::Itertools;
+use std::collections::BTreeMap;
+
+use ordered_float::OrderedFloat;
 
 use crate::{
     bitcoin::sats_to_btc,
-    computers::utxo_based::{structs::BlockPath, BlockData},
     structs::{AnyHeightMap, HeightMap},
 };
 
-use super::ProcessedData;
+pub struct PriceDatasetInsertData {
+    pub height: usize,
+    pub price: f32,
+    pub price_to_amount: BTreeMap<OrderedFloat<f32>, u64>,
+    pub realized_loss: f32,
+    pub realized_profit: f32,
+    pub total_supply: u64,
+    pub utxo_count: usize,
+}
 
 pub struct PriceDataset {
     height_to_total_supply: HeightMap<u64>,
@@ -42,8 +50,8 @@ pub struct PriceDataset {
 }
 
 impl PriceDataset {
-    pub fn new(name: &str) -> color_eyre::Result<Self> {
-        let f = |s: &str| format!("height_to_{}_{}.json", name, s);
+    pub fn import(path: &str, name: &str) -> color_eyre::Result<Self> {
+        let f = |s: &str| format!("{path}/height_to_{name}_{s}.json");
 
         Ok(Self {
             height_to_total_supply: HeightMap::new(&f("total_supply")),
@@ -76,129 +84,22 @@ impl PriceDataset {
         })
     }
 
-    fn insert<'a>(
+    pub fn insert(
         &self,
-        processed_data: &ProcessedData,
-        iter_realized: impl Iterator<Item = (&'a f32, &'a u64)>,
-    ) {
-        let &ProcessedData {
-            date_data_vec,
-            price,
+        PriceDatasetInsertData {
             height,
-            block_path_to_spent_value,
-            ..
-        } = processed_data;
-
-        let len = date_data_vec.len();
-
-        let mut realized_profit = 0.0;
-        let mut realized_loss = 0.0;
-
-        iter_realized.for_each(|(previous_price, value)| {
-            let previous_dollar_amount = *previous_price as f64 * sats_to_btc(*value);
-            let current_dollar_amount = price as f64 * sats_to_btc(*value);
-
-            if previous_dollar_amount < current_dollar_amount {
-                realized_profit += (current_dollar_amount - previous_dollar_amount) as f32
-            } else if current_dollar_amount < previous_dollar_amount {
-                realized_loss += (previous_dollar_amount - current_dollar_amount) as f32
-            }
-        });
-
-        let sliced_date_data_vec = {
-            match self.range {
-                AgeRange::Full => date_data_vec.iter().collect_vec(),
-                AgeRange::From(from) => {
-                    if from < len {
-                        date_data_vec[..(len - from)].iter().collect_vec()
-                    } else {
-                        vec![]
-                    }
-                }
-                AgeRange::To(to) => {
-                    if to <= len {
-                        date_data_vec[(len - to)..].iter().collect_vec()
-                    } else {
-                        date_data_vec.iter().collect_vec()
-                    }
-                }
-                AgeRange::FromTo(from, to) => {
-                    if from < len {
-                        if to <= len {
-                            date_data_vec[(len - to)..(len - from)].iter().collect_vec()
-                        } else {
-                            date_data_vec[..(len - from)].iter().collect_vec()
-                        }
-                    } else {
-                        vec![]
-                    }
-                }
-                AgeRange::Year(year) => date_data_vec
-                    .iter()
-                    .filter(|date_data| date_data.date.year() == year as i32)
-                    .collect_vec(),
-            }
-        };
-
-        if sliced_date_data_vec.is_empty() {
-            self.height_to_utxo_count.insert(height, 0);
-
-            self.height_to_total_supply.insert(height, 0);
-            self.height_to_unrealized_profit.insert(height, 0.0);
-            self.height_to_unrealized_loss.insert(height, 0.0);
-            self.height_to_supply_in_profit.insert(height, 0);
-
-            self.height_to_realized_profit.insert(height, 0.0);
-            self.height_to_realized_loss.insert(height, 0.0);
-
-            self.height_to_mean_price.insert(height, 0.0);
-
-            self.height_to_05p_price.insert(height, 0.0);
-            self.height_to_10p_price.insert(height, 0.0);
-            self.height_to_15p_price.insert(height, 0.0);
-            self.height_to_20p_price.insert(height, 0.0);
-            self.height_to_25p_price.insert(height, 0.0);
-            self.height_to_30p_price.insert(height, 0.0);
-            self.height_to_35p_price.insert(height, 0.0);
-            self.height_to_40p_price.insert(height, 0.0);
-            self.height_to_45p_price.insert(height, 0.0);
-            self.height_to_median_price.insert(height, 0.0);
-            self.height_to_55p_price.insert(height, 0.0);
-            self.height_to_60p_price.insert(height, 0.0);
-            self.height_to_65p_price.insert(height, 0.0);
-            self.height_to_70p_price.insert(height, 0.0);
-            self.height_to_75p_price.insert(height, 0.0);
-            self.height_to_80p_price.insert(height, 0.0);
-            self.height_to_85p_price.insert(height, 0.0);
-            self.height_to_90p_price.insert(height, 0.0);
-            self.height_to_95p_price.insert(height, 0.0);
-
+            price: block_price,
+            price_to_amount,
+            realized_loss,
+            realized_profit,
+            total_supply,
+            utxo_count,
+        }: PriceDatasetInsertData,
+    ) {
+        if price_to_amount.is_empty() {
+            self.insert_default(height);
             return;
         }
-
-        let mut utxo_count = 0;
-
-        let mut block_data_vec = sliced_date_data_vec
-            .iter()
-            .flat_map(|date_data| {
-                utxo_count += date_data
-                    .blocks
-                    .iter()
-                    .map(|block| block.outputs_len as usize)
-                    .sum::<usize>();
-
-                &date_data.blocks
-            })
-            .collect_vec();
-
-        block_data_vec.sort_unstable_by(|tuple_a, tuple_b| {
-            tuple_a.price.partial_cmp(&tuple_b.price).unwrap()
-        });
-
-        let total_supply = block_data_vec
-            .iter()
-            .map(|block_data| block_data.amount)
-            .sum();
 
         let mut unrealized_profit = 0.0;
         let mut unrealized_loss = 0.0;
@@ -231,94 +132,96 @@ impl PriceDataset {
 
         let total_supply_in_btc = sats_to_btc(total_supply);
 
-        block_data_vec.iter().for_each(|block_data| {
-            processed_amount_in_btc += sats_to_btc(block_data.amount);
+        price_to_amount.into_iter().for_each(|(price, amount)| {
+            let price = price.0;
 
-            if block_data.price < price {
-                unrealized_profit +=
-                    sats_to_btc(block_data.amount) * (price - block_data.price) as f64;
-                supply_in_profit += block_data.amount;
-            } else if block_data.price > price {
-                unrealized_loss +=
-                    sats_to_btc(block_data.amount) * (block_data.price - price) as f64
+            let btc_amount = sats_to_btc(amount);
+
+            processed_amount_in_btc += btc_amount;
+
+            if price < block_price {
+                unrealized_profit += btc_amount * (block_price - price) as f64;
+                supply_in_profit += amount;
+            } else if price > block_price {
+                unrealized_loss += btc_amount * (price - block_price) as f64
             }
 
-            undivided_price_mean += sats_to_btc(block_data.amount) * (block_data.price as f64);
+            undivided_price_mean += btc_amount * (price as f64);
 
             if price_05p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.05 {
-                price_05p.replace(block_data.price);
+                price_05p.replace(price);
             }
 
             if price_10p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.1 {
-                price_10p.replace(block_data.price);
+                price_10p.replace(price);
             }
 
             if price_15p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.15 {
-                price_15p.replace(block_data.price);
+                price_15p.replace(price);
             }
 
             if price_20p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.2 {
-                price_20p.replace(block_data.price);
+                price_20p.replace(price);
             }
 
             if price_25p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.25 {
-                price_25p.replace(block_data.price);
+                price_25p.replace(price);
             }
 
             if price_30p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.3 {
-                price_30p.replace(block_data.price);
+                price_30p.replace(price);
             }
 
             if price_35p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.35 {
-                price_35p.replace(block_data.price);
+                price_35p.replace(price);
             }
 
             if price_40p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.4 {
-                price_40p.replace(block_data.price);
+                price_40p.replace(price);
             }
 
             if price_45p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.45 {
-                price_45p.replace(block_data.price);
+                price_45p.replace(price);
             }
 
             if price_median.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.5 {
-                price_median.replace(block_data.price);
+                price_median.replace(price);
             }
 
             if price_55p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.55 {
-                price_55p.replace(block_data.price);
+                price_55p.replace(price);
             }
 
             if price_60p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.6 {
-                price_60p.replace(block_data.price);
+                price_60p.replace(price);
             }
 
             if price_65p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.65 {
-                price_65p.replace(block_data.price);
+                price_65p.replace(price);
             }
 
             if price_70p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.7 {
-                price_70p.replace(block_data.price);
+                price_70p.replace(price);
             }
 
             if price_75p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.75 {
-                price_75p.replace(block_data.price);
+                price_75p.replace(price);
             }
 
             if price_80p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.8 {
-                price_80p.replace(block_data.price);
+                price_80p.replace(price);
             }
 
             if price_85p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.85 {
-                price_85p.replace(block_data.price);
+                price_85p.replace(price);
             }
 
             if price_90p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.9 {
-                price_90p.replace(block_data.price);
+                price_90p.replace(price);
             }
 
             if price_95p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.95 {
-                price_95p.replace(block_data.price);
+                price_95p.replace(price);
             }
         });
 
@@ -420,7 +323,7 @@ impl PriceDataset {
         }
     }
 
-    fn to_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
+    pub fn to_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
         vec![
             &self.height_to_total_supply,
             &self.height_to_supply_in_profit,
@@ -450,5 +353,39 @@ impl PriceDataset {
             &self.height_to_05p_price,
             &self.height_to_utxo_count,
         ]
+    }
+
+    fn insert_default(&self, height: usize) {
+        self.height_to_utxo_count.insert_default(height);
+
+        self.height_to_total_supply.insert_default(height);
+        self.height_to_unrealized_profit.insert_default(height);
+        self.height_to_unrealized_loss.insert_default(height);
+        self.height_to_supply_in_profit.insert_default(height);
+
+        self.height_to_realized_profit.insert_default(height);
+        self.height_to_realized_loss.insert_default(height);
+
+        self.height_to_mean_price.insert_default(height);
+
+        self.height_to_05p_price.insert_default(height);
+        self.height_to_10p_price.insert_default(height);
+        self.height_to_15p_price.insert_default(height);
+        self.height_to_20p_price.insert_default(height);
+        self.height_to_25p_price.insert_default(height);
+        self.height_to_30p_price.insert_default(height);
+        self.height_to_35p_price.insert_default(height);
+        self.height_to_40p_price.insert_default(height);
+        self.height_to_45p_price.insert_default(height);
+        self.height_to_median_price.insert_default(height);
+        self.height_to_55p_price.insert_default(height);
+        self.height_to_60p_price.insert_default(height);
+        self.height_to_65p_price.insert_default(height);
+        self.height_to_70p_price.insert_default(height);
+        self.height_to_75p_price.insert_default(height);
+        self.height_to_80p_price.insert_default(height);
+        self.height_to_85p_price.insert_default(height);
+        self.height_to_90p_price.insert_default(height);
+        self.height_to_95p_price.insert_default(height);
     }
 }

@@ -2,11 +2,12 @@ use chrono::Days;
 
 use crate::structs::DateMap;
 
-use super::{Datasets, States};
+use super::{Databases, HeightDatasets, HeightDatasetsTrait, States};
 
 pub fn min_height(
     states: &mut States,
-    datasets: &Datasets,
+    databases: &Databases,
+    datasets: &HeightDatasets,
     date_to_first_block: &DateMap<usize>,
 ) -> usize {
     let max_date = states
@@ -20,25 +21,18 @@ pub fn min_height(
         .and_then(|date| {
             let min_last_height = datasets.get_min_last_height();
 
-            dbg!(min_last_height);
-
             date_to_first_block.get(&date).map(|snapshot_start_height| {
-                // if min_last_height.unwrap_or(0) < snapshot_start_height - 1 {
-                //     println!("snapshot_start_height {snapshot_start_height} > last_saved_height {min_last_height:?}");
+                if min_last_height.unwrap_or(0) < snapshot_start_height - 1 {
+                    println!("snapshot_start_height {snapshot_start_height} > last_saved_height {min_last_height:?}");
 
-                //     println!("Starting over...");
+                    println!("Starting over...");
+                    states.clear();
+                    databases.clear().unwrap();
 
-                //     address_index_to_address_data.clear();
-                //     date_data_vec.clear();
-                //     tx_index_to_tx_data.clear();
-                //     txout_index_to_txout_data.clear();
-
-                //     counters.reset();
-
-                //      0
-                // } else {
-                snapshot_start_height
-                // }
+                     0
+                } else {
+                    snapshot_start_height
+                }
             })
         })
         .unwrap_or(0)

@@ -29,13 +29,20 @@ impl AddressData {
 
 impl AddressData {
     pub fn receive(&mut self, value: u64, price: f32) {
-        let previous_amount = self.amount;
+        let price = price as f64;
+        let previous_mean_price_paid = self.mean_price_paid as f64;
 
+        let previous_amount = self.amount;
         let new_amount = previous_amount + value;
 
-        self.mean_price_paid = ((self.mean_price_paid as f64 * sats_to_btc(previous_amount)
-            + sats_to_btc(value) * price as f64)
-            / sats_to_btc(new_amount)) as f32;
+        let btc_value = sats_to_btc(value);
+        let priced_btc_value = btc_value * price;
+
+        let previous_btc_amount = sats_to_btc(previous_amount);
+        let new_btc_amount = sats_to_btc(new_amount);
+
+        self.mean_price_paid = ((previous_mean_price_paid * previous_btc_amount + priced_btc_value)
+            / new_btc_amount) as f32;
 
         self.amount = new_amount;
 
@@ -44,22 +51,30 @@ impl AddressData {
         self.outputs_len += 1;
     }
 
-    pub fn spend(&mut self, value: u64, price: f32) {
-        let previous_amount = self.amount;
-        let previous_mean_price_paid = self.mean_price_paid;
+    pub fn spend(&mut self, value: u64, price: f32) -> f32 {
+        let price = price as f64;
+        let previous_mean_price_paid = self.mean_price_paid as f64;
 
+        let previous_amount = self.amount;
         let new_amount = previous_amount - value;
 
-        self.mean_price_paid = ((((previous_mean_price_paid as f64)
-            * sats_to_btc(previous_amount))
-            - (sats_to_btc(value) * price as f64))
-            / sats_to_btc(new_amount)) as f32;
+        let btc_value = sats_to_btc(value);
+        let priced_btc_value = btc_value * price;
+
+        let previous_btc_amount = sats_to_btc(previous_amount);
+        let new_btc_amount = sats_to_btc(new_amount);
+
+        self.mean_price_paid = (((previous_mean_price_paid * previous_btc_amount)
+            - priced_btc_value)
+            / new_btc_amount) as f32;
 
         self.amount = new_amount;
 
         self.sent += value;
 
         self.outputs_len -= 1;
+
+        (priced_btc_value - (btc_value * previous_mean_price_paid)) as f32
     }
 
     pub fn is_empty(&self) -> bool {
@@ -73,7 +88,7 @@ impl AddressData {
             sent: empty.transfered,
             received: empty.transfered,
             mean_price_paid: 0.0,
-            outputs_len: empty.outputs_len,
+            outputs_len: 0,
         }
     }
 }

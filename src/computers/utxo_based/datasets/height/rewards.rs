@@ -1,6 +1,6 @@
 use crate::structs::{AnyHeightMap, HeightMap};
 
-use super::{HeightDataset, ProcessedData};
+use super::{HeightDatasetTrait, ProcessedData};
 
 pub struct RewardsDataset {
     pub height_to_fees: HeightMap<u64>,
@@ -8,15 +8,17 @@ pub struct RewardsDataset {
 }
 
 impl RewardsDataset {
-    pub fn import() -> color_eyre::Result<Self> {
+    pub fn import(path: &str) -> color_eyre::Result<Self> {
+        let f = |s: &str| format!("{path}/rewards/height_to_{s}.json");
+
         Ok(Self {
-            height_to_fees: HeightMap::new("height_to_fees.json"),
-            height_to_subsidy: HeightMap::new("height_to_subsidy.json"),
+            height_to_fees: HeightMap::new(&f("fees")),
+            height_to_subsidy: HeightMap::new(&f("subsidy")),
         })
     }
 }
 
-impl<'a> HeightDataset<ProcessedData<'a>> for RewardsDataset {
+impl HeightDatasetTrait for RewardsDataset {
     fn insert(&self, processed_data: &ProcessedData) {
         let &ProcessedData {
             height,

@@ -20,9 +20,7 @@ mod structs;
 use databases::*;
 use datasets::*;
 use export_all::*;
-use export_all::*;
 use min_height::*;
-use parse_block::*;
 use parse_block::*;
 use states::*;
 use structs::*;
@@ -32,17 +30,17 @@ pub fn compute_utxo_based_datasets(
     block_count: usize,
     height_to_price: &[f32],
     date_to_first_block: &DateMap<usize>,
-) -> color_eyre::Result<Datasets> {
+) -> color_eyre::Result<HeightDatasets> {
     println!("{:?} - Starting aged", Local::now());
 
-    let mut datasets = Datasets::new()?;
+    let mut datasets = HeightDatasets::import()?;
 
     println!("{:?} - Imported datasets", Local::now());
 
     let mut databases = Databases::default();
     let mut states = States::import().unwrap_or_default();
 
-    let mut height = min_height(&mut states, &datasets, date_to_first_block);
+    let mut height = min_height(&mut states, &databases, &datasets, date_to_first_block);
 
     println!("{:?} - Starting parsing", Local::now());
 

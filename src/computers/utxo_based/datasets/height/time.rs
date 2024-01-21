@@ -5,23 +5,25 @@ use crate::{
     utils::timestamp_to_naive_date,
 };
 
-use super::{HeightDataset, ProcessedData};
+use super::{HeightDatasetTrait, ProcessedData};
 
-pub struct BlockMetadataDataset {
+pub struct TimeDataset {
     pub height_to_date: HeightMap<NaiveDate>,
     pub height_to_timestamp: HeightMap<u32>,
 }
 
-impl BlockMetadataDataset {
-    pub fn import() -> color_eyre::Result<Self> {
+impl TimeDataset {
+    pub fn import(path: &str) -> color_eyre::Result<Self> {
+        let f = |s: &str| format!("{path}/time/height_to_{s}.json");
+
         Ok(Self {
-            height_to_date: HeightMap::new("height_to_date.json"),
-            height_to_timestamp: HeightMap::new("height_to_timestamp.json"),
+            height_to_date: HeightMap::new(&f("date")),
+            height_to_timestamp: HeightMap::new(&f("timestamp")),
         })
     }
 }
 
-impl<'a> HeightDataset<ProcessedData<'a>> for BlockMetadataDataset {
+impl HeightDatasetTrait for TimeDataset {
     fn insert(&self, processed_data: &ProcessedData) {
         let &ProcessedData {
             height, timestamp, ..

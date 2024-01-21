@@ -7,7 +7,6 @@ use super::{AddressData, RawAddressType};
 pub struct EmptyAddressData {
     pub address_type: RawAddressType,
     pub transfered: u64,
-    pub outputs_len: u32,
 }
 direct_repr!(EmptyAddressData);
 
@@ -21,7 +20,6 @@ impl EmptyAddressData {
         Self {
             address_type: non_empty.address_type,
             transfered: non_empty.sent,
-            outputs_len: non_empty.outputs_len,
         }
     }
 }

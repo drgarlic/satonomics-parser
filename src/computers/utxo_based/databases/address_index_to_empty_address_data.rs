@@ -56,7 +56,7 @@ impl AddressIndexToEmptyAddressData {
 }
 
 impl DatabaseGroup for AddressIndexToEmptyAddressData {
-    fn drain_export(&mut self) -> color_eyre::Result<()> {
+    fn export(&mut self) -> color_eyre::Result<()> {
         self.par_drain().try_for_each(|(_, db)| db.export())?;
 
         Ok(())

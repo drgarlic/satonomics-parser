@@ -3,7 +3,8 @@ mod address_index_to_address_data;
 mod counters;
 mod date_data_vec;
 mod tx_index_to_tx_data;
-mod txout_index_to_txout_data;
+mod txout_index_to_address_index;
+mod txout_index_to_sats;
 
 use std::thread;
 
@@ -12,7 +13,8 @@ use address_index_to_address_data::*;
 use counters::*;
 use date_data_vec::*;
 use tx_index_to_tx_data::*;
-use txout_index_to_txout_data::*;
+use txout_index_to_address_index::*;
+use txout_index_to_sats::*;
 
 #[derive(Default)]
 pub struct States {
@@ -20,7 +22,8 @@ pub struct States {
     pub counters: Counters,
     pub date_data_vec: DateDataVec,
     pub tx_index_to_tx_data: TxIndexToTxData,
-    pub txout_index_to_txout_data: TxoutIndexToTxoutData,
+    pub txout_index_to_address_index: TxoutIndexToAddressIndex,
+    pub txout_index_to_sats: TxoutIndexToSats,
 }
 
 impl States {
@@ -29,7 +32,9 @@ impl States {
 
         let tx_index_to_tx_data_handle = thread::spawn(TxIndexToTxData::import);
 
-        let txout_index_to_txout_value_handle = thread::spawn(TxoutIndexToTxoutData::import);
+        let txout_index_to_sats_handle = thread::spawn(TxoutIndexToSats::import);
+
+        let txout_index_to_address_index_handle = thread::spawn(TxoutIndexToAddressIndex::import);
 
         let date_data_vec_handle = thread::spawn(DateDataVec::import);
 
@@ -37,7 +42,9 @@ impl States {
 
         let date_data_vec = date_data_vec_handle.join().unwrap()?;
 
-        let txout_index_to_txout_data = txout_index_to_txout_value_handle.join().unwrap()?;
+        let txout_index_to_address_index = txout_index_to_address_index_handle.join().unwrap()?;
+
+        let txout_index_to_sats = txout_index_to_sats_handle.join().unwrap()?;
 
         let tx_index_to_tx_data = tx_index_to_tx_data_handle.join().unwrap()?;
 
@@ -47,9 +54,19 @@ impl States {
             date_data_vec,
             counters,
             tx_index_to_tx_data,
-            txout_index_to_txout_data,
+            txout_index_to_address_index,
+            txout_index_to_sats,
             address_index_to_address_data,
         })
+    }
+
+    pub fn clear(&mut self) {
+        self.address_index_to_address_data.clear();
+        self.counters.reset();
+        self.date_data_vec.clear();
+        self.tx_index_to_tx_data.clear();
+        self.txout_index_to_address_index.clear();
+        self.txout_index_to_sats.clear();
     }
 
     pub fn export(&self) -> color_eyre::Result<()> {
@@ -58,7 +75,8 @@ impl States {
             s.spawn(|| self.counters.export().unwrap());
             s.spawn(|| self.date_data_vec.export().unwrap());
             s.spawn(|| self.tx_index_to_tx_data.export().unwrap());
-            s.spawn(|| self.txout_index_to_txout_data.export().unwrap());
+            s.spawn(|| self.txout_index_to_address_index.export().unwrap());
+            s.spawn(|| self.txout_index_to_sats.export().unwrap());
         });
 
         Ok(())
