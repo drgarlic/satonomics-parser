@@ -1,29 +1,39 @@
+use std::path::Path;
+
 mod bitcoin;
-mod computers;
-mod run;
+mod databases;
+mod datasets;
+mod export_all;
+mod iter_blocks;
+mod min_height;
+mod parse_block;
+mod states;
 mod structs;
 mod utils;
 
-use run::run;
-use utils::{Node, Terminal};
+use crate::{bitcoin::BitcoinDB, iter_blocks::iter_blocks, structs::BITCOIN_DATADIR_RAW_PATH};
 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    Terminal::increase_open_files_limit();
-
-    // Node::start();
+    // Daemon::start();
     //
     // loop {
-    //     Node::wait_sync()?;
+    //     Daemon::wait_sync()?;
     //
-    //     Node::stop();
+    //     Daemon::stop();
     //
     //
-    let block_count = run()?;
+    let bitcoin_db = BitcoinDB::new(Path::new(BITCOIN_DATADIR_RAW_PATH), true)?;
+
+    let block_count = bitcoin_db.get_block_count();
+    println!("{block_count} blocks found.");
+
+    iter_blocks(&bitcoin_db, block_count)?;
+
     //
-    //     Node::start();
-    //     Node::wait_for_new_block(block_count - 1)?;
+    //     Daemon::start();
+    //     Daemon::wait_for_new_block(block_count - 1)?;
     // }
 
     Ok(())
