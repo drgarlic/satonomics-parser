@@ -39,19 +39,6 @@ pub trait AnyHeightDatasets {
             .and_then(|opt| opt)
     }
 
-    fn export_if_needed(&self, height: usize) -> color_eyre::Result<()> {
-        self.to_vec()
-            .par_iter()
-            .filter(|dataset| Self::check_if_dataset_is_up_to_height(**dataset, height))
-            .try_for_each(|dataset| dataset.export())
-    }
-
-    fn export(&self) -> color_eyre::Result<()> {
-        self.to_vec()
-            .par_iter()
-            .try_for_each(|dataset| dataset.export())
-    }
-
     fn insert(&self, processed_block_data: ProcessedBlockData) {
         let ProcessedBlockData { height, .. } = processed_block_data;
 
@@ -66,6 +53,19 @@ pub trait AnyHeightDatasets {
         height: usize,
     ) -> bool {
         dataset.get_min_initial_first_unsafe_height().unwrap_or(0) <= height
+    }
+
+    fn export_if_needed(&self, height: usize) -> color_eyre::Result<()> {
+        self.to_vec()
+            .par_iter()
+            .filter(|dataset| Self::check_if_dataset_is_up_to_height(**dataset, height))
+            .try_for_each(|dataset| dataset.export())
+    }
+
+    fn export(&self) -> color_eyre::Result<()> {
+        self.to_vec()
+            .par_iter()
+            .try_for_each(|dataset| dataset.export())
     }
 
     fn to_vec(&self) -> Vec<&(dyn AnyHeightDataset + Send + Sync)>;

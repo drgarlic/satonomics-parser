@@ -3,17 +3,18 @@
 use std::{collections::BTreeMap, path::Path};
 
 use itertools::Itertools;
+use nohash_hasher::IntMap;
 use serde_json::Value;
 
 use crate::structs::{Json, IMPORTS_FOLDER_PATH};
 
-struct Binance;
+pub struct Binance;
 
 impl Binance {
-    pub fn read_har_file() -> color_eyre::Result<BTreeMap<u32, f32>> {
+    pub fn read_har_file() -> color_eyre::Result<IntMap<u32, f32>> {
         let path_binance_har = Path::new(IMPORTS_FOLDER_PATH).join("binance.har");
 
-        let json: BTreeMap<String, Value> = Json::import_map(path_binance_har);
+        let json: BTreeMap<String, Value> = Json::import(path_binance_har).unwrap_or_default();
 
         Ok(json
             .get("log")
@@ -75,6 +76,35 @@ impl Binance {
                     })
                     .collect_vec()
             })
-            .collect::<BTreeMap<_, _>>())
+            .collect::<IntMap<_, _>>())
+    }
+
+    pub fn fetch_1mn_prices() -> color_eyre::Result<IntMap<u32, f32>> {
+        let body: Value = reqwest::blocking::get(
+            "https://api.binance.com/api/v3/uiKlines?symbol=BTCUSDT&interval=1m&limit=1000",
+        )?
+        .json()?;
+
+        Ok(body
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|value| {
+                // [timestamp, open, high, low, close, volume, ...]
+                let array = value.as_array().unwrap();
+
+                let timestamp = array.first().unwrap().as_u64().unwrap() as u32;
+
+                let price = array
+                    .get(4)
+                    .unwrap()
+                    .as_str()
+                    .unwrap()
+                    .parse::<f32>()
+                    .unwrap();
+
+                (timestamp, price)
+            })
+            .collect::<IntMap<_, _>>())
     }
 }

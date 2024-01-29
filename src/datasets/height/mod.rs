@@ -8,10 +8,8 @@ use crate::{
     structs::{AddressData, AddressRealizedData, BlockPath},
 };
 
-use super::DATASETS_PATH;
-
 mod _trait;
-mod address;
+// mod address;
 mod coinblocks;
 mod coindays;
 mod rewards;
@@ -20,7 +18,7 @@ mod time;
 mod utxo;
 
 pub use _trait::*;
-use address::*;
+// use address::*;
 use coinblocks::*;
 use coindays::*;
 use rewards::*;
@@ -44,7 +42,7 @@ pub struct ProcessedBlockData<'a> {
 }
 
 pub struct HeightDatasets {
-    address: AddressDatasets,
+    // address: AddressDatasets,
     coinblocks: CoinblocksDataset,
     coindays: CoindaysDataset,
     rewards: RewardsDataset,
@@ -53,24 +51,19 @@ pub struct HeightDatasets {
 }
 
 impl HeightDatasets {
-    pub fn import() -> color_eyre::Result<Self> {
-        let path = format!("{DATASETS_PATH}/height");
+    pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
+        let path = format!("{parent_path}/height");
 
         thread::scope(|scope| {
+            // let address_handle = scope.spawn(|| AddressDatasets::import(&path));
+            let coinblocks_handle = scope.spawn(|| CoinblocksDataset::import(&path));
+            let coindays_handle = scope.spawn(|| CoindaysDataset::import(&path));
+            let rewards_handle = scope.spawn(|| RewardsDataset::import(&path));
+            let time_handle = scope.spawn(|| TimeDataset::import(&path));
             let utxo_handle = scope.spawn(|| UTXODatasets::import(&path));
 
-            let address_handle = scope.spawn(|| AddressDatasets::import(&path));
-
-            let rewards_handle = scope.spawn(|| RewardsDataset::import(&path));
-
-            let coinblocks_handle = scope.spawn(|| CoinblocksDataset::import(&path));
-
-            let coindays_handle = scope.spawn(|| CoindaysDataset::import(&path));
-
-            let time_handle = scope.spawn(|| TimeDataset::import(&path));
-
             Ok(Self {
-                address: address_handle.join().unwrap()?,
+                // address: address_handle.join().unwrap()?,
                 coinblocks: coinblocks_handle.join().unwrap()?,
                 coindays: coindays_handle.join().unwrap()?,
                 rewards: rewards_handle.join().unwrap()?,
@@ -86,10 +79,14 @@ impl AnyHeightDatasets for HeightDatasets {
         let flat_datasets: Vec<&(dyn AnyHeightDataset + Send + Sync)> =
             vec![&self.rewards, &self.coinblocks, &self.coindays, &self.time];
 
-        [flat_datasets, self.address.to_vec(), self.utxo.to_vec()]
-            .iter()
-            .flatten()
-            .copied()
-            .collect()
+        [
+            flat_datasets,
+            // self.address.to_vec(),
+            self.utxo.to_vec(),
+        ]
+        .iter()
+        .flatten()
+        .copied()
+        .collect()
     }
 }

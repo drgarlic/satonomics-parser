@@ -5,7 +5,7 @@ use chrono::{offset::Local, Datelike};
 use crate::{
     bitcoin::{BitcoinDB, NUMBER_OF_UNSAFE_BLOCKS},
     databases::Databases,
-    datasets::{compute_height_to_price, AllDatasets, AnyDateDatasets, ProcessedDateData},
+    datasets::{AllDatasets, AnyDateDatasets, ProcessedDateData},
     export_all::{export_all, ExportedData},
     min_height::min_height,
     parse_block::{parse_block, ParseData},
@@ -16,8 +16,6 @@ use crate::{
 
 pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Result<()> {
     println!("{:?} - Starting aged", Local::now());
-
-    let height_to_price = compute_height_to_price(bitcoin_db, block_count)?.consume();
 
     let mut datasets = AllDatasets::import()?;
 
@@ -91,10 +89,9 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
                                 block: current_block,
                                 block_index,
                                 databases: &mut databases,
-                                datasets: &mut datasets.height,
+                                datasets: &mut datasets,
                                 date: current_block_date,
                                 height: height + block_index,
-                                height_to_price: &height_to_price,
                                 timestamp,
                                 states: &mut states,
                             });

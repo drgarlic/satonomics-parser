@@ -12,7 +12,7 @@ impl AddressFilter {
         Self::FromTo { from, to }
     }
 
-    pub fn includes(&self, amount: &u64, address_type: &RawAddressType) -> bool {
+    pub fn check(&self, amount: &u64, address_type: &RawAddressType) -> bool {
         match self {
             Self::FromTo { from, to } => amount >= from && amount < to,
             Self::AddressType(_address_type) => address_type == _address_type,

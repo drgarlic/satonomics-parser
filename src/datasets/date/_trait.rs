@@ -57,7 +57,7 @@ pub trait AnyDateDatasets {
         let ProcessedDateData { date, .. } = processed_date_data;
 
         self.to_vec()
-            .par_iter()
+            .iter()
             .filter(|dataset| Self::check_if_dataset_is_up_to_date(**dataset, date))
             .for_each(|dataset| dataset.insert(&processed_date_data));
     }

@@ -1,10 +1,16 @@
-use std::{collections::BTreeMap, path::Path, sync::RwLock};
+use std::{
+    collections::BTreeMap,
+    fmt::Debug,
+    sync::{RwLock, RwLockReadGuard},
+};
 
+use bincode::{Decode, Encode};
 use chrono::{Days, NaiveDate};
-// use itertools::Itertools;
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::{structs::Json, utils::string_to_naive_date};
+use crate::utils::string_to_naive_date;
+
+use super::Serialization;
 
 // Should use number of unsafe blocks instead of avoid useless re-computation
 // Actually maybe not ?
@@ -14,49 +20,101 @@ pub struct DateMap<T> {
     batch: RwLock<Vec<(NaiveDate, T)>>,
     path: String,
     initial_first_unsafe_date: Option<NaiveDate>,
+    inner: Option<RwLock<BTreeMap<String, T>>>,
+    called_insert: RwLock<bool>,
+    serialization: Serialization,
 }
 
 impl<T> DateMap<T>
 where
-    T: Clone + DeserializeOwned + Serialize + Default,
+    T: Clone + Default + Encode + Decode + Debug + Serialize + DeserializeOwned,
 {
-    pub fn new(path: &str) -> Self {
-        Self {
+    #[allow(unused)]
+    pub fn new_on_disk_bin(path: &str) -> Self {
+        Self::new(path, false, Serialization::Binary)
+    }
+
+    #[allow(unused)]
+    pub fn new_in_memory_bin(path: &str) -> Self {
+        Self::new(path, true, Serialization::Binary)
+    }
+
+    #[allow(unused)]
+    pub fn new_on_disk_json(path: &str) -> Self {
+        Self::new(path, false, Serialization::Json)
+    }
+
+    #[allow(unused)]
+    pub fn new_in_memory_json(path: &str) -> Self {
+        Self::new(path, true, Serialization::Json)
+    }
+
+    fn new(path: &str, in_memory: bool, serialization: Serialization) -> Self {
+        let mut s = Self {
             batch: RwLock::new(vec![]),
-            initial_first_unsafe_date: get_first_unsafe_date::<T, _>(&path),
-            path: path.to_string(),
+            initial_first_unsafe_date: None,
+            path: serialization.append_extension(path),
+            inner: None,
+            called_insert: RwLock::new(false),
+            serialization,
+        };
+
+        if in_memory {
+            s.inner.replace(RwLock::new(s.import()));
         }
+
+        s.initial_first_unsafe_date = s.get_first_unsafe_date();
+
+        s
     }
 
     pub fn insert(&self, date: NaiveDate, value: T) {
-        if self
-            .initial_first_unsafe_date
-            .map_or(true, |initial_first_unsafe_date| {
-                initial_first_unsafe_date <= date
-            })
-        {
-            self.batch.write().unwrap().push((date, value));
+        if !self.is_date_safe(date) {
+            *self.called_insert.write().unwrap() = true;
+
+            if let Some(map) = &self.inner {
+                map.write().unwrap().insert(date.to_string(), value);
+            } else {
+                self.batch.write().unwrap().push((date, value));
+            }
         }
     }
 
-    // pub fn get_min_first_unsafe_date(list: &[&Self]) -> Option<NaiveDate> {
-    //     let first_unsafe_date_opts = list
-    //         .iter()
-    //         .map(|map| map.get_first_unsafe_date())
-    //         .collect_vec();
+    pub fn is_date_safe(&self, date: NaiveDate) -> bool {
+        self.initial_first_unsafe_date
+            .map_or(false, |initial_first_unsafe_date| {
+                initial_first_unsafe_date > date
+            })
+    }
 
-    //     if first_unsafe_date_opts.iter().all(|opt| opt.is_some()) {
-    //         first_unsafe_date_opts
-    //             .iter()
-    //             .map(|first_unsafe_date_opt| first_unsafe_date_opt.unwrap())
-    //             .min()
-    //     } else {
-    //         None
-    //     }
-    // }
+    pub fn unsafe_inner(&self) -> RwLockReadGuard<'_, BTreeMap<String, T>> {
+        self.inner.as_ref().unwrap().read().unwrap()
+    }
 
     pub fn import(&self) -> BTreeMap<String, T> {
-        Json::import_map(&self.path)
+        self.serialization.import(&self.path).unwrap_or_default()
+    }
+
+    fn get_first_unsafe_date(&self) -> Option<NaiveDate> {
+        self.get_last_date().and_then(|last_date| {
+            let offset = NUMBER_OF_UNSAFE_DATES - 1;
+
+            last_date.checked_sub_days(Days::new(offset as u64))
+        })
+    }
+
+    fn get_last_date(&self) -> Option<NaiveDate> {
+        if self.inner.is_some() {
+            self.unsafe_inner()
+                .keys()
+                .map(|date| string_to_naive_date(date))
+                .max()
+        } else {
+            self.import()
+                .keys()
+                .map(|date| string_to_naive_date(date))
+                .max()
+        }
     }
 }
 
@@ -72,14 +130,14 @@ pub trait AnyDateMap {
 
 impl<T> AnyDateMap for DateMap<T>
 where
-    T: Clone + DeserializeOwned + Serialize + Default,
+    T: Clone + Default + Encode + Decode + Debug + Serialize + DeserializeOwned,
 {
     fn get_last_date(&self) -> Option<NaiveDate> {
-        get_last_date::<T, _>(&self.path)
+        self.get_last_date()
     }
 
     fn get_first_unsafe_date(&self) -> Option<NaiveDate> {
-        get_first_unsafe_date::<T, _>(&self.path)
+        self.get_first_unsafe_date()
     }
 
     fn get_initial_first_unsafe_date(&self) -> Option<NaiveDate> {
@@ -87,39 +145,30 @@ where
     }
 
     fn export(&self) -> color_eyre::Result<()> {
-        let mut map = self.import();
+        if !self.called_insert.read().unwrap().to_owned() {
+            return Ok(());
+        }
 
-        self.batch
-            .write()
-            .unwrap()
-            .drain(..)
-            .for_each(|(date, value)| {
-                map.insert(date.to_string(), value);
-            });
+        *self.called_insert.write().unwrap() = false;
 
-        Json::export(&self.path, &map)
+        if let Some(inner) = self.inner.as_ref() {
+            self.serialization.export(&self.path, inner)
+        } else {
+            if self.batch.read().unwrap().is_empty() {
+                return Ok(());
+            }
+
+            let mut map = self.import();
+
+            self.batch
+                .write()
+                .unwrap()
+                .drain(..)
+                .for_each(|(date, value)| {
+                    map.insert(date.to_string(), value);
+                });
+
+            self.serialization.export(&self.path, &map)
+        }
     }
-}
-
-fn get_first_unsafe_date<T, P>(path: P) -> Option<NaiveDate>
-where
-    T: Clone + DeserializeOwned + Serialize,
-    P: AsRef<Path>,
-{
-    get_last_date::<T, P>(path).and_then(|last_date| {
-        let offset = NUMBER_OF_UNSAFE_DATES - 1;
-
-        last_date.checked_sub_days(Days::new(offset as u64))
-    })
-}
-
-fn get_last_date<T, P>(path: P) -> Option<NaiveDate>
-where
-    T: Clone + DeserializeOwned + Serialize,
-    P: AsRef<Path>,
-{
-    Json::import_map::<T, P>(path)
-        .keys()
-        .map(|date| string_to_naive_date(date))
-        .max()
 }

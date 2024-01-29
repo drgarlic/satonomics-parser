@@ -7,7 +7,7 @@ use ordered_float::OrderedFloat;
 use crate::{
     bitcoin::sats_to_btc,
     datasets::{
-        height::{PricesSubDataset, PricesSubDatasetInsertData},
+        height::{RealizedDataset, UTXOsMetadataDataset, UnrealizedDataset},
         AnyHeightDataset, ProcessedBlockData,
     },
     structs::BlockPath,
@@ -18,7 +18,9 @@ use super::UTXOFilter;
 
 pub struct UTXODataset {
     filter: UTXOFilter,
-    prices: PricesSubDataset,
+    realized: RealizedDataset,
+    unrealized: UnrealizedDataset,
+    utxos_metadata: UTXOsMetadataDataset,
 }
 
 impl UTXODataset {
@@ -29,7 +31,9 @@ impl UTXODataset {
 
         Ok(Self {
             filter: range,
-            prices: PricesSubDataset::import(&folder_path)?,
+            realized: RealizedDataset::import(&folder_path)?,
+            unrealized: UnrealizedDataset::import(&folder_path)?,
+            utxos_metadata: UTXOsMetadataDataset::import(&folder_path)?,
         })
     }
 }
@@ -130,28 +134,35 @@ impl AnyHeightDataset for UTXODataset {
         .flat_map(|date_data| &date_data.blocks)
         .map(|block_data| {
             total_supply += block_data.amount;
-            utxo_count += block_data.outputs_len as usize;
+            utxo_count += block_data.spendable_outputs as usize;
 
             (OrderedFloat(block_data.price), block_data.amount)
         })
         .sorted_unstable_by(|a, b| Ord::cmp(&a.0, &b.0))
         .collect_vec();
 
-        self.prices.insert(
-            PricesSubDatasetInsertData {
-                height,
-                price,
-                realized_loss,
-                realized_profit,
-                total_supply,
-                utxo_count,
-            },
+        self.realized.insert(height, realized_loss, realized_profit);
+
+        self.unrealized.insert(
+            height,
+            price,
+            total_supply,
             #[allow(clippy::map_identity)]
             vec.iter().map(|(price, amount)| (price, amount)),
-        )
+        );
+
+        self.utxos_metadata.insert(height, utxo_count);
     }
 
     fn to_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
-        self.prices.to_vec()
+        [
+            self.realized.to_vec(),
+            self.unrealized.to_vec(),
+            self.utxos_metadata.to_vec(),
+        ]
+        .iter()
+        .flatten()
+        .copied()
+        .collect()
     }
 }

@@ -5,7 +5,7 @@ use crate::structs::{AnyHeightMap, HeightMap};
 use super::{AnyHeightDataset, ProcessedBlockData};
 
 pub struct CoindaysDataset {
-    pub coindays_destroyed: HeightMap<f64>,
+    pub destroyed: HeightMap<f64>,
 }
 
 impl CoindaysDataset {
@@ -14,10 +14,10 @@ impl CoindaysDataset {
 
         fs::create_dir_all(&folder_path)?;
 
-        let f = |s: &str| format!("{folder_path}/{s}.json");
+        let f = |s: &str| format!("{folder_path}/{s}");
 
         Ok(Self {
-            coindays_destroyed: HeightMap::new(&f("destroyed")),
+            destroyed: HeightMap::new_on_disk_bin(&f("destroyed")),
         })
     }
 }
@@ -31,10 +31,10 @@ impl AnyHeightDataset for CoindaysDataset {
             ..
         }: &ProcessedBlockData,
     ) {
-        self.coindays_destroyed.insert(height, coindays_destroyed);
+        self.destroyed.insert(height, coindays_destroyed);
     }
 
     fn to_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
-        vec![&self.coindays_destroyed]
+        vec![&self.destroyed]
     }
 }

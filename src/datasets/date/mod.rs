@@ -7,8 +7,6 @@ pub use _trait::*;
 use block::*;
 use chrono::NaiveDate;
 
-use super::DATASETS_PATH;
-
 pub struct ProcessedDateData {
     pub block_count: usize,
     pub first_height: usize,
@@ -21,8 +19,8 @@ pub struct DateDatasets {
 }
 
 impl DateDatasets {
-    pub fn import() -> color_eyre::Result<Self> {
-        let path = format!("{DATASETS_PATH}/date");
+    pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
+        let path = format!("{parent_path}/date");
 
         thread::scope(|scope| {
             let block_handle = scope.spawn(|| BlockDataset::import(&path));

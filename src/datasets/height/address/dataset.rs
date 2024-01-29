@@ -1,4 +1,4 @@
-use std::{fs, thread};
+use std::fs;
 
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
@@ -6,7 +6,7 @@ use ordered_float::OrderedFloat;
 use crate::{
     bitcoin::{btc_to_sats, sats_to_btc},
     datasets::{
-        height::{PricesSubDataset, PricesSubDatasetInsertData},
+        height::{RealizedDataset, UTXOsMetadataDataset, UnrealizedDataset},
         AnyHeightDataset, ProcessedBlockData,
     },
     structs::{AnyHeightMap, HeightMap},
@@ -79,7 +79,7 @@ impl AnyHeightDataset for AddressDataset {
             })
             .filter(|(address_data, previous_amount, _)| {
                 self.filter
-                    .includes(previous_amount, &address_data.address_type)
+                    .check(previous_amount, &address_data.address_type)
             })
             .for_each(|(address_data, _, address_realized_data)| {
                 full_realized_profit += address_realized_data.profit;
@@ -119,7 +119,7 @@ impl AnyHeightDataset for AddressDataset {
             .values()
             .filter(|address_data| {
                 self.filter
-                    .includes(&address_data.amount, &address_data.address_type)
+                    .check(&address_data.amount, &address_data.address_type)
             })
             .map(|address_data| {
                 let amount = address_data.amount;
@@ -157,66 +157,51 @@ impl AnyHeightDataset for AddressDataset {
 
         let len = vec.len();
 
-        thread::scope(|scope| {
-            scope.spawn(|| {
-                self.full_dataset.insert(
-                    PricesSubDatasetInsertData {
-                        height,
-                        price,
-                        realized_loss: full_realized_loss,
-                        realized_profit: full_realized_profit,
-                        total_supply: full_total_supply,
-                        utxo_count: full_utxo_count,
-                    },
-                    len,
-                    vec.iter().map(|(price, (full, _, _, _))| (price, full)),
-                )
-            });
-            scope.spawn(|| {
-                self.illiquid_dataset.insert(
-                    PricesSubDatasetInsertData {
-                        height,
-                        price,
-                        realized_loss: illiquid_realized_loss,
-                        realized_profit: illiquid_realized_profit,
-                        total_supply: illiquid_total_supply,
-                        utxo_count: illiquid_utxo_count,
-                    },
-                    len,
-                    vec.iter()
-                        .map(|(price, (_, illiquid, _, _))| (price, illiquid)),
-                )
-            });
-            scope.spawn(|| {
-                self.liquid_dataset.insert(
-                    PricesSubDatasetInsertData {
-                        height,
-                        price,
-                        realized_loss: liquid_realized_loss,
-                        realized_profit: liquid_realized_profit,
-                        total_supply: liquid_total_supply,
-                        utxo_count: liquid_utxo_count,
-                    },
-                    len,
-                    vec.iter().map(|(price, (_, _, liquid, _))| (price, liquid)),
-                )
-            });
-            scope.spawn(|| {
-                self.highly_liquid_dataset.insert(
-                    PricesSubDatasetInsertData {
-                        height,
-                        price,
-                        realized_loss: highly_liquid_realized_loss,
-                        realized_profit: highly_liquid_realized_profit,
-                        total_supply: highly_liquid_total_supply,
-                        utxo_count: highly_liquid_utxo_count,
-                    },
-                    len,
-                    vec.iter()
-                        .map(|(price, (_, _, _, highly_liquid))| (price, highly_liquid)),
-                )
-            });
-        });
+        self.full_dataset.insert(
+            height,
+            price,
+            full_realized_loss,
+            full_realized_profit,
+            full_total_supply,
+            full_utxo_count,
+            len,
+            vec.iter().map(|(price, (full, _, _, _))| (price, full)),
+        );
+
+        self.illiquid_dataset.insert(
+            height,
+            price,
+            illiquid_realized_loss,
+            illiquid_realized_profit,
+            illiquid_total_supply,
+            illiquid_utxo_count,
+            len,
+            vec.iter()
+                .map(|(price, (_, illiquid, _, _))| (price, illiquid)),
+        );
+
+        self.liquid_dataset.insert(
+            height,
+            price,
+            liquid_realized_loss,
+            liquid_realized_profit,
+            liquid_total_supply,
+            liquid_utxo_count,
+            len,
+            vec.iter().map(|(price, (_, _, liquid, _))| (price, liquid)),
+        );
+
+        self.highly_liquid_dataset.insert(
+            height,
+            price,
+            highly_liquid_realized_loss,
+            highly_liquid_realized_profit,
+            highly_liquid_total_supply,
+            highly_liquid_utxo_count,
+            len,
+            vec.iter()
+                .map(|(price, (_, _, _, highly_liquid))| (price, highly_liquid)),
+        );
     }
 
     fn to_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
@@ -233,39 +218,54 @@ impl AnyHeightDataset for AddressDataset {
 }
 
 pub struct AddressSubDataset {
-    price_dataset: PricesSubDataset,
-    height_to_address_count: HeightMap<usize>,
+    realized: RealizedDataset,
+    unrealized: UnrealizedDataset,
+    utxos_metadata: UTXOsMetadataDataset,
+    address_count: HeightMap<usize>,
 }
 
 impl AddressSubDataset {
-    pub fn import(path: &str) -> color_eyre::Result<Self> {
-        fs::create_dir_all(path)?;
+    pub fn import(folder_path: &str) -> color_eyre::Result<Self> {
+        fs::create_dir_all(folder_path)?;
 
-        let f = |s: &str| format!("{path}/height_to_{s}.json");
+        let f = |s: &str| format!("{folder_path}/{s}");
 
         Ok(Self {
-            price_dataset: PricesSubDataset::import(path)?,
-            height_to_address_count: HeightMap::new(&f("address_count")),
+            address_count: HeightMap::new(&f("address_count")),
+            realized: RealizedDataset::import(&folder_path)?,
+            unrealized: UnrealizedDataset::import(&folder_path)?,
+            utxos_metadata: UTXOsMetadataDataset::import(&folder_path)?,
         })
     }
 
     pub fn insert<'a>(
         &self,
-        price_dataset_insert_data: PricesSubDatasetInsertData,
+        height: usize,
+        price: f32,
+        realized_loss: f32,
+        realized_profit: f32,
+        total_supply: u64,
+        utxo_count: usize,
         sorted_price_to_amount_len: usize,
         sorted_price_to_amount: impl Iterator<Item = (&'a OrderedFloat<f32>, &'a u64)>,
     ) {
-        self.height_to_address_count
-            .insert(price_dataset_insert_data.height, sorted_price_to_amount_len);
+        self.address_count
+            .insert(height, sorted_price_to_amount_len);
 
-        self.price_dataset
-            .insert(price_dataset_insert_data, sorted_price_to_amount);
+        self.realized.insert(height, realized_loss, realized_profit);
+
+        self.unrealized
+            .insert(height, price, total_supply, sorted_price_to_amount);
+
+        self.utxos_metadata.insert(height, utxo_count);
     }
 
     pub fn to_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
         [
-            self.price_dataset.to_vec(),
-            vec![&self.height_to_address_count],
+            self.realized.to_vec(),
+            self.unrealized.to_vec(),
+            self.utxos_metadata.to_vec(),
+            vec![&self.address_count],
         ]
         .into_iter()
         .flatten()

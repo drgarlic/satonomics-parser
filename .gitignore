@@ -1,11 +1,12 @@
 .DS_Store
-*flamegraph*
-
-datasets
-
+/datasets
 /target
 /.vscode
+/.zed
+
+*flamegraph*
 /profile.json
+
 /inputs*/
 /outputs*/
 /snapshots*/

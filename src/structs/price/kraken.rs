@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+use nohash_hasher::IntMap;
 use serde_json::Value;
 
 use crate::utils::timestamp_to_naive_date;
@@ -9,7 +10,7 @@ use crate::utils::timestamp_to_naive_date;
 pub struct Kraken;
 
 impl Kraken {
-    pub fn fetch_1mn_prices() -> color_eyre::Result<HashMap<u32, f32>> {
+    pub fn fetch_1mn_prices() -> color_eyre::Result<IntMap<u32, f32>> {
         let body: Value =
             reqwest::blocking::get("https://api.kraken.com/0/public/OHLC?pair=XBTUSD&interval=1")?
                 .json()?;
@@ -41,7 +42,7 @@ impl Kraken {
 
                 (timestamp, price)
             })
-            .collect::<HashMap<_, _>>())
+            .collect::<IntMap<_, _>>())
     }
 
     pub fn fetch_daily_prices() -> color_eyre::Result<HashMap<String, f32>> {

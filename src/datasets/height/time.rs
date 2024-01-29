@@ -1,16 +1,14 @@
 use std::fs;
 
-use chrono::NaiveDate;
-
 use crate::{
-    structs::{AnyHeightMap, HeightMap},
+    structs::{AnyHeightMap, HeightMap, WNaiveDate},
     utils::timestamp_to_naive_date,
 };
 
 use super::{AnyHeightDataset, ProcessedBlockData};
 
 pub struct TimeDataset {
-    pub date: HeightMap<NaiveDate>,
+    pub date: HeightMap<WNaiveDate>,
     pub timestamp: HeightMap<u32>,
 }
 
@@ -20,11 +18,11 @@ impl TimeDataset {
 
         fs::create_dir_all(&folder_path)?;
 
-        let f = |s: &str| format!("{folder_path}/{s}.json");
+        let f = |s: &str| format!("{folder_path}/{s}");
 
         Ok(Self {
-            date: HeightMap::new(&f("date")),
-            timestamp: HeightMap::new(&f("timestamp")),
+            date: HeightMap::new_on_disk_bin(&f("date")),
+            timestamp: HeightMap::new_on_disk_bin(&f("timestamp")),
         })
     }
 }
@@ -38,7 +36,8 @@ impl AnyHeightDataset for TimeDataset {
     ) {
         self.timestamp.insert(height, timestamp);
 
-        self.date.insert(height, timestamp_to_naive_date(timestamp));
+        self.date
+            .insert(height, WNaiveDate::wrap(timestamp_to_naive_date(timestamp)));
     }
 
     fn to_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {

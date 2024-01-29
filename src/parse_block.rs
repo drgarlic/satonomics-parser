@@ -8,7 +8,7 @@ use rayon::prelude::*;
 use crate::{
     bitcoin::{sats_to_btc, BitcoinDB},
     databases::Databases,
-    datasets::{AnyHeightDatasets, HeightDatasets, ProcessedBlockData},
+    datasets::{AllDatasets, AnyHeightDatasets, ProcessedBlockData},
     states::States,
     structs::{
         AddressData, AddressRealizedData, BlockData, BlockPath, EmptyAddressData, PartialTxoutData,
@@ -21,10 +21,9 @@ pub struct ParseData<'a> {
     pub block: Block,
     pub block_index: usize,
     pub databases: &'a mut Databases,
-    pub datasets: &'a mut HeightDatasets,
+    pub datasets: &'a mut AllDatasets,
     pub date: NaiveDate,
     pub height: usize,
-    pub height_to_price: &'a [f32],
     pub timestamp: u32,
     pub states: &'a mut States,
 }
@@ -38,17 +37,16 @@ pub fn parse_block(
         datasets,
         date,
         height,
-        height_to_price,
         timestamp,
         states,
     }: ParseData,
 ) {
     let date_index = states.date_data_vec.len() - 1;
 
-    let price = height_to_price
-        .get(height)
-        .unwrap_or_else(|| panic!("Expect {height} to have a price"))
-        .to_owned();
+    let price = datasets
+        .price
+        .height_to_close(height, timestamp)
+        .unwrap_or_else(|_| panic!("Expect {height} to have a price"));
 
     states
         .date_data_vec
@@ -69,14 +67,21 @@ pub fn parse_block(
     let mut coinblocks_destroyed = 0.0;
     let mut coindays_destroyed = 0.0;
 
+    let compute_addresses = false;
+
     let TxoutsParsingResults {
         mut partial_txout_data_vec,
         op_returns: _op_returns,
         provably_unspendable: _provably_unspendable,
-    } = parse_txouts(&block, states, databases);
+    } = parse_txouts(&block, states, databases, compute_addresses);
 
     let mut empty_address_index_to_empty_address_data =
-        take_empty_address_index_to_empty_address_data(states, databases, &partial_txout_data_vec);
+        take_empty_address_index_to_empty_address_data(
+            states,
+            databases,
+            &partial_txout_data_vec,
+            compute_addresses,
+        );
 
     // Reverse to get in order via pop later
     partial_txout_data_vec.reverse();
@@ -96,7 +101,7 @@ pub fn parse_block(
         // outputs
         // ---
 
-        let mut non_zero_outputs_len = 0;
+        let mut spendable_outputs = 0;
         let mut non_zero_amount = 0;
 
         let is_coinbase = tx.is_coinbase();
@@ -125,12 +130,14 @@ pub fn parse_block(
                     sats,
                 } = partial_txout_data.unwrap();
 
-                non_zero_outputs_len += 1;
+                spendable_outputs += 1;
                 non_zero_amount += sats;
 
                 states.txout_index_to_sats.insert(txout_index, sats);
 
-                if let Some(raw_address) = raw_address {
+                if compute_addresses {
+                    let raw_address = raw_address.unwrap();
+
                     let (address_data, address_index) = {
                         if let Some(address_index) = address_index_opt.or_else(|| {
                             databases
@@ -218,21 +225,21 @@ pub fn parse_block(
                 ControlFlow::Continue(())
             });
 
-        if non_zero_outputs_len != 0 {
+        if spendable_outputs != 0 {
             databases.txid_to_tx_index.insert(&txid, tx_index);
 
             states.tx_index_to_tx_data.insert(
                 tx_index,
                 TxData::new(
                     BlockPath::new(date_index as u16, block_index as u16),
-                    non_zero_outputs_len,
+                    spendable_outputs,
                 ),
             );
 
             let last_block = states.date_data_vec.last_mut_block();
 
             last_block.amount += non_zero_amount;
-            last_block.outputs_len += non_zero_outputs_len as u32;
+            last_block.spendable_outputs += spendable_outputs as u32;
 
             if is_coinbase {
                 coinbase = non_zero_amount;
@@ -330,7 +337,7 @@ pub fn parse_block(
                         panic!()
                     });
 
-                input_block_data.outputs_len -= 1;
+                input_block_data.spendable_outputs -= 1;
 
                 input_block_data.amount -= input_sats;
 
@@ -340,48 +347,6 @@ pub fn parse_block(
                     .entry(input_block_path)
                     .or_default() += input_sats;
 
-                let input_address_index = states
-                    .txout_index_to_address_index
-                    .remove(&input_txout_index)
-                    .unwrap();
-
-                let input_address_data = states
-                    .address_index_to_address_data
-                    .get_mut(&input_address_index)
-                    .unwrap_or_else(|| {
-                        dbg!(input_address_index);
-                        panic!();
-                    });
-
-                let address_realized_profit_or_loss =
-                    input_address_data.spend(input_sats, input_block_data.price);
-
-                if input_address_data.is_empty() {
-                    let address_data = states
-                        .address_index_to_address_data
-                        .remove(&input_address_index)
-                        .unwrap();
-
-                    databases.address_index_to_empty_address_data.insert(
-                        input_address_index,
-                        EmptyAddressData::from_non_empty(&address_data),
-                    );
-
-                    address_index_to_removed_address_data.insert(input_address_index, address_data);
-                }
-
-                let address_realized_data = address_index_to_address_realized_data
-                    .entry(input_address_index)
-                    .or_default();
-
-                address_realized_data.sent += input_sats;
-
-                if address_realized_profit_or_loss >= 0.0 {
-                    address_realized_data.profit += address_realized_profit_or_loss;
-                } else {
-                    address_realized_data.loss += address_realized_profit_or_loss.abs();
-                }
-
                 coinblocks_destroyed += (height - input_block_data.height as usize) as f64
                     * sats_to_btc(input_block_data.amount);
 
@@ -389,9 +354,54 @@ pub fn parse_block(
                     as f64
                     * sats_to_btc(input_block_data.amount);
 
-                input_tx_data.outputs_len -= 1;
+                input_tx_data.spendable_outputs -= 1;
 
-                if input_tx_data.outputs_len == 0 {
+                if compute_addresses {
+                    let input_address_index = states
+                        .txout_index_to_address_index
+                        .remove(&input_txout_index)
+                        .unwrap();
+
+                    let input_address_data = states
+                        .address_index_to_address_data
+                        .get_mut(&input_address_index)
+                        .unwrap_or_else(|| {
+                            dbg!(input_address_index);
+                            panic!();
+                        });
+
+                    let address_realized_profit_or_loss =
+                        input_address_data.spend(input_sats, input_block_data.price);
+
+                    if input_address_data.is_empty() {
+                        let address_data = states
+                            .address_index_to_address_data
+                            .remove(&input_address_index)
+                            .unwrap();
+
+                        databases.address_index_to_empty_address_data.insert(
+                            input_address_index,
+                            EmptyAddressData::from_non_empty(&address_data),
+                        );
+
+                        address_index_to_removed_address_data
+                            .insert(input_address_index, address_data);
+                    }
+
+                    let address_realized_data = address_index_to_address_realized_data
+                        .entry(input_address_index)
+                        .or_default();
+
+                    address_realized_data.sent += input_sats;
+
+                    if address_realized_profit_or_loss >= 0.0 {
+                        address_realized_data.profit += address_realized_profit_or_loss;
+                    } else {
+                        address_realized_data.loss += address_realized_profit_or_loss.abs();
+                    }
+                }
+
+                if input_tx_data.is_empty() {
                     Some(input_tx_index)
                 } else {
                     None
@@ -411,7 +421,7 @@ pub fn parse_block(
 
     let fees = inputs_sum - outputs_sum;
 
-    datasets.insert(ProcessedBlockData {
+    datasets.height.insert(ProcessedBlockData {
         address_index_to_address_realized_data: &address_index_to_address_realized_data,
         address_index_to_removed_address_data: &address_index_to_removed_address_data,
         block_path_to_spent_value: &block_path_to_spent_value,
@@ -447,6 +457,7 @@ fn parse_txouts(
     block: &Block,
     states: &mut States,
     databases: &mut Databases,
+    compute_addresses: bool,
 ) -> TxoutsParsingResults {
     let raw_address_to_address_index = &mut databases.raw_address_to_address_index;
 
@@ -482,21 +493,29 @@ fn parse_txouts(
                 return None;
             }
 
-            let raw_address = RawAddress::from(txout, states);
+            let raw_address_opt = {
+                if compute_addresses {
+                    let raw_address = RawAddress::from(txout, states);
+                    raw_address_to_address_index.open_db(&raw_address);
+                    Some(raw_address)
+                } else {
+                    None
+                }
+            };
 
-            raw_address_to_address_index.open_db(&raw_address);
-
-            Some(PartialTxoutData::new(Some(raw_address), value, None))
+            Some(PartialTxoutData::new(raw_address_opt, value, None))
         })
         .collect_vec();
 
-    partial_txout_data_vec.par_iter_mut().for_each(|opt| {
-        if let Some(partial_tx_out_data) = opt {
-            partial_tx_out_data.address_index_opt = raw_address_to_address_index
-                .unsafe_get(partial_tx_out_data.raw_address.as_ref().unwrap())
-                .cloned();
-        }
-    });
+    if compute_addresses {
+        partial_txout_data_vec.par_iter_mut().for_each(|opt| {
+            if let Some(partial_tx_out_data) = opt {
+                partial_tx_out_data.address_index_opt = raw_address_to_address_index
+                    .unsafe_get(partial_tx_out_data.raw_address.as_ref().unwrap())
+                    .cloned();
+            }
+        });
+    }
 
     TxoutsParsingResults {
         partial_txout_data_vec,
@@ -509,7 +528,12 @@ fn take_empty_address_index_to_empty_address_data(
     states: &mut States,
     databases: &mut Databases,
     partial_txout_data_vec: &[Option<PartialTxoutData>],
+    compute_addresses: bool,
 ) -> BTreeMap<u32, EmptyAddressData> {
+    if !compute_addresses {
+        return BTreeMap::default();
+    }
+
     let address_index_to_empty_address_data = &mut databases.address_index_to_empty_address_data;
 
     let address_index_to_address_data = &mut states.address_index_to_address_data;

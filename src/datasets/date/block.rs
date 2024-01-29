@@ -16,12 +16,12 @@ impl BlockDataset {
 
         fs::create_dir_all(&folder_path)?;
 
-        let f = |s: &str| format!("{folder_path}/{s}.json");
+        let f = |s: &str| format!("{folder_path}/{s}");
 
         Ok(Self {
-            first_height: DateMap::new(&f("first_height")),
-            last_height: DateMap::new(&f("last_height")),
-            block_count: DateMap::new(&f("block_count")),
+            first_height: DateMap::new_on_disk_bin(&f("first_height")),
+            last_height: DateMap::new_on_disk_bin(&f("last_height")),
+            block_count: DateMap::new_on_disk_bin(&f("block_count")),
         })
     }
 }

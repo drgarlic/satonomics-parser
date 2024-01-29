@@ -5,7 +5,7 @@ pub struct BlockData {
     pub height: u32,
     pub price: f32,
     pub amount: u64,
-    pub outputs_len: u32,
+    pub spendable_outputs: u32,
 }
 
 impl BlockData {
@@ -14,7 +14,7 @@ impl BlockData {
             height,
             price,
             amount: 0,
-            outputs_len: 0,
+            spendable_outputs: 0,
         }
     }
 }

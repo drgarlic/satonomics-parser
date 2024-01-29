@@ -1,33 +1,16 @@
 use std::{
-    collections::BTreeMap,
     fmt::Debug,
     fs::File,
     io::{BufReader, BufWriter},
     path::Path,
 };
 
-use serde::de::DeserializeOwned;
+use serde::{de::DeserializeOwned, Serialize};
 
 pub struct Json;
 
 impl Json {
-    pub fn import_vec<T, P>(path: P) -> Vec<T>
-    where
-        T: DeserializeOwned,
-        P: AsRef<Path>,
-    {
-        Self::import_json::<Vec<T>, P>(path).unwrap_or_default()
-    }
-
-    pub fn import_map<T, P>(path: P) -> BTreeMap<String, T>
-    where
-        T: DeserializeOwned,
-        P: AsRef<Path>,
-    {
-        Self::import_json::<BTreeMap<String, T>, P>(path).unwrap_or_default()
-    }
-
-    fn import_json<T, P>(path: P) -> color_eyre::Result<T>
+    pub fn import<T, P>(path: P) -> color_eyre::Result<T>
     where
         T: DeserializeOwned,
         P: AsRef<Path>,
@@ -39,13 +22,13 @@ impl Json {
         Ok(serde_json::from_reader(reader)?)
     }
 
-    pub fn export<T, P>(path: &P, value: &T) -> color_eyre::Result<()>
+    pub fn export<T, P>(path: P, value: &T) -> color_eyre::Result<()>
     where
-        T: serde::Serialize,
+        T: Serialize,
         P: AsRef<Path> + Debug,
     {
-        let file = File::create(path).unwrap_or_else(|_| {
-            dbg!(path);
+        let file = File::create(&path).unwrap_or_else(|_| {
+            dbg!(&path);
             panic!("No such file or directory")
         });
 

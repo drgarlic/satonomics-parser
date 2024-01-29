@@ -15,11 +15,11 @@ impl RewardsDataset {
 
         fs::create_dir_all(&folder_path)?;
 
-        let f = |s: &str| format!("{folder_path}/{s}.json");
+        let f = |s: &str| format!("{folder_path}/{s}");
 
         Ok(Self {
-            fees: HeightMap::new(&f("fees")),
-            subsidy: HeightMap::new(&f("subsidy")),
+            fees: HeightMap::new_on_disk_bin(&f("fees")),
+            subsidy: HeightMap::new_on_disk_bin(&f("subsidy")),
         })
     }
 }

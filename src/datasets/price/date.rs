@@ -1,22 +1,53 @@
-use crate::{
-    structs::{AnyDateMap, DateMap},
-    utils::{string_to_naive_date, Kraken},
-};
+use std::collections::HashMap;
 
-pub fn compute_date_to_price() -> color_eyre::Result<DateMap<f32>> {
-    println!("Computing date_to_price...");
+use chrono::NaiveDate;
 
-    let date_to_price = DateMap::new("date_to_price.json");
+use crate::structs::{AnyDateMap, DateMap, Kraken};
 
-    Kraken::fetch_daily_prices()?
-        .iter()
-        .for_each(|(date, price)| {
-            println!("Date: {date}");
+pub struct DateDatasets {
+    closes: DateMap<f32>,
+    kraken_daily: Option<HashMap<String, f32>>,
+}
 
-            date_to_price.insert(string_to_naive_date(date), price.to_owned());
-        });
+impl DateDatasets {
+    pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
+        let closes = DateMap::new_in_memory_json(&format!("{parent_path}/date_to_close"));
 
-    date_to_price.export()?;
+        Ok(Self {
+            closes,
+            kraken_daily: None,
+        })
+    }
 
-    Ok(date_to_price)
+    pub fn get(&mut self, date: NaiveDate) -> color_eyre::Result<f32> {
+        if self.closes.is_date_safe(date) {
+            Ok(self
+                .closes
+                .unsafe_inner()
+                .get(&date.to_string())
+                .unwrap()
+                .to_owned())
+        } else {
+            let price = self
+                .get_from_daily_kraken(&date.to_string())
+                .unwrap_or_else(|_| panic!("Can't find price for {date}"));
+
+            self.closes.insert(date, price);
+
+            Ok(price)
+        }
+    }
+
+    pub fn export(&self) -> color_eyre::Result<()> {
+        self.closes.export()
+    }
+
+    fn get_from_daily_kraken(&mut self, date: &str) -> color_eyre::Result<f32> {
+        Ok(self
+            .kraken_daily
+            .get_or_insert(Kraken::fetch_daily_prices()?)
+            .get(date)
+            .cloned()
+            .unwrap())
+    }
 }

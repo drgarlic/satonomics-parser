@@ -8,8 +8,22 @@ use bincode::{
 };
 use chrono::NaiveDate;
 use derive_deref::{Deref, DerefMut};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Deref, DerefMut, Default)]
+#[derive(
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Clone,
+    Copy,
+    Deref,
+    DerefMut,
+    Default,
+    Serialize,
+    Deserialize,
+)]
 pub struct WNaiveDate(NaiveDate);
 
 impl WNaiveDate {
