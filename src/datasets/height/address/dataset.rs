@@ -218,6 +218,7 @@ impl AnyHeightDataset for AddressDataset {
 }
 
 pub struct AddressSubDataset {
+    price_point: PricePointDataset,
     realized: RealizedDataset,
     unrealized: UnrealizedDataset,
     utxos_metadata: UTXOsMetadataDataset,

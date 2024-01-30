@@ -7,7 +7,10 @@ use ordered_float::OrderedFloat;
 use crate::{
     bitcoin::sats_to_btc,
     datasets::{
-        height::{RealizedDataset, UTXOsMetadataDataset, UnrealizedDataset},
+        height::{
+            PricePointDataset, RealizedDataset, SupplyDataset, UTXOsMetadataDataset,
+            UnrealizedDataset,
+        },
         AnyHeightDataset, ProcessedBlockData,
     },
     structs::BlockPath,
@@ -18,7 +21,9 @@ use super::UTXOFilter;
 
 pub struct UTXODataset {
     filter: UTXOFilter,
+    price_point: PricePointDataset,
     realized: RealizedDataset,
+    supply: SupplyDataset,
     unrealized: UnrealizedDataset,
     utxos_metadata: UTXOsMetadataDataset,
 }
@@ -31,7 +36,9 @@ impl UTXODataset {
 
         Ok(Self {
             filter: range,
+            price_point: PricePointDataset::import(&folder_path)?,
             realized: RealizedDataset::import(&folder_path)?,
+            supply: SupplyDataset::import(&folder_path)?,
             unrealized: UnrealizedDataset::import(&folder_path)?,
             utxos_metadata: UTXOsMetadataDataset::import(&folder_path)?,
         })
@@ -42,10 +49,13 @@ impl AnyHeightDataset for UTXODataset {
     fn insert(
         &self,
         &ProcessedBlockData {
-            states,
-            price,
-            height,
             block_path_to_spent_value,
+            block_price,
+            date,
+            date_price,
+            height,
+            is_date_last_block,
+            states,
             ..
         }: &ProcessedBlockData,
     ) {
@@ -89,7 +99,7 @@ impl AnyHeightDataset for UTXODataset {
             })
             .for_each(|(previous_price, value)| {
                 let previous_dollar_amount = *previous_price as f64 * sats_to_btc(*value);
-                let current_dollar_amount = price as f64 * sats_to_btc(*value);
+                let current_dollar_amount = block_price as f64 * sats_to_btc(*value);
 
                 if previous_dollar_amount < current_dollar_amount {
                     realized_profit += (current_dollar_amount - previous_dollar_amount) as f32
@@ -141,23 +151,43 @@ impl AnyHeightDataset for UTXODataset {
         .sorted_unstable_by(|a, b| Ord::cmp(&a.0, &b.0))
         .collect_vec();
 
-        self.realized.insert(height, realized_loss, realized_profit);
-
-        self.unrealized.insert(
+        self.price_point.insert(
             height,
-            price,
+            block_price,
             total_supply,
             #[allow(clippy::map_identity)]
             vec.iter().map(|(price, amount)| (price, amount)),
         );
 
+        self.realized.insert(height, realized_loss, realized_profit);
+
+        self.supply.insert(height, total_supply);
+
+        self.unrealized.insert_height(
+            height,
+            block_price,
+            #[allow(clippy::map_identity)]
+            vec.iter().map(|(price, amount)| (price, amount)),
+        );
+
         self.utxos_metadata.insert(height, utxo_count);
+
+        if is_date_last_block {
+            self.unrealized.insert_date(
+                date,
+                date_price,
+                #[allow(clippy::map_identity)]
+                vec.iter().map(|(price, amount)| (price, amount)),
+            );
+        }
     }
 
-    fn to_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
+    fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
         [
+            self.price_point.to_vec(),
             self.realized.to_vec(),
-            self.unrealized.to_vec(),
+            self.supply.to_vec(),
+            self.unrealized.to_height_vec(),
             self.utxos_metadata.to_vec(),
         ]
         .iter()

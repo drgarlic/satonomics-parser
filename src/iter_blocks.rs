@@ -1,9 +1,9 @@
-use std::{cmp::Ordering, time::Instant};
+use std::time::Instant;
 
 use chrono::{offset::Local, Datelike};
 
 use crate::{
-    bitcoin::{BitcoinDB, NUMBER_OF_UNSAFE_BLOCKS},
+    bitcoin::{check_if_height_safe, BitcoinDB},
     databases::Databases,
     datasets::{AllDatasets, AnyDateDatasets, ProcessedDateData},
     export_all::{export_all, ExportedData},
@@ -31,36 +31,31 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
     let mut block_iter = bitcoin_db.iter_block(height, block_count);
 
     let mut parsing = true;
-    let mut saved_block_opt = None;
-    let mut blocks_date_opt = None;
+    let mut next_block_opt = None;
+    let mut blocks_loop_date = None;
 
     while parsing {
         let time = Instant::now();
 
         'days: loop {
-            let mut block_count = 0;
+            let mut blocks_loop_i = 0;
 
-            blocks_date_opt.take();
+            blocks_loop_date.take();
 
             'blocks: loop {
-                let current_block = {
-                    let saved_block = saved_block_opt.take();
+                let current_block_opt = next_block_opt.take().or_else(|| block_iter.next());
 
-                    if saved_block.is_some() {
-                        saved_block
-                    } else {
-                        block_iter.next()
-                    }
-                };
+                next_block_opt = block_iter.next();
 
-                if let Some(current_block) = current_block {
+                if let Some(current_block) = current_block_opt {
                     let timestamp = current_block.header.time;
 
                     let current_block_date = timestamp_to_naive_date(timestamp);
+                    let current_block_height = height + blocks_loop_i;
 
                     // Always run for the first block of the loop
-                    if blocks_date_opt.is_none() {
-                        blocks_date_opt.replace(current_block_date);
+                    if blocks_loop_date.is_none() {
+                        blocks_loop_date.replace(current_block_date);
 
                         if states
                             .date_data_vec
@@ -73,52 +68,56 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
                                 .push(DateData::new(current_block_date, vec![]));
                         }
 
-                        println!("{:?} - Processing {current_block_date}...", Local::now());
+                        println!(
+                            "{:?} - Processing {current_block_date} (height: {height})...",
+                            Local::now()
+                        );
                     }
 
-                    let blocks_date = blocks_date_opt.unwrap();
+                    let blocks_loop_date = blocks_loop_date.unwrap();
 
-                    match blocks_date.cmp(&current_block_date) {
-                        Ordering::Equal | Ordering::Greater => {
-                            let block_index = block_count;
+                    if current_block_date > blocks_loop_date {
+                        panic!("current block should always have the same date as the current blocks loop");
+                    }
 
-                            block_count += 1;
+                    let is_date_last_block = next_block_opt.is_none()
+                        || current_block_date
+                            < timestamp_to_naive_date(next_block_opt.as_ref().unwrap().header.time);
 
-                            parse_block(ParseData {
-                                bitcoin_db,
-                                block: current_block,
-                                block_index,
-                                databases: &mut databases,
-                                datasets: &mut datasets,
-                                date: current_block_date,
-                                height: height + block_index,
-                                timestamp,
-                                states: &mut states,
-                            });
-                        }
-                        Ordering::Less => {
-                            datasets.date.insert(ProcessedDateData {
-                                block_count,
-                                first_height: height,
-                                height: height + block_count,
-                                date: blocks_date,
-                            });
+                    parse_block(ParseData {
+                        bitcoin_db,
+                        block: current_block,
+                        block_index: blocks_loop_i,
+                        databases: &mut databases,
+                        datasets: &mut datasets,
+                        date: current_block_date,
+                        height: current_block_height,
+                        is_date_last_block,
+                        states: &mut states,
+                        timestamp,
+                    });
 
-                            saved_block_opt.replace(current_block);
+                    blocks_loop_i += 1;
 
-                            height += block_count;
+                    if is_date_last_block {
+                        datasets.date.insert(ProcessedDateData {
+                            block_count,
+                            first_height: height,
+                            height: current_block_height,
+                            date: blocks_loop_date,
+                        });
 
-                            if blocks_date.day() == 1
-                                || (block_count - NUMBER_OF_UNSAFE_BLOCKS * 10) < height
-                            {
-                                break 'days;
-                            } else {
-                                break 'blocks;
-                            }
+                        height += blocks_loop_i;
+
+                        if blocks_loop_date.day() == 1 || check_if_height_safe(height, block_count)
+                        {
+                            break 'days;
+                        } else {
+                            break 'blocks;
                         }
                     }
                 } else {
-                    height += block_count;
+                    height += blocks_loop_i;
 
                     parsing = false;
 
@@ -138,7 +137,7 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
             block_count,
             databases: &mut databases,
             datasets: &datasets,
-            date: blocks_date_opt.unwrap(),
+            date: blocks_loop_date.unwrap(),
             height: last_height,
             states: &states,
         })?;

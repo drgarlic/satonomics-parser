@@ -2,10 +2,9 @@ use std::fs;
 
 use crate::structs::{AnyHeightMap, HeightMap};
 
+/// NOTE: Fees not taken into account
 pub struct RealizedDataset {
-    /// NOTE: Fees not taken into account
     profit: HeightMap<f32>,
-    /// NOTE: Fees not taken into account
     loss: HeightMap<f32>,
 }
 

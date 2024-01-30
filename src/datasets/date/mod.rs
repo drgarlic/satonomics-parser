@@ -37,7 +37,7 @@ impl DateDatasets {
 }
 
 impl AnyDateDatasets for DateDatasets {
-    fn to_vec(&self) -> Vec<&(dyn AnyDateDataset + Send + Sync)> {
+    fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateDataset + Send + Sync)> {
         vec![&self.block]
     }
 }

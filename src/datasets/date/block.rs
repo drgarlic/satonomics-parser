@@ -46,7 +46,7 @@ impl AnyDateDataset for BlockDataset {
             .insert(date.to_owned(), block_count.to_owned());
     }
 
-    fn to_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
+    fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
         let vec: Vec<&(dyn AnyDateMap + Send + Sync)> =
             vec![&self.block_count, &self.first_height, &self.last_height];
 

@@ -40,7 +40,7 @@ impl AnyHeightDataset for TimeDataset {
             .insert(height, WNaiveDate::wrap(timestamp_to_naive_date(timestamp)));
     }
 
-    fn to_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
+    fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
         vec![&self.date, &self.timestamp]
     }
 }

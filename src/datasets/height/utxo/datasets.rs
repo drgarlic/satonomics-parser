@@ -191,7 +191,7 @@ impl UTXODatasets {
 }
 
 impl AnyHeightDatasets for UTXODatasets {
-    fn to_vec(&self) -> Vec<&(dyn AnyHeightDataset + Send + Sync)> {
+    fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightDataset + Send + Sync)> {
         let flats: Vec<&(dyn AnyHeightDataset + Send + Sync)> = vec![
             // &self.all,
             // &self.up_to_1d,

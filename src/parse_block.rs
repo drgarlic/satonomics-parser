@@ -24,6 +24,7 @@ pub struct ParseData<'a> {
     pub datasets: &'a mut AllDatasets,
     pub date: NaiveDate,
     pub height: usize,
+    pub is_date_last_block: bool,
     pub timestamp: u32,
     pub states: &'a mut States,
 }
@@ -37,23 +38,29 @@ pub fn parse_block(
         datasets,
         date,
         height,
+        is_date_last_block,
         timestamp,
         states,
     }: ParseData,
 ) {
     let date_index = states.date_data_vec.len() - 1;
 
-    let price = datasets
+    let block_price = datasets
         .price
         .height_to_close(height, timestamp)
         .unwrap_or_else(|_| panic!("Expect {height} to have a price"));
+
+    let date_price = datasets
+        .price
+        .date_to_close(date)
+        .unwrap_or_else(|_| panic!("Expect {date} to have a price"));
 
     states
         .date_data_vec
         .last_mut()
         .unwrap()
         .blocks
-        .push(BlockData::new(height as u32, price));
+        .push(BlockData::new(height as u32, block_price));
 
     let mut coinbase = 0;
     let mut inputs_sum = 0;
@@ -210,7 +217,7 @@ pub fn parse_block(
                         }
                     };
 
-                    address_data.receive(sats, price);
+                    address_data.receive(sats, block_price);
 
                     address_index_to_address_realized_data
                         .entry(address_index)
@@ -425,13 +432,15 @@ pub fn parse_block(
         address_index_to_address_realized_data: &address_index_to_address_realized_data,
         address_index_to_removed_address_data: &address_index_to_removed_address_data,
         block_path_to_spent_value: &block_path_to_spent_value,
+        block_price,
         coinbase,
         coinblocks_destroyed,
         coindays_destroyed,
         date,
+        date_price,
         fees,
         height,
-        price,
+        is_date_last_block,
         states,
         timestamp,
     });

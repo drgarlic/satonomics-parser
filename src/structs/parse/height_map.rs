@@ -7,9 +7,7 @@ use std::{
 use bincode::{Decode, Encode};
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::bitcoin::NUMBER_OF_UNSAFE_BLOCKS;
-
-use super::Serialization;
+use crate::{bitcoin::NUMBER_OF_UNSAFE_BLOCKS, structs::Serialization};
 
 pub struct HeightMap<T>
 where
@@ -78,12 +76,12 @@ where
         }
     }
 
-    pub fn is_height_safe(&self, height: usize) -> bool {
-        self.initial_first_unsafe_height.unwrap_or(0) > height
-    }
-
     pub fn insert_default(&self, height: usize) {
         self.insert(height, T::default())
+    }
+
+    pub fn is_height_safe(&self, height: usize) -> bool {
+        self.initial_first_unsafe_height.unwrap_or(0) > height
     }
 
     pub fn unsafe_inner(&self) -> RwLockReadGuard<'_, Vec<T>> {

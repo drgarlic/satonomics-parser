@@ -34,10 +34,12 @@ pub struct ProcessedBlockData<'a> {
     pub coinblocks_destroyed: f64,
     pub coindays_destroyed: f64,
     pub date: NaiveDate,
+    pub date_price: f32,
     pub states: &'a States,
     pub fees: u64,
     pub height: usize,
-    pub price: f32,
+    pub is_date_last_block: bool,
+    pub block_price: f32,
     pub timestamp: u32,
 }
 
@@ -75,14 +77,14 @@ impl HeightDatasets {
 }
 
 impl AnyHeightDatasets for HeightDatasets {
-    fn to_vec(&self) -> Vec<&(dyn AnyHeightDataset + Send + Sync)> {
+    fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightDataset + Send + Sync)> {
         let flat_datasets: Vec<&(dyn AnyHeightDataset + Send + Sync)> =
             vec![&self.rewards, &self.coinblocks, &self.coindays, &self.time];
 
         [
             flat_datasets,
             // self.address.to_vec(),
-            self.utxo.to_vec(),
+            self.utxo.to_any_height_map_vec(),
         ]
         .iter()
         .flatten()

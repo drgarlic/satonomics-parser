@@ -40,7 +40,7 @@ impl AnyHeightDataset for RewardsDataset {
         self.subsidy.insert(height, subsidy);
     }
 
-    fn to_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
+    fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
         vec![&self.fees, &self.subsidy]
     }
 }

@@ -34,7 +34,7 @@ impl AnyHeightDataset for CoinblocksDataset {
         self.destroyed.insert(height, coinblocks_destroyed);
     }
 
-    fn to_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
+    fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
         vec![&self.destroyed]
     }
 }

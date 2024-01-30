@@ -8,9 +8,7 @@ use bincode::{Decode, Encode};
 use chrono::{Days, NaiveDate};
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::utils::string_to_naive_date;
-
-use super::Serialization;
+use crate::{structs::Serialization, utils::string_to_naive_date};
 
 // Should use number of unsafe blocks instead of avoid useless re-computation
 // Actually maybe not ?
@@ -78,6 +76,11 @@ where
                 self.batch.write().unwrap().push((date, value));
             }
         }
+    }
+
+    #[allow(unused)]
+    pub fn insert_default(&self, date: NaiveDate) {
+        self.insert(date, T::default())
     }
 
     pub fn is_date_safe(&self, date: NaiveDate) -> bool {
