@@ -2,16 +2,19 @@ use std::collections::HashMap;
 
 use chrono::NaiveDate;
 
-use crate::structs::{AnyDateMap, DateMap, Kraken};
+use crate::{
+    datasets::AnyDataset,
+    structs::{AnyDateMap, DateMap, Kraken},
+};
 
-pub struct DateDatasets {
+pub struct DateDataset {
     closes: DateMap<f32>,
     kraken_daily: Option<HashMap<String, f32>>,
 }
 
-impl DateDatasets {
+impl DateDataset {
     pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
-        let closes = DateMap::new_in_memory_json(&format!("{parent_path}/date_to_close"));
+        let closes = DateMap::new_in_memory_json(&format!("{parent_path}/close"));
 
         Ok(Self {
             closes,
@@ -38,10 +41,6 @@ impl DateDatasets {
         }
     }
 
-    pub fn export(&self) -> color_eyre::Result<()> {
-        self.closes.export()
-    }
-
     fn get_from_daily_kraken(&mut self, date: &str) -> color_eyre::Result<f32> {
         Ok(self
             .kraken_daily
@@ -49,5 +48,11 @@ impl DateDatasets {
             .get(date)
             .cloned()
             .unwrap())
+    }
+}
+
+impl AnyDataset for DateDataset {
+    fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
+        vec![&self.closes]
     }
 }

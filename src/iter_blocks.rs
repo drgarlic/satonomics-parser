@@ -5,7 +5,7 @@ use chrono::{offset::Local, Datelike};
 use crate::{
     bitcoin::{check_if_height_safe, BitcoinDB},
     databases::Databases,
-    datasets::{AllDatasets, AnyDateDatasets, ProcessedDateData},
+    datasets::{AllDatasets, AnyDatasets, ProcessedDateData},
     export_all::{export_all, ExportedData},
     min_height::min_height,
     parse_block::{parse_block, ParseData},
@@ -42,6 +42,11 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
 
             blocks_loop_date.take();
 
+            let mut coinbase_vec = vec![];
+            let mut coinblocks_destroyed_vec = vec![];
+            let mut coindays_destroyed_vec = vec![];
+            let mut fees_vec = vec![];
+
             'blocks: loop {
                 let current_block_opt = next_block_opt.take().or_else(|| block_iter.next());
 
@@ -52,6 +57,9 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
 
                     let current_block_date = timestamp_to_naive_date(timestamp);
                     let current_block_height = height + blocks_loop_i;
+
+                    let next_block_date =
+                        timestamp_to_naive_date(next_block_opt.as_ref().unwrap().header.time);
 
                     // Always run for the first block of the loop
                     if blocks_loop_date.is_none() {
@@ -80,17 +88,20 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
                         panic!("current block should always have the same date as the current blocks loop");
                     }
 
-                    let is_date_last_block = next_block_opt.is_none()
-                        || current_block_date
-                            < timestamp_to_naive_date(next_block_opt.as_ref().unwrap().header.time);
+                    let is_date_last_block =
+                        next_block_opt.is_none() || current_block_date < next_block_date;
 
                     parse_block(ParseData {
                         bitcoin_db,
                         block: current_block,
                         block_index: blocks_loop_i,
+                        coinbase_vec: &mut coinbase_vec,
+                        coinblocks_destroyed_vec: &mut coinblocks_destroyed_vec,
+                        coindays_destroyed_vec: &mut coindays_destroyed_vec,
                         databases: &mut databases,
                         datasets: &mut datasets,
                         date: current_block_date,
+                        fees_vec: &mut fees_vec,
                         height: current_block_height,
                         is_date_last_block,
                         states: &mut states,
@@ -100,7 +111,7 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
                     blocks_loop_i += 1;
 
                     if is_date_last_block {
-                        datasets.date.insert(ProcessedDateData {
+                        datasets.insert_date_data(ProcessedDateData {
                             block_count,
                             first_height: height,
                             height: current_block_height,
@@ -109,7 +120,7 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
 
                         height += blocks_loop_i;
 
-                        if blocks_loop_date.day() == 1 || check_if_height_safe(height, block_count)
+                        if next_block_date.day() == 1 || !check_if_height_safe(height, block_count)
                         {
                             break 'days;
                         } else {

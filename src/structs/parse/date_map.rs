@@ -1,6 +1,7 @@
 use std::{
     collections::BTreeMap,
     fmt::Debug,
+    fs,
     sync::{RwLock, RwLockReadGuard},
 };
 
@@ -48,10 +49,12 @@ where
     }
 
     fn new(path: &str, in_memory: bool, serialization: Serialization) -> Self {
+        fs::create_dir_all(path).unwrap();
+
         let mut s = Self {
             batch: RwLock::new(vec![]),
             initial_first_unsafe_date: None,
-            path: serialization.append_extension(path),
+            path: serialization.append_extension(&format!("{path}/date")),
             inner: None,
             called_insert: RwLock::new(false),
             serialization,

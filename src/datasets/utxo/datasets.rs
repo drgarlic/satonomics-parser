@@ -1,10 +1,10 @@
-use std::{fs, thread};
+use std::thread;
 
 // use chrono::Datelike;
 // use itertools::Itertools;
 // use rayon::prelude::*;
 
-use crate::datasets::{AnyHeightDataset, AnyHeightDatasets};
+use crate::datasets::{AnyDataset, AnyDatasets};
 
 use super::{UTXODataset, UTXOFilter};
 
@@ -48,9 +48,6 @@ impl UTXODatasets {
     pub fn import(path: &str) -> color_eyre::Result<Self> {
         let path_string = format!("{path}/utxo");
         let path = path_string.as_str();
-
-        fs::create_dir_all(path)?;
-
         thread::scope(|scope| {
             // let all_handle = scope.spawn(|| UTXODataset::import(path, "all", UTXOFilter::Full));
             //
@@ -190,9 +187,9 @@ impl UTXODatasets {
     }
 }
 
-impl AnyHeightDatasets for UTXODatasets {
-    fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightDataset + Send + Sync)> {
-        let flats: Vec<&(dyn AnyHeightDataset + Send + Sync)> = vec![
+impl AnyDatasets for UTXODatasets {
+    fn to_vec(&self) -> Vec<&(dyn AnyDataset + Send + Sync)> {
+        let flats: Vec<&(dyn AnyDataset + Send + Sync)> = vec![
             // &self.all,
             // &self.up_to_1d,
             &self.up_to_7d,

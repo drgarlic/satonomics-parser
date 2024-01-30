@@ -1,15 +1,17 @@
-use std::fs;
-
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
+use rayon::iter::ParallelBridge;
 
 use crate::{
     bitcoin::{btc_to_sats, sats_to_btc},
     datasets::{
-        height::{RealizedDataset, UTXOsMetadataDataset, UnrealizedDataset},
-        AnyHeightDataset, ProcessedBlockData,
+        height::{
+            PricePaidSubDataset, RealizedSubDataset, SupplySubDataset, UTXOsMetadataSubDataset,
+            UnrealizedSubDataset,
+        },
+        AnyDataset, ProcessedBlockData,
     },
-    structs::{AnyHeightMap, HeightMap},
+    structs::{AnyDateMap, AnyHeightMap, HeightMap},
 };
 
 use super::{AddressFilter, LiquidityClassification};
@@ -37,18 +39,15 @@ impl AddressDataset {
     }
 }
 
-impl AnyHeightDataset for AddressDataset {
-    fn insert(
-        &self,
-        &ProcessedBlockData {
+impl AnyDataset for AddressDataset {
+    fn insert_block_data(&self, processed_block_data: &ProcessedBlockData) {
+        let &ProcessedBlockData {
             states,
-            price,
-            height,
             address_index_to_address_realized_data,
             address_index_to_removed_address_data,
             ..
-        }: &ProcessedBlockData,
-    ) {
+        } = processed_block_data;
+
         let address_index_to_address_data = &states.address_index_to_address_data;
 
         let mut full_realized_profit = 0.0;
@@ -158,19 +157,18 @@ impl AnyHeightDataset for AddressDataset {
         let len = vec.len();
 
         self.full_dataset.insert(
-            height,
-            price,
+            processed_block_data,
             full_realized_loss,
             full_realized_profit,
             full_total_supply,
             full_utxo_count,
             len,
             vec.iter().map(|(price, (full, _, _, _))| (price, full)),
+            vec.iter().map(|(price, (full, _, _, _))| (price, full)),
         );
 
         self.illiquid_dataset.insert(
-            height,
-            price,
+            processed_block_data,
             illiquid_realized_loss,
             illiquid_realized_profit,
             illiquid_total_supply,
@@ -178,22 +176,24 @@ impl AnyHeightDataset for AddressDataset {
             len,
             vec.iter()
                 .map(|(price, (_, illiquid, _, _))| (price, illiquid)),
+            vec.iter()
+                .map(|(price, (_, illiquid, _, _))| (price, illiquid)),
         );
 
         self.liquid_dataset.insert(
-            height,
-            price,
+            processed_block_data,
             liquid_realized_loss,
             liquid_realized_profit,
             liquid_total_supply,
             liquid_utxo_count,
             len,
             vec.iter().map(|(price, (_, _, liquid, _))| (price, liquid)),
+            vec.iter()
+                .map(|(price, (_, _, _, highly_liquid))| (price, highly_liquid)),
         );
 
         self.highly_liquid_dataset.insert(
-            height,
-            price,
+            processed_block_data,
             highly_liquid_realized_loss,
             highly_liquid_realized_profit,
             highly_liquid_total_supply,
@@ -201,15 +201,29 @@ impl AnyHeightDataset for AddressDataset {
             len,
             vec.iter()
                 .map(|(price, (_, _, _, highly_liquid))| (price, highly_liquid)),
+            vec.iter()
+                .map(|(price, (_, _, _, highly_liquid))| (price, highly_liquid)),
         );
     }
 
-    fn to_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
+    fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
         [
-            self.full_dataset.to_vec(),
-            self.illiquid_dataset.to_vec(),
-            self.liquid_dataset.to_vec(),
-            self.highly_liquid_dataset.to_vec(),
+            self.full_dataset.to_any_height_map_vec(),
+            self.illiquid_dataset.to_any_height_map_vec(),
+            self.liquid_dataset.to_any_height_map_vec(),
+            self.highly_liquid_dataset.to_any_height_map_vec(),
+        ]
+        .into_iter()
+        .flatten()
+        .collect_vec()
+    }
+
+    fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
+        [
+            self.full_dataset.to_any_date_map_vec(),
+            self.illiquid_dataset.to_any_date_map_vec(),
+            self.liquid_dataset.to_any_date_map_vec(),
+            self.highly_liquid_dataset.to_any_date_map_vec(),
         ]
         .into_iter()
         .flatten()
@@ -218,55 +232,80 @@ impl AnyHeightDataset for AddressDataset {
 }
 
 pub struct AddressSubDataset {
-    price_point: PricePointDataset,
-    realized: RealizedDataset,
-    unrealized: UnrealizedDataset,
-    utxos_metadata: UTXOsMetadataDataset,
     address_count: HeightMap<usize>,
+    price_paid: PricePaidSubDataset,
+    realized: RealizedSubDataset,
+    supply: SupplySubDataset,
+    unrealized: UnrealizedSubDataset,
+    utxos_metadata: UTXOsMetadataSubDataset,
 }
 
 impl AddressSubDataset {
-    pub fn import(folder_path: &str) -> color_eyre::Result<Self> {
-        fs::create_dir_all(folder_path)?;
-
-        let f = |s: &str| format!("{folder_path}/{s}");
+    pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
+        let f = |s: &str| format!("{parent_path}/{s}");
 
         Ok(Self {
-            address_count: HeightMap::new(&f("address_count")),
-            realized: RealizedDataset::import(&folder_path)?,
-            unrealized: UnrealizedDataset::import(&folder_path)?,
-            utxos_metadata: UTXOsMetadataDataset::import(&folder_path)?,
+            address_count: HeightMap::new_on_disk_bin(&f("address_count")),
+            price_paid: PricePaidSubDataset::import(parent_path)?,
+            realized: RealizedSubDataset::import(parent_path)?,
+            supply: SupplySubDataset::import(parent_path)?,
+            unrealized: UnrealizedSubDataset::import(parent_path)?,
+            utxos_metadata: UTXOsMetadataSubDataset::import(parent_path)?,
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn insert<'a>(
         &self,
-        height: usize,
-        price: f32,
+        processed_block_data: &'a ProcessedBlockData,
         realized_loss: f32,
         realized_profit: f32,
         total_supply: u64,
         utxo_count: usize,
         sorted_price_to_amount_len: usize,
-        sorted_price_to_amount: impl Iterator<Item = (&'a OrderedFloat<f32>, &'a u64)>,
+        // TODO: Fix, double iter temporary
+        sorted_price_to_amount1: impl Iterator<Item = (&'a OrderedFloat<f32>, &'a u64)>,
+        sorted_price_to_amount2: impl Iterator<Item = (&'a OrderedFloat<f32>, &'a u64)>,
     ) {
         self.address_count
-            .insert(height, sorted_price_to_amount_len);
+            .insert(processed_block_data.height, sorted_price_to_amount_len);
 
-        self.realized.insert(height, realized_loss, realized_profit);
+        self.realized
+            .insert(processed_block_data, realized_loss, realized_profit);
 
         self.unrealized
-            .insert(height, price, total_supply, sorted_price_to_amount);
+            .insert_height(processed_block_data, sorted_price_to_amount1);
 
-        self.utxos_metadata.insert(height, utxo_count);
+        self.utxos_metadata.insert(processed_block_data, utxo_count);
+
+        self.supply.insert(processed_block_data, total_supply);
+
+        self.price_paid
+            .insert(processed_block_data, total_supply, sorted_price_to_amount2);
     }
 
-    pub fn to_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
+    pub fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
         [
-            self.realized.to_vec(),
-            self.unrealized.to_vec(),
-            self.utxos_metadata.to_vec(),
+            self.price_paid.to_any_height_map_vec(),
+            self.realized.to_any_height_map_vec(),
+            self.supply.to_any_height_map_vec(),
+            self.unrealized.to_any_height_map_vec(),
+            self.utxos_metadata.to_any_height_map_vec(),
             vec![&self.address_count],
+        ]
+        .into_iter()
+        .flatten()
+        .collect_vec()
+    }
+
+    pub fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
+        [
+            self.price_paid.to_any_date_map_vec(),
+            self.realized.to_any_date_map_vec(),
+            self.supply.to_any_date_map_vec(),
+            self.unrealized.to_any_date_map_vec(),
+            self.utxos_metadata.to_any_date_map_vec(),
+            // vec![&self.address_count],
         ]
         .into_iter()
         .flatten()

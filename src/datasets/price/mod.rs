@@ -1,26 +1,24 @@
 mod date;
 mod height;
 
-use std::fs;
-
 use chrono::NaiveDate;
 use date::*;
 use height::*;
 
+use super::AnyDatasets;
+
 pub struct PriceDatasets {
-    date: DateDatasets,
-    height: HeightDatasets,
+    date: DateDataset,
+    height: HeightDataset,
 }
 
 impl PriceDatasets {
     pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
         let dir = format!("{parent_path}/price");
 
-        fs::create_dir_all(&dir)?;
-
         Ok(Self {
-            date: DateDatasets::import(&dir)?,
-            height: HeightDatasets::import(&dir)?,
+            date: DateDataset::import(&dir)?,
+            height: HeightDataset::import(&dir)?,
         })
     }
 
@@ -31,11 +29,10 @@ impl PriceDatasets {
     pub fn height_to_close(&mut self, height: usize, timestamp: u32) -> color_eyre::Result<f32> {
         self.height.get(height, timestamp)
     }
+}
 
-    pub fn export(&self) -> color_eyre::Result<()> {
-        self.date.export()?;
-        self.height.export()?;
-
-        Ok(())
+impl AnyDatasets for PriceDatasets {
+    fn to_vec(&self) -> Vec<&(dyn super::AnyDataset + Send + Sync)> {
+        vec![&self.date, &self.height]
     }
 }

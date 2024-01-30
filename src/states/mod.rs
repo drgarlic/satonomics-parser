@@ -60,15 +60,13 @@ impl States {
         })
     }
 
-    pub fn reset(&mut self) -> color_eyre::Result<()> {
-        self.address_index_to_address_data.reset()?;
-        self.counters.reset()?;
-        self.date_data_vec.reset()?;
-        self.tx_index_to_tx_data.reset()?;
-        self.txout_index_to_address_index.reset()?;
-        self.txout_index_to_sats.reset()?;
-
-        Ok(())
+    pub fn reset(&mut self) {
+        let _ = self.address_index_to_address_data.reset();
+        let _ = self.counters.reset();
+        let _ = self.date_data_vec.reset();
+        let _ = self.tx_index_to_tx_data.reset();
+        let _ = self.txout_index_to_address_index.reset();
+        let _ = self.txout_index_to_sats.reset();
     }
 
     pub fn export(&self) -> color_eyre::Result<()> {

@@ -1,4 +1,4 @@
-use std::{io, thread};
+use std::thread;
 
 mod _trait;
 mod address_index_to_empty_address_data;
@@ -28,14 +28,12 @@ impl Databases {
         Ok(())
     }
 
-    pub fn reset(&self, include_addresses: bool) -> color_eyre::Result<(), io::Error> {
+    pub fn reset(&self, include_addresses: bool) {
         if include_addresses {
-            self.address_index_to_empty_address_data.reset()?;
-            self.raw_address_to_address_index.reset()?;
+            let _ = self.address_index_to_empty_address_data.reset();
+            let _ = self.raw_address_to_address_index.reset();
         }
 
-        self.txid_to_tx_index.reset()?;
-
-        Ok(())
+        let _ = self.txid_to_tx_index.reset();
     }
 }

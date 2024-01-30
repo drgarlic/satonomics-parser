@@ -1,7 +1,7 @@
 use std::{fs, thread};
 
 use crate::{
-    datasets::{AnyHeightDataset, AnyHeightDatasets},
+    datasets::{AnyDataset, AnyDatasets},
     structs::RawAddressType,
 };
 
@@ -28,9 +28,6 @@ pub struct AddressDatasets {
 impl AddressDatasets {
     pub fn import(path: &str) -> color_eyre::Result<Self> {
         let path = format!("{path}/address");
-
-        fs::create_dir_all(&path)?;
-
         let f = |s: &str| format!("{path}/{s}");
 
         thread::scope(|scope| {
@@ -129,8 +126,8 @@ impl AddressDatasets {
     }
 }
 
-impl AnyHeightDatasets for AddressDatasets {
-    fn to_vec(&self) -> Vec<&(dyn AnyHeightDataset + Send + Sync)> {
+impl AnyDatasets for AddressDatasets {
+    fn to_vec(&self) -> Vec<&(dyn AnyDataset + Send + Sync)> {
         vec![
             &self.plankton,
             &self.shrimp,

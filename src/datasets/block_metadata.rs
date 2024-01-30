@@ -1,23 +1,19 @@
-use std::fs;
-
 use crate::{
+    datasets::AnyDataset,
     structs::{AnyHeightMap, HeightMap, WNaiveDate},
     utils::timestamp_to_naive_date,
 };
 
-use super::{AnyHeightDataset, ProcessedBlockData};
+use super::ProcessedBlockData;
 
-pub struct TimeDataset {
+pub struct BlockMetadataDataset {
     pub date: HeightMap<WNaiveDate>,
     pub timestamp: HeightMap<u32>,
 }
 
-impl TimeDataset {
+impl BlockMetadataDataset {
     pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
-        let folder_path = format!("{parent_path}/time");
-
-        fs::create_dir_all(&folder_path)?;
-
+        let folder_path = format!("{parent_path}/block_metadata");
         let f = |s: &str| format!("{folder_path}/{s}");
 
         Ok(Self {
@@ -27,8 +23,8 @@ impl TimeDataset {
     }
 }
 
-impl AnyHeightDataset for TimeDataset {
-    fn insert(
+impl AnyDataset for BlockMetadataDataset {
+    fn insert_block_data(
         &self,
         &ProcessedBlockData {
             height, timestamp, ..

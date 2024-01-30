@@ -1,18 +1,21 @@
 use chrono::{NaiveDateTime, NaiveTime, TimeZone, Timelike, Utc};
 use nohash_hasher::IntMap;
 
-use crate::structs::{AnyHeightMap, Binance, HeightMap, Kraken};
+use crate::{
+    datasets::AnyDataset,
+    structs::{AnyHeightMap, Binance, HeightMap, Kraken},
+};
 
-pub struct HeightDatasets {
+pub struct HeightDataset {
     closes: HeightMap<f32>,
     kraken_1mn: Option<IntMap<u32, f32>>,
     binance_1mn: Option<IntMap<u32, f32>>,
     binance_har: Option<IntMap<u32, f32>>,
 }
 
-impl HeightDatasets {
+impl HeightDataset {
     pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
-        let closes = HeightMap::new_in_memory_json(&format!("{parent_path}/height_to_close"));
+        let closes = HeightMap::new_in_memory_json(&format!("{parent_path}/close"));
 
         Ok(Self {
             closes,
@@ -48,10 +51,6 @@ impl HeightDatasets {
         }
     }
 
-    pub fn export(&self) -> color_eyre::Result<()> {
-        self.closes.export()
-    }
-
     fn get_from_1mn_kraken(&mut self, timestamp: u32) -> color_eyre::Result<f32> {
         Ok(self
             .kraken_1mn
@@ -77,5 +76,11 @@ impl HeightDatasets {
             .get(&timestamp)
             .cloned()
             .unwrap())
+    }
+}
+
+impl AnyDataset for HeightDataset {
+    fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
+        vec![&self.closes]
     }
 }

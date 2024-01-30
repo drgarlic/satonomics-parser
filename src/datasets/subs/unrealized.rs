@@ -1,14 +1,12 @@
-use std::fs;
-
-use chrono::NaiveDate;
 use ordered_float::OrderedFloat;
 
 use crate::{
     bitcoin::sats_to_btc,
+    datasets::ProcessedBlockData,
     structs::{AnyDateMap, AnyHeightMap, BiMap},
 };
 
-pub struct UnrealizedDataset {
+pub struct UnrealizedSubDataset {
     supply_in_profit: BiMap<u64>,
     unrealized_profit: BiMap<f32>,
     unrealized_loss: BiMap<f32>,
@@ -20,13 +18,10 @@ struct ComputedResult {
     unrealized_loss: f32,
 }
 
-impl UnrealizedDataset {
+impl UnrealizedSubDataset {
     pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
         let supply_path = format!("{parent_path}/supply");
-        fs::create_dir_all(&supply_path)?;
         let unrealized_path = format!("{parent_path}/unrealized");
-        fs::create_dir_all(&unrealized_path)?;
-
         let f1 = |s: &str| format!("{supply_path}/{s}");
         let f2 = |s: &str| format!("{unrealized_path}/{s}");
 
@@ -39,8 +34,11 @@ impl UnrealizedDataset {
 
     pub fn insert_height<'a>(
         &self,
-        height: usize,
-        price: f32,
+        &ProcessedBlockData {
+            height,
+            block_price: price,
+            ..
+        }: &ProcessedBlockData,
         sorted_price_to_amount: impl Iterator<Item = (&'a OrderedFloat<f32>, &'a u64)>,
     ) {
         let ComputedResult {
@@ -62,10 +60,18 @@ impl UnrealizedDataset {
 
     pub fn insert_date<'a>(
         &self,
-        date: NaiveDate,
-        price: f32,
+        &ProcessedBlockData {
+            date,
+            date_price: price,
+            is_date_last_block,
+            ..
+        }: &ProcessedBlockData,
         sorted_price_to_amount: impl Iterator<Item = (&'a OrderedFloat<f32>, &'a u64)>,
     ) {
+        if !is_date_last_block {
+            unreachable!()
+        }
+
         let ComputedResult {
             supply_in_profit,
             unrealized_loss,
@@ -110,7 +116,7 @@ impl UnrealizedDataset {
         }
     }
 
-    pub fn to_height_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
+    pub fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
         vec![
             &self.supply_in_profit.height,
             &self.unrealized_profit.height,
@@ -118,7 +124,7 @@ impl UnrealizedDataset {
         ]
     }
 
-    pub fn to_date_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
+    pub fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
         vec![
             &self.supply_in_profit.date,
             &self.unrealized_profit.date,

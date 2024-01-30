@@ -3,7 +3,10 @@ use std::thread;
 use chrono::{Local, NaiveDate};
 
 use crate::{
-    bitcoin::check_if_height_safe, databases::Databases, datasets::AllDatasets, states::States,
+    bitcoin::check_if_height_safe,
+    databases::Databases,
+    datasets::{AllDatasets, AnyDatasets},
+    states::States,
 };
 
 pub struct ExportedData<'a> {
@@ -34,7 +37,7 @@ pub fn export_all(
         });
     }
 
-    datasets.export_if_needed(height, date)?;
+    datasets.export_if_needed(date, height)?;
 
     Ok(())
 }

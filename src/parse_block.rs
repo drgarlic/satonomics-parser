@@ -8,7 +8,7 @@ use rayon::prelude::*;
 use crate::{
     bitcoin::{sats_to_btc, BitcoinDB},
     databases::Databases,
-    datasets::{AllDatasets, AnyHeightDatasets, ProcessedBlockData},
+    datasets::{AllDatasets, AnyDatasets, ProcessedBlockData},
     states::States,
     structs::{
         AddressData, AddressRealizedData, BlockData, BlockPath, EmptyAddressData, PartialTxoutData,
@@ -20,13 +20,17 @@ pub struct ParseData<'a> {
     pub bitcoin_db: &'a BitcoinDB,
     pub block: Block,
     pub block_index: usize,
+    pub coinbase_vec: &'a mut Vec<u64>,
+    pub coinblocks_destroyed_vec: &'a mut Vec<f64>,
+    pub coindays_destroyed_vec: &'a mut Vec<f64>,
     pub databases: &'a mut Databases,
     pub datasets: &'a mut AllDatasets,
     pub date: NaiveDate,
+    pub fees_vec: &'a mut Vec<Vec<u64>>,
     pub height: usize,
     pub is_date_last_block: bool,
-    pub timestamp: u32,
     pub states: &'a mut States,
+    pub timestamp: u32,
 }
 
 pub fn parse_block(
@@ -34,13 +38,17 @@ pub fn parse_block(
         bitcoin_db,
         block,
         block_index,
+        coinbase_vec,
+        coinblocks_destroyed_vec,
+        coindays_destroyed_vec,
         databases,
         datasets,
         date,
+        fees_vec,
         height,
         is_date_last_block,
-        timestamp,
         states,
+        timestamp,
     }: ParseData,
 ) {
     let date_index = states.date_data_vec.len() - 1;
@@ -62,9 +70,7 @@ pub fn parse_block(
         .blocks
         .push(BlockData::new(height as u32, block_price));
 
-    let mut coinbase = 0;
-    let mut inputs_sum = 0;
-    let mut outputs_sum = 0;
+    fees_vec.push(vec![]);
 
     let mut block_path_to_spent_value: BTreeMap<BlockPath, u64> = BTreeMap::new();
     let mut address_index_to_address_realized_data: BTreeMap<u32, AddressRealizedData> =
@@ -112,6 +118,9 @@ pub fn parse_block(
         let mut non_zero_amount = 0;
 
         let is_coinbase = tx.is_coinbase();
+
+        let mut inputs_sum = 0;
+        let mut outputs_sum = 0;
 
         // Before `input` as some inputs can be used as later outputs
         tx.output
@@ -249,7 +258,7 @@ pub fn parse_block(
             last_block.spendable_outputs += spendable_outputs as u32;
 
             if is_coinbase {
-                coinbase = non_zero_amount;
+                coinbase_vec.push(non_zero_amount);
             } else {
                 outputs_sum += non_zero_amount;
             }
@@ -259,186 +268,190 @@ pub fn parse_block(
         // inputs
         // ---
 
-        if is_coinbase {
-            return ControlFlow::Continue::<()>(());
-        }
+        if !is_coinbase {
+            tx.input.into_iter().try_for_each(|txin| {
+                let outpoint = txin.previous_output;
+                let input_txid = outpoint.txid;
+                let input_vout = outpoint.vout;
 
-        tx.input.into_iter().try_for_each(|txin| {
-            let outpoint = txin.previous_output;
-            let input_txid = outpoint.txid;
-            let input_vout = outpoint.vout;
-
-            let input_tx_index = {
-                let input_tx_index = txin_ordered_tx_indexes.pop().unwrap().or_else(|| {
-                    databases
-                        .txid_to_tx_index
-                        .unsafe_get_from_puts(&input_txid)
-                        .cloned()
-                });
-
-                if input_tx_index.is_none() {
-                    let txout_from_db = get_txout_from_db(bitcoin_db, &input_txid, input_vout);
-
-                    if txout_from_db.value.to_sat() == 0 {
-                        return ControlFlow::Continue::<()>(());
-                    } else {
-                        dbg!((input_txid, txid, tx_index, input_vout, txout_from_db));
-                        panic!("Txid to be in txid_to_tx_data");
-                    }
-                }
-
-                let input_tx_index = input_tx_index.unwrap();
-
-                let input_txout_index = TxoutIndex::new(input_tx_index, input_vout as u16);
-
-                let input_sats = states.txout_index_to_sats.remove(&input_txout_index);
-
-                if input_sats.is_none() {
-                    let txout_from_db = get_txout_from_db(bitcoin_db, &input_txid, input_vout);
-
-                    if txout_from_db.value.to_sat() == 0 {
-                        return ControlFlow::Continue::<()>(());
-                    } else {
-                        dbg!((
-                            input_txid,
-                            tx_index,
-                            input_tx_index,
-                            input_vout,
-                            input_sats,
-                            txout_from_db
-                        ));
-                        panic!("Txout index to be in txout_index_to_txout_value");
-                    }
-                }
-
-                let input_sats = input_sats.unwrap();
-
-                let input_tx_data = states.tx_index_to_tx_data.get_mut(&input_tx_index).unwrap();
-
-                let input_block_path = input_tx_data.block_path;
-
-                let BlockPath {
-                    date_index: input_date_index,
-                    block_index: input_block_index,
-                } = input_block_path;
-
-                let input_date_data = states
-                    .date_data_vec
-                    .get_mut(input_date_index as usize)
-                    .unwrap_or_else(|| {
-                        dbg!(height, &input_txid, input_block_path, input_date_index);
-                        panic!()
+                let input_tx_index = {
+                    let input_tx_index = txin_ordered_tx_indexes.pop().unwrap().or_else(|| {
+                        databases
+                            .txid_to_tx_index
+                            .unsafe_get_from_puts(&input_txid)
+                            .cloned()
                     });
 
-                let input_block_data = input_date_data
-                    .blocks
-                    .get_mut(input_block_index as usize)
-                    .unwrap_or_else(|| {
-                        dbg!(
-                            height,
-                            &input_txid,
-                            input_block_path,
-                            input_date_index,
-                            input_block_index,
-                        );
-                        panic!()
-                    });
+                    if input_tx_index.is_none() {
+                        let txout_from_db = get_txout_from_db(bitcoin_db, &input_txid, input_vout);
 
-                input_block_data.spendable_outputs -= 1;
+                        if txout_from_db.value.to_sat() == 0 {
+                            return ControlFlow::Continue::<()>(());
+                        } else {
+                            dbg!((input_txid, txid, tx_index, input_vout, txout_from_db));
+                            panic!("Txid to be in txid_to_tx_data");
+                        }
+                    }
 
-                input_block_data.amount -= input_sats;
+                    let input_tx_index = input_tx_index.unwrap();
 
-                inputs_sum += input_sats;
+                    let input_txout_index = TxoutIndex::new(input_tx_index, input_vout as u16);
 
-                *block_path_to_spent_value
-                    .entry(input_block_path)
-                    .or_default() += input_sats;
+                    let input_sats = states.txout_index_to_sats.remove(&input_txout_index);
 
-                coinblocks_destroyed += (height - input_block_data.height as usize) as f64
-                    * sats_to_btc(input_block_data.amount);
+                    if input_sats.is_none() {
+                        let txout_from_db = get_txout_from_db(bitcoin_db, &input_txid, input_vout);
 
-                coindays_destroyed += date.signed_duration_since(*input_date_data.date).num_days()
-                    as f64
-                    * sats_to_btc(input_block_data.amount);
+                        if txout_from_db.value.to_sat() == 0 {
+                            return ControlFlow::Continue::<()>(());
+                        } else {
+                            dbg!((
+                                input_txid,
+                                tx_index,
+                                input_tx_index,
+                                input_vout,
+                                input_sats,
+                                txout_from_db
+                            ));
+                            panic!("Txout index to be in txout_index_to_txout_value");
+                        }
+                    }
 
-                input_tx_data.spendable_outputs -= 1;
+                    let input_sats = input_sats.unwrap();
 
-                if compute_addresses {
-                    let input_address_index = states
-                        .txout_index_to_address_index
-                        .remove(&input_txout_index)
-                        .unwrap();
+                    let input_tx_data =
+                        states.tx_index_to_tx_data.get_mut(&input_tx_index).unwrap();
 
-                    let input_address_data = states
-                        .address_index_to_address_data
-                        .get_mut(&input_address_index)
+                    let input_block_path = input_tx_data.block_path;
+
+                    let BlockPath {
+                        date_index: input_date_index,
+                        block_index: input_block_index,
+                    } = input_block_path;
+
+                    let input_date_data = states
+                        .date_data_vec
+                        .get_mut(input_date_index as usize)
                         .unwrap_or_else(|| {
-                            dbg!(input_address_index);
-                            panic!();
+                            dbg!(height, &input_txid, input_block_path, input_date_index);
+                            panic!()
                         });
 
-                    let address_realized_profit_or_loss =
-                        input_address_data.spend(input_sats, input_block_data.price);
+                    let input_block_data = input_date_data
+                        .blocks
+                        .get_mut(input_block_index as usize)
+                        .unwrap_or_else(|| {
+                            dbg!(
+                                height,
+                                &input_txid,
+                                input_block_path,
+                                input_date_index,
+                                input_block_index,
+                            );
+                            panic!()
+                        });
 
-                    if input_address_data.is_empty() {
-                        let address_data = states
-                            .address_index_to_address_data
-                            .remove(&input_address_index)
+                    input_block_data.spendable_outputs -= 1;
+
+                    input_block_data.amount -= input_sats;
+
+                    inputs_sum += input_sats;
+
+                    *block_path_to_spent_value
+                        .entry(input_block_path)
+                        .or_default() += input_sats;
+
+                    coinblocks_destroyed += (height - input_block_data.height as usize) as f64
+                        * sats_to_btc(input_block_data.amount);
+
+                    coindays_destroyed +=
+                        date.signed_duration_since(*input_date_data.date).num_days() as f64
+                            * sats_to_btc(input_block_data.amount);
+
+                    input_tx_data.spendable_outputs -= 1;
+
+                    if compute_addresses {
+                        let input_address_index = states
+                            .txout_index_to_address_index
+                            .remove(&input_txout_index)
                             .unwrap();
 
-                        databases.address_index_to_empty_address_data.insert(
-                            input_address_index,
-                            EmptyAddressData::from_non_empty(&address_data),
-                        );
+                        let input_address_data = states
+                            .address_index_to_address_data
+                            .get_mut(&input_address_index)
+                            .unwrap_or_else(|| {
+                                dbg!(input_address_index);
+                                panic!();
+                            });
 
-                        address_index_to_removed_address_data
-                            .insert(input_address_index, address_data);
+                        let address_realized_profit_or_loss =
+                            input_address_data.spend(input_sats, input_block_data.price);
+
+                        if input_address_data.is_empty() {
+                            let address_data = states
+                                .address_index_to_address_data
+                                .remove(&input_address_index)
+                                .unwrap();
+
+                            databases.address_index_to_empty_address_data.insert(
+                                input_address_index,
+                                EmptyAddressData::from_non_empty(&address_data),
+                            );
+
+                            address_index_to_removed_address_data
+                                .insert(input_address_index, address_data);
+                        }
+
+                        let address_realized_data = address_index_to_address_realized_data
+                            .entry(input_address_index)
+                            .or_default();
+
+                        address_realized_data.sent += input_sats;
+
+                        if address_realized_profit_or_loss >= 0.0 {
+                            address_realized_data.profit += address_realized_profit_or_loss;
+                        } else {
+                            address_realized_data.loss += address_realized_profit_or_loss.abs();
+                        }
                     }
 
-                    let address_realized_data = address_index_to_address_realized_data
-                        .entry(input_address_index)
-                        .or_default();
-
-                    address_realized_data.sent += input_sats;
-
-                    if address_realized_profit_or_loss >= 0.0 {
-                        address_realized_data.profit += address_realized_profit_or_loss;
+                    if input_tx_data.is_empty() {
+                        Some(input_tx_index)
                     } else {
-                        address_realized_data.loss += address_realized_profit_or_loss.abs();
+                        None
                     }
+                };
+
+                if let Some(input_tx_index) = input_tx_index {
+                    states.tx_index_to_tx_data.remove(&input_tx_index);
+                    databases.txid_to_tx_index.remove(&input_txid);
                 }
 
-                if input_tx_data.is_empty() {
-                    Some(input_tx_index)
-                } else {
-                    None
-                }
-            };
+                ControlFlow::Continue(())
+            })?;
+        }
 
-            if let Some(input_tx_index) = input_tx_index {
-                states.tx_index_to_tx_data.remove(&input_tx_index);
-                databases.txid_to_tx_index.remove(&input_txid);
-            }
+        let fees = inputs_sum - outputs_sum;
 
-            ControlFlow::Continue(())
-        });
+        fees_vec.last_mut().unwrap().push(fees);
 
         ControlFlow::Continue(())
     });
 
-    let fees = inputs_sum - outputs_sum;
+    coinblocks_destroyed_vec.push(coinblocks_destroyed);
+    coindays_destroyed_vec.push(coindays_destroyed);
 
-    datasets.height.insert(ProcessedBlockData {
+    datasets.insert_block_data(ProcessedBlockData {
         address_index_to_address_realized_data: &address_index_to_address_realized_data,
         address_index_to_removed_address_data: &address_index_to_removed_address_data,
         block_path_to_spent_value: &block_path_to_spent_value,
         block_price,
-        coinbase,
-        coinblocks_destroyed,
-        coindays_destroyed,
+        coinbase_vec,
+        coinblocks_destroyed_vec,
+        coindays_destroyed_vec,
         date,
         date_price,
-        fees,
+        fees_vec,
         height,
         is_date_last_block,
         states,

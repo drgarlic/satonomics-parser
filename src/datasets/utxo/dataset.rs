@@ -1,5 +1,3 @@
-use std::fs;
-
 use chrono::Datelike;
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
@@ -7,13 +5,10 @@ use ordered_float::OrderedFloat;
 use crate::{
     bitcoin::sats_to_btc,
     datasets::{
-        height::{
-            PricePointDataset, RealizedDataset, SupplyDataset, UTXOsMetadataDataset,
-            UnrealizedDataset,
-        },
-        AnyHeightDataset, ProcessedBlockData,
+        AnyDataset, PricePaidSubDataset, ProcessedBlockData, RealizedSubDataset, SupplySubDataset,
+        UTXOsMetadataSubDataset, UnrealizedSubDataset,
     },
-    structs::BlockPath,
+    structs::{AnyDateMap, BlockPath},
     structs::{AnyHeightMap, BlockData},
 };
 
@@ -21,44 +16,37 @@ use super::UTXOFilter;
 
 pub struct UTXODataset {
     filter: UTXOFilter,
-    price_point: PricePointDataset,
-    realized: RealizedDataset,
-    supply: SupplyDataset,
-    unrealized: UnrealizedDataset,
-    utxos_metadata: UTXOsMetadataDataset,
+    price_paid: PricePaidSubDataset,
+    realized: RealizedSubDataset,
+    supply: SupplySubDataset,
+    unrealized: UnrealizedSubDataset,
+    utxos_metadata: UTXOsMetadataSubDataset,
 }
 
 impl UTXODataset {
     pub fn import(parent_path: &str, name: &str, range: UTXOFilter) -> color_eyre::Result<Self> {
         let folder_path = format!("{parent_path}/{name}");
-
-        fs::create_dir_all(&folder_path)?;
-
         Ok(Self {
             filter: range,
-            price_point: PricePointDataset::import(&folder_path)?,
-            realized: RealizedDataset::import(&folder_path)?,
-            supply: SupplyDataset::import(&folder_path)?,
-            unrealized: UnrealizedDataset::import(&folder_path)?,
-            utxos_metadata: UTXOsMetadataDataset::import(&folder_path)?,
+            price_paid: PricePaidSubDataset::import(&folder_path)?,
+            realized: RealizedSubDataset::import(&folder_path)?,
+            supply: SupplySubDataset::import(&folder_path)?,
+            unrealized: UnrealizedSubDataset::import(&folder_path)?,
+            utxos_metadata: UTXOsMetadataSubDataset::import(&folder_path)?,
         })
     }
 }
 
-impl AnyHeightDataset for UTXODataset {
-    fn insert(
-        &self,
-        &ProcessedBlockData {
+impl AnyDataset for UTXODataset {
+    fn insert_block_data(&self, processed_block_data: &ProcessedBlockData) {
+        let &ProcessedBlockData {
             block_path_to_spent_value,
             block_price,
-            date,
-            date_price,
-            height,
             is_date_last_block,
             states,
             ..
-        }: &ProcessedBlockData,
-    ) {
+        } = processed_block_data;
+
         let date_data_vec = &states.date_data_vec;
 
         let len = date_data_vec.len();
@@ -151,31 +139,29 @@ impl AnyHeightDataset for UTXODataset {
         .sorted_unstable_by(|a, b| Ord::cmp(&a.0, &b.0))
         .collect_vec();
 
-        self.price_point.insert(
-            height,
-            block_price,
+        self.price_paid.insert(
+            processed_block_data,
             total_supply,
             #[allow(clippy::map_identity)]
             vec.iter().map(|(price, amount)| (price, amount)),
         );
 
-        self.realized.insert(height, realized_loss, realized_profit);
+        self.realized
+            .insert(processed_block_data, realized_loss, realized_profit);
 
-        self.supply.insert(height, total_supply);
+        self.supply.insert(processed_block_data, total_supply);
 
         self.unrealized.insert_height(
-            height,
-            block_price,
+            processed_block_data,
             #[allow(clippy::map_identity)]
             vec.iter().map(|(price, amount)| (price, amount)),
         );
 
-        self.utxos_metadata.insert(height, utxo_count);
+        self.utxos_metadata.insert(processed_block_data, utxo_count);
 
         if is_date_last_block {
             self.unrealized.insert_date(
-                date,
-                date_price,
+                processed_block_data,
                 #[allow(clippy::map_identity)]
                 vec.iter().map(|(price, amount)| (price, amount)),
             );
@@ -184,11 +170,25 @@ impl AnyHeightDataset for UTXODataset {
 
     fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
         [
-            self.price_point.to_vec(),
-            self.realized.to_vec(),
-            self.supply.to_vec(),
-            self.unrealized.to_height_vec(),
-            self.utxos_metadata.to_vec(),
+            self.price_paid.to_any_height_map_vec(),
+            self.realized.to_any_height_map_vec(),
+            self.supply.to_any_height_map_vec(),
+            self.unrealized.to_any_height_map_vec(),
+            self.utxos_metadata.to_any_height_map_vec(),
+        ]
+        .iter()
+        .flatten()
+        .copied()
+        .collect()
+    }
+
+    fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
+        [
+            self.price_paid.to_any_date_map_vec(),
+            self.realized.to_any_date_map_vec(),
+            self.supply.to_any_date_map_vec(),
+            self.unrealized.to_any_date_map_vec(),
+            self.utxos_metadata.to_any_date_map_vec(),
         ]
         .iter()
         .flatten()
