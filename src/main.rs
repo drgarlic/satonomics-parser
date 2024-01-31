@@ -11,30 +11,38 @@ mod states;
 mod structs;
 mod utils;
 
-use crate::{bitcoin::BitcoinDB, iter_blocks::iter_blocks, structs::BITCOIN_DATADIR_RAW_PATH};
+use crate::{
+    bitcoin::BitcoinDB,
+    iter_blocks::iter_blocks,
+    structs::{Daemon, BITCOIN_DATADIR_RAW_PATH},
+};
 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    // Daemon::start();
-    //
-    // loop {
-    //     Daemon::wait_sync()?;
-    //
-    //     Daemon::stop();
-    //
-    //
-    let bitcoin_db = BitcoinDB::new(Path::new(BITCOIN_DATADIR_RAW_PATH), true)?;
+    loop {
+        Daemon::stop();
 
-    let block_count = bitcoin_db.get_block_count();
-    println!("{block_count} blocks found.");
+        // Scoped to free bitcoin's lock
+        let block_count = {
+            let bitcoin_db = BitcoinDB::new(Path::new(BITCOIN_DATADIR_RAW_PATH), true)?;
 
-    iter_blocks(&bitcoin_db, block_count)?;
+            let block_count = bitcoin_db.get_block_count();
+            println!("{block_count} blocks found.");
 
-    //
-    //     Daemon::start();
-    //     Daemon::wait_for_new_block(block_count - 1)?;
-    // }
+            iter_blocks(&bitcoin_db, block_count)?;
 
-    Ok(())
+            block_count
+        };
+
+        Daemon::start();
+
+        if Daemon::check_if_fully_synced()? {
+            Daemon::wait_for_new_block(block_count - 1)?;
+        } else {
+            Daemon::wait_sync()?;
+        }
+    }
+
+    // Ok(())
 }

@@ -1,2 +1,2 @@
-ulimit -n 100000
+ulimit -n 1000000
 cargo run -r

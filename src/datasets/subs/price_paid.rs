@@ -35,27 +35,48 @@ impl PricePaidSubDataset {
         let folder_path = format!("{parent_path}/price_paid");
         let f = |s: &str| format!("{folder_path}/{s}");
 
+        let pp_mean = BiMap::new_on_disk_bin(&f("mean"));
+        let pp_median = BiMap::new_on_disk_bin(&f("median"));
+        let pp_95p = BiMap::new_on_disk_bin(&f("95p"));
+        let pp_90p = BiMap::new_on_disk_bin(&f("90p"));
+        let pp_85p = BiMap::new_on_disk_bin(&f("85p"));
+        let pp_80p = BiMap::new_on_disk_bin(&f("80p"));
+        let pp_75p = BiMap::new_on_disk_bin(&f("75p"));
+        let pp_70p = BiMap::new_on_disk_bin(&f("70p"));
+        let pp_65p = BiMap::new_on_disk_bin(&f("65p"));
+        let pp_60p = BiMap::new_on_disk_bin(&f("60p"));
+        let pp_55p = BiMap::new_on_disk_bin(&f("55p"));
+        let pp_45p = BiMap::new_on_disk_bin(&f("45p"));
+        let pp_40p = BiMap::new_on_disk_bin(&f("40p"));
+        let pp_35p = BiMap::new_on_disk_bin(&f("35p"));
+        let pp_30p = BiMap::new_on_disk_bin(&f("30p"));
+        let pp_25p = BiMap::new_on_disk_bin(&f("25p"));
+        let pp_20p = BiMap::new_on_disk_bin(&f("20p"));
+        let pp_15p = BiMap::new_on_disk_bin(&f("15p"));
+        let pp_10p = BiMap::new_on_disk_bin(&f("10p"));
+        let pp_05p = BiMap::new_on_disk_bin(&f("05p"));
+
         Ok(Self {
-            pp_mean: BiMap::new_on_disk_bin(&f("mean")),
-            pp_median: BiMap::new_on_disk_bin(&f("median")),
-            pp_95p: BiMap::new_on_disk_bin(&f("95p")),
-            pp_90p: BiMap::new_on_disk_bin(&f("90p")),
-            pp_85p: BiMap::new_on_disk_bin(&f("85p")),
-            pp_80p: BiMap::new_on_disk_bin(&f("80p")),
-            pp_75p: BiMap::new_on_disk_bin(&f("75p")),
-            pp_70p: BiMap::new_on_disk_bin(&f("70p")),
-            pp_65p: BiMap::new_on_disk_bin(&f("65p")),
-            pp_60p: BiMap::new_on_disk_bin(&f("60p")),
-            pp_55p: BiMap::new_on_disk_bin(&f("55p")),
-            pp_45p: BiMap::new_on_disk_bin(&f("45p")),
-            pp_40p: BiMap::new_on_disk_bin(&f("40p")),
-            pp_35p: BiMap::new_on_disk_bin(&f("35p")),
-            pp_30p: BiMap::new_on_disk_bin(&f("30p")),
-            pp_25p: BiMap::new_on_disk_bin(&f("25p")),
-            pp_20p: BiMap::new_on_disk_bin(&f("20p")),
-            pp_15p: BiMap::new_on_disk_bin(&f("15p")),
-            pp_10p: BiMap::new_on_disk_bin(&f("10p")),
-            pp_05p: BiMap::new_on_disk_bin(&f("05p")),
+            pp_mean,
+            pp_median,
+            pp_95p,
+            pp_90p,
+            pp_85p,
+            pp_80p,
+            pp_75p,
+            pp_70p,
+            pp_65p,
+            pp_60p,
+            pp_55p,
+            pp_45p,
+            pp_40p,
+            pp_35p,
+            pp_30p,
+            pp_25p,
+            pp_20p,
+            pp_15p,
+            pp_10p,
+            pp_05p,
         })
     }
 

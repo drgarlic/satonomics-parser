@@ -14,10 +14,26 @@ pub trait AnyDataset {
             .and_then(|opt| opt)
     }
 
+    fn get_min_initial_last_date(&self) -> Option<NaiveDate> {
+        self.to_any_date_map_vec()
+            .iter()
+            .map(|map| map.get_initial_last_date())
+            .min()
+            .and_then(|opt| opt)
+    }
+
     fn get_min_initial_first_unsafe_date(&self) -> Option<NaiveDate> {
         self.to_any_date_map_vec()
             .iter()
             .map(|map| map.get_initial_first_unsafe_date())
+            .min()
+            .and_then(|opt| opt)
+    }
+
+    fn get_min_initial_last_height(&self) -> Option<usize> {
+        self.to_any_height_map_vec()
+            .iter()
+            .map(|map| map.get_initial_last_height())
             .min()
             .and_then(|opt| opt)
     }
@@ -75,20 +91,38 @@ pub trait AnyDataset {
 }
 
 pub trait AnyDatasets {
-    fn get_min_last_date(&self) -> Option<NaiveDate> {
+    fn get_min_initial_last_date(&self) -> Option<NaiveDate> {
         self.to_vec()
             .iter()
             .filter(|dataset| !dataset.to_any_date_map_vec().is_empty())
-            .map(|dataset| dataset.get_min_last_date())
+            .map(|dataset| dataset.get_min_initial_last_date())
             .min()
             .and_then(|opt| opt)
     }
 
-    fn get_min_last_height(&self) -> Option<usize> {
+    fn get_min_initial_last_height(&self) -> Option<usize> {
         self.to_vec()
             .iter()
             .filter(|dataset| !dataset.to_any_height_map_vec().is_empty())
-            .map(|dataset| dataset.get_min_last_height())
+            .map(|dataset| dataset.get_min_initial_last_height())
+            .min()
+            .and_then(|opt| opt)
+    }
+
+    fn get_min_initial_first_unsafe_date(&self) -> Option<NaiveDate> {
+        self.to_vec()
+            .iter()
+            .filter(|dataset| !dataset.to_any_date_map_vec().is_empty())
+            .map(|dataset| dataset.get_min_initial_first_unsafe_date())
+            .min()
+            .and_then(|opt| opt)
+    }
+
+    fn get_min_initial_first_unsafe_height(&self) -> Option<usize> {
+        self.to_vec()
+            .iter()
+            .filter(|dataset| !dataset.to_any_height_map_vec().is_empty())
+            .map(|dataset| dataset.get_min_initial_first_unsafe_height())
             .min()
             .and_then(|opt| opt)
     }
@@ -97,7 +131,7 @@ pub trait AnyDatasets {
         let ProcessedDateData { date, .. } = processed_date_data;
 
         self.to_vec()
-            .iter()
+            .par_iter()
             .filter(|dataset| dataset.process_date(date))
             .for_each(|dataset| dataset.insert_date_data(&processed_date_data));
     }

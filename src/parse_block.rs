@@ -23,6 +23,7 @@ pub struct ParseData<'a> {
     pub coinbase_vec: &'a mut Vec<u64>,
     pub coinblocks_destroyed_vec: &'a mut Vec<f64>,
     pub coindays_destroyed_vec: &'a mut Vec<f64>,
+    pub compute_addresses: bool,
     pub databases: &'a mut Databases,
     pub datasets: &'a mut AllDatasets,
     pub date: NaiveDate,
@@ -41,6 +42,7 @@ pub fn parse_block(
         coinbase_vec,
         coinblocks_destroyed_vec,
         coindays_destroyed_vec,
+        compute_addresses,
         databases,
         datasets,
         date,
@@ -79,8 +81,6 @@ pub fn parse_block(
 
     let mut coinblocks_destroyed = 0.0;
     let mut coindays_destroyed = 0.0;
-
-    let compute_addresses = false;
 
     let TxoutsParsingResults {
         mut partial_txout_data_vec,

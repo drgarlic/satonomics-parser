@@ -16,6 +16,7 @@ where
 {
     batch: RwLock<Vec<(usize, T)>>,
     path: String,
+    initial_last_height: Option<usize>,
     initial_first_unsafe_height: Option<usize>,
     inner: Option<RwLock<Vec<T>>>,
     called_insert: RwLock<bool>,
@@ -52,6 +53,7 @@ where
         let mut s = Self {
             batch: RwLock::new(vec![]),
             initial_first_unsafe_height: None,
+            initial_last_height: None,
             path: serialization.append_extension(&format!("{path}/height")),
             inner: None,
             called_insert: RwLock::new(false),
@@ -62,7 +64,8 @@ where
             s.inner.replace(RwLock::new(s.import()));
         }
 
-        s.initial_first_unsafe_height = s.get_first_unsafe_height();
+        s.initial_last_height = s.get_last_height();
+        s.initial_first_unsafe_height = last_height_to_first_unsafe_height(s.initial_last_height);
 
         s
     }
@@ -91,23 +94,12 @@ where
         self.inner.as_ref().unwrap().read().unwrap()
     }
 
-    fn import(&self) -> Vec<T> {
-        self.serialization.import(&self.path).unwrap_or_default()
+    pub fn unsafe_len(&self) -> usize {
+        self.unsafe_inner().len()
     }
 
-    fn get_first_unsafe_height(&self) -> Option<usize>
-    where
-        T: Clone + Default + Debug + Decode + Encode + Serialize + DeserializeOwned,
-    {
-        self.get_last_height().and_then(|last_height| {
-            let offset = NUMBER_OF_UNSAFE_BLOCKS - 1;
-
-            if last_height >= offset {
-                Some(last_height - offset)
-            } else {
-                None
-            }
-        })
+    fn import(&self) -> Vec<T> {
+        self.serialization.import(&self.path).unwrap_or_default()
     }
 
     fn get_last_height(&self) -> Option<usize>
@@ -131,6 +123,8 @@ where
 pub trait AnyHeightMap {
     fn get_initial_first_unsafe_height(&self) -> Option<usize>;
 
+    fn get_initial_last_height(&self) -> Option<usize>;
+
     fn get_last_height(&self) -> Option<usize>;
 
     fn get_first_unsafe_height(&self) -> Option<usize>;
@@ -146,12 +140,16 @@ where
         self.initial_first_unsafe_height
     }
 
+    fn get_initial_last_height(&self) -> Option<usize> {
+        self.initial_last_height
+    }
+
     fn get_last_height(&self) -> Option<usize> {
         self.get_last_height()
     }
 
     fn get_first_unsafe_height(&self) -> Option<usize> {
-        self.get_first_unsafe_height()
+        last_height_to_first_unsafe_height(self.get_last_height())
     }
 
     fn export(&self) -> color_eyre::Result<()> {
@@ -207,4 +205,16 @@ where
             list[height] = value;
         }
     }
+}
+
+fn last_height_to_first_unsafe_height(last_height: Option<usize>) -> Option<usize> {
+    last_height.and_then(|last_height| {
+        let offset = NUMBER_OF_UNSAFE_BLOCKS - 1;
+
+        if last_height >= offset {
+            Some(last_height - offset)
+        } else {
+            None
+        }
+    })
 }

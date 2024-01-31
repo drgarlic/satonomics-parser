@@ -1,17 +1,14 @@
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
-use rayon::iter::ParallelBridge;
+use rayon::slice::ParallelSliceMut;
 
 use crate::{
     bitcoin::{btc_to_sats, sats_to_btc},
     datasets::{
-        height::{
-            PricePaidSubDataset, RealizedSubDataset, SupplySubDataset, UTXOsMetadataSubDataset,
-            UnrealizedSubDataset,
-        },
-        AnyDataset, ProcessedBlockData,
+        AnyDataset, PricePaidSubDataset, ProcessedBlockData, RealizedSubDataset, SupplySubDataset,
+        UTXOsMetadataSubDataset, UnrealizedSubDataset,
     },
-    structs::{AnyDateMap, AnyHeightMap, HeightMap},
+    structs::{AnyDateMap, AnyHeightMap, BiMap},
 };
 
 use super::{AddressFilter, LiquidityClassification};
@@ -114,7 +111,7 @@ impl AnyDataset for AddressDataset {
         let mut liquid_utxo_count = 0;
         let mut highly_liquid_utxo_count = 0;
 
-        let vec = address_index_to_address_data
+        let mut vec = address_index_to_address_data
             .values()
             .filter(|address_data| {
                 self.filter
@@ -151,8 +148,9 @@ impl AnyDataset for AddressDataset {
                     (amount, illiquid_sats, liquid_sats, highly_liquid_sats),
                 )
             })
-            .sorted_unstable_by(|a, b| Ord::cmp(&a.0, &b.0))
             .collect_vec();
+
+        vec.par_sort_unstable_by(|a, b| Ord::cmp(&a.0, &b.0));
 
         let len = vec.len();
 
@@ -163,6 +161,7 @@ impl AnyDataset for AddressDataset {
             full_total_supply,
             full_utxo_count,
             len,
+            vec.iter().map(|(price, (full, _, _, _))| (price, full)),
             vec.iter().map(|(price, (full, _, _, _))| (price, full)),
             vec.iter().map(|(price, (full, _, _, _))| (price, full)),
         );
@@ -178,6 +177,8 @@ impl AnyDataset for AddressDataset {
                 .map(|(price, (_, illiquid, _, _))| (price, illiquid)),
             vec.iter()
                 .map(|(price, (_, illiquid, _, _))| (price, illiquid)),
+            vec.iter()
+                .map(|(price, (_, illiquid, _, _))| (price, illiquid)),
         );
 
         self.liquid_dataset.insert(
@@ -188,8 +189,8 @@ impl AnyDataset for AddressDataset {
             liquid_utxo_count,
             len,
             vec.iter().map(|(price, (_, _, liquid, _))| (price, liquid)),
-            vec.iter()
-                .map(|(price, (_, _, _, highly_liquid))| (price, highly_liquid)),
+            vec.iter().map(|(price, (_, _, liquid, _))| (price, liquid)),
+            vec.iter().map(|(price, (_, _, liquid, _))| (price, liquid)),
         );
 
         self.highly_liquid_dataset.insert(
@@ -199,6 +200,8 @@ impl AnyDataset for AddressDataset {
             highly_liquid_total_supply,
             highly_liquid_utxo_count,
             len,
+            vec.iter()
+                .map(|(price, (_, _, _, highly_liquid))| (price, highly_liquid)),
             vec.iter()
                 .map(|(price, (_, _, _, highly_liquid))| (price, highly_liquid)),
             vec.iter()
@@ -232,7 +235,7 @@ impl AnyDataset for AddressDataset {
 }
 
 pub struct AddressSubDataset {
-    address_count: HeightMap<usize>,
+    address_count: BiMap<usize>,
     price_paid: PricePaidSubDataset,
     realized: RealizedSubDataset,
     supply: SupplySubDataset,
@@ -245,7 +248,7 @@ impl AddressSubDataset {
         let f = |s: &str| format!("{parent_path}/{s}");
 
         Ok(Self {
-            address_count: HeightMap::new_on_disk_bin(&f("address_count")),
+            address_count: BiMap::new_on_disk_bin(&f("address_count")),
             price_paid: PricePaidSubDataset::import(parent_path)?,
             realized: RealizedSubDataset::import(parent_path)?,
             supply: SupplySubDataset::import(parent_path)?,
@@ -266,8 +269,10 @@ impl AddressSubDataset {
         // TODO: Fix, double iter temporary
         sorted_price_to_amount1: impl Iterator<Item = (&'a OrderedFloat<f32>, &'a u64)>,
         sorted_price_to_amount2: impl Iterator<Item = (&'a OrderedFloat<f32>, &'a u64)>,
+        sorted_price_to_amount3: impl Iterator<Item = (&'a OrderedFloat<f32>, &'a u64)>,
     ) {
         self.address_count
+            .height
             .insert(processed_block_data.height, sorted_price_to_amount_len);
 
         self.realized
@@ -282,6 +287,15 @@ impl AddressSubDataset {
 
         self.price_paid
             .insert(processed_block_data, total_supply, sorted_price_to_amount2);
+
+        if processed_block_data.is_date_last_block {
+            self.address_count
+                .date
+                .insert(processed_block_data.date, sorted_price_to_amount_len);
+
+            self.unrealized
+                .insert_date(processed_block_data, sorted_price_to_amount3);
+        }
     }
 
     pub fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
@@ -291,7 +305,7 @@ impl AddressSubDataset {
             self.supply.to_any_height_map_vec(),
             self.unrealized.to_any_height_map_vec(),
             self.utxos_metadata.to_any_height_map_vec(),
-            vec![&self.address_count],
+            vec![&self.address_count.height],
         ]
         .into_iter()
         .flatten()
@@ -305,7 +319,7 @@ impl AddressSubDataset {
             self.supply.to_any_date_map_vec(),
             self.unrealized.to_any_date_map_vec(),
             self.utxos_metadata.to_any_date_map_vec(),
-            // vec![&self.address_count],
+            vec![&self.address_count.date],
         ]
         .into_iter()
         .flatten()

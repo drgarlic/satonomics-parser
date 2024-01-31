@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+use color_eyre::eyre::ContextCompat;
 use nohash_hasher::IntMap;
 use serde_json::Value;
 
@@ -11,21 +12,23 @@ pub struct Kraken;
 
 impl Kraken {
     pub fn fetch_1mn_prices() -> color_eyre::Result<IntMap<u32, f32>> {
+        println!("kraken: fetch 1mn");
+
         let body: Value =
             reqwest::blocking::get("https://api.kraken.com/0/public/OHLC?pair=XBTUSD&interval=1")?
                 .json()?;
 
         Ok(body
             .as_object()
-            .unwrap()
+            .context("Expect to be an object")?
             .get("result")
-            .unwrap()
+            .context("Expect object to have result")?
             .as_object()
-            .unwrap()
+            .context("Expect to be an object")?
             .get("XXBTZUSD")
-            .unwrap()
+            .context("Expect to have XXBTZUSD")?
             .as_array()
-            .unwrap()
+            .context("Expect to be an array")?
             .iter()
             .map(|value| {
                 let array = value.as_array().unwrap();
@@ -53,15 +56,15 @@ impl Kraken {
 
         Ok(body
             .as_object()
-            .unwrap()
+            .context("Expect to be an object")?
             .get("result")
-            .unwrap()
+            .context("Expect object to have result")?
             .as_object()
-            .unwrap()
+            .context("Expect to be an object")?
             .get("XXBTZUSD")
-            .unwrap()
+            .context("Expect to have XXBTZUSD")?
             .as_array()
-            .unwrap()
+            .context("Expect to be an array")?
             .iter()
             .map(|value| {
                 let array = value.as_array().unwrap();

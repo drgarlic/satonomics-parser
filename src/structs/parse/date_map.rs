@@ -18,6 +18,7 @@ const NUMBER_OF_UNSAFE_DATES: usize = 2;
 pub struct DateMap<T> {
     batch: RwLock<Vec<(NaiveDate, T)>>,
     path: String,
+    initial_last_date: Option<NaiveDate>,
     initial_first_unsafe_date: Option<NaiveDate>,
     inner: Option<RwLock<BTreeMap<String, T>>>,
     called_insert: RwLock<bool>,
@@ -53,6 +54,7 @@ where
 
         let mut s = Self {
             batch: RwLock::new(vec![]),
+            initial_last_date: None,
             initial_first_unsafe_date: None,
             path: serialization.append_extension(&format!("{path}/date")),
             inner: None,
@@ -64,7 +66,8 @@ where
             s.inner.replace(RwLock::new(s.import()));
         }
 
-        s.initial_first_unsafe_date = s.get_first_unsafe_date();
+        s.initial_last_date = s.get_last_date();
+        s.initial_first_unsafe_date = last_date_to_first_unsafe_date(s.initial_last_date);
 
         s
     }
@@ -102,11 +105,7 @@ where
     }
 
     fn get_first_unsafe_date(&self) -> Option<NaiveDate> {
-        self.get_last_date().and_then(|last_date| {
-            let offset = NUMBER_OF_UNSAFE_DATES - 1;
-
-            last_date.checked_sub_days(Days::new(offset as u64))
-        })
+        last_date_to_first_unsafe_date(self.get_last_date())
     }
 
     fn get_last_date(&self) -> Option<NaiveDate> {
@@ -126,6 +125,8 @@ where
 
 pub trait AnyDateMap {
     fn get_initial_first_unsafe_date(&self) -> Option<NaiveDate>;
+
+    fn get_initial_last_date(&self) -> Option<NaiveDate>;
 
     fn get_last_date(&self) -> Option<NaiveDate>;
 
@@ -148,6 +149,10 @@ where
 
     fn get_initial_first_unsafe_date(&self) -> Option<NaiveDate> {
         self.initial_first_unsafe_date
+    }
+
+    fn get_initial_last_date(&self) -> Option<NaiveDate> {
+        self.initial_last_date
     }
 
     fn export(&self) -> color_eyre::Result<()> {
@@ -177,4 +182,12 @@ where
             self.serialization.export(&self.path, &map)
         }
     }
+}
+
+fn last_date_to_first_unsafe_date(last_date: Option<NaiveDate>) -> Option<NaiveDate> {
+    last_date.and_then(|last_date| {
+        let offset = NUMBER_OF_UNSAFE_DATES - 1;
+
+        last_date.checked_sub_days(Days::new(offset as u64))
+    })
 }

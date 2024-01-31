@@ -1,4 +1,5 @@
 use chrono::{NaiveDateTime, NaiveTime, TimeZone, Timelike, Utc};
+use color_eyre::eyre::Error;
 use nohash_hasher::IntMap;
 
 use crate::{
@@ -26,7 +27,7 @@ impl HeightDataset {
     }
 
     pub fn get(&mut self, height: usize, timestamp: u32) -> color_eyre::Result<f32> {
-        if self.closes.is_height_safe(height) {
+        if height < self.closes.unsafe_len() - 1 {
             Ok(self.closes.unsafe_inner().get(height).unwrap().to_owned())
         } else {
             let date_time = Utc.timestamp_opt(i64::from(timestamp), 0).unwrap();
@@ -52,30 +53,42 @@ impl HeightDataset {
     }
 
     fn get_from_1mn_kraken(&mut self, timestamp: u32) -> color_eyre::Result<f32> {
-        Ok(self
-            .kraken_1mn
-            .get_or_insert(Kraken::fetch_1mn_prices()?)
+        if self.kraken_1mn.is_none() {
+            self.kraken_1mn.replace(Kraken::fetch_1mn_prices()?);
+        }
+
+        self.kraken_1mn
+            .as_ref()
+            .unwrap()
             .get(&timestamp)
             .cloned()
-            .unwrap())
+            .ok_or(Error::msg("Couldn't find timestamp in 1mn kraken"))
     }
 
     fn get_from_1mn_binance(&mut self, timestamp: u32) -> color_eyre::Result<f32> {
-        Ok(self
-            .binance_1mn
-            .get_or_insert(Binance::fetch_1mn_prices()?)
+        if self.binance_1mn.is_none() {
+            self.binance_1mn.replace(Binance::fetch_1mn_prices()?);
+        }
+
+        self.binance_1mn
+            .as_ref()
+            .unwrap()
             .get(&timestamp)
             .cloned()
-            .unwrap())
+            .ok_or(Error::msg("Couldn't find timestamp in 1mn binance"))
     }
 
     fn get_from_har_binance(&mut self, timestamp: u32) -> color_eyre::Result<f32> {
-        Ok(self
-            .binance_har
-            .get_or_insert(Binance::read_har_file()?)
+        if self.binance_har.is_none() {
+            self.binance_har.replace(Binance::read_har_file()?);
+        }
+
+        self.binance_har
+            .as_ref()
+            .unwrap()
             .get(&timestamp)
             .cloned()
-            .unwrap())
+            .ok_or(Error::msg("Couldn't find timestamp in har binance"))
     }
 }
 

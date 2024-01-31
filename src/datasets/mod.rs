@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, sync::RwLockReadGuard, thread};
 use chrono::NaiveDate;
 
 mod _traits;
-// mod address;
+mod address;
 mod block_metadata;
 mod coinblocks;
 mod coindays;
@@ -14,7 +14,7 @@ mod subs;
 mod utxo;
 
 pub use _traits::*;
-// use address::*;
+use address::*;
 use block_metadata::*;
 use coinblocks::*;
 use coindays::*;
@@ -55,7 +55,7 @@ pub struct ProcessedBlockData<'a> {
 }
 
 pub struct AllDatasets {
-    // address: AddressDatasets,
+    pub address: AddressDatasets,
     coinblocks: CoinblocksDataset,
     coindays: CoindaysDataset,
     rewards: RewardsDataset,
@@ -72,8 +72,6 @@ impl AllDatasets {
         thread::scope(|scope| {
             let date_metadata_handle = scope.spawn(|| DateMetadataDataset::import(path));
 
-            // let address_handle = scope.spawn(|| AddressDatasets::import(&path));
-            //
             let coinblocks_handle = scope.spawn(|| CoinblocksDataset::import(path));
 
             let coindays_handle = scope.spawn(|| CoindaysDataset::import(path));
@@ -82,16 +80,20 @@ impl AllDatasets {
 
             let block_metadata_handle = scope.spawn(|| BlockMetadataDataset::import(path));
 
+            let price_handle = scope.spawn(|| PriceDatasets::import(path));
+
             let utxo_handle = scope.spawn(|| UTXODatasets::import(path));
 
+            let address = AddressDatasets::import(path)?;
+
             Ok(Self {
-                date_metadata: date_metadata_handle.join().unwrap()?,
-                price: PriceDatasets::import(path)?,
-                // address: address_handle.join().unwrap()?,
+                address,
+                block_metadata: block_metadata_handle.join().unwrap()?,
                 coinblocks: coinblocks_handle.join().unwrap()?,
                 coindays: coindays_handle.join().unwrap()?,
+                date_metadata: date_metadata_handle.join().unwrap()?,
+                price: price_handle.join().unwrap()?,
                 rewards: rewards_handle.join().unwrap()?,
-                block_metadata: block_metadata_handle.join().unwrap()?,
                 utxo: utxo_handle.join().unwrap()?,
             })
         })
@@ -105,18 +107,18 @@ impl AllDatasets {
 impl AnyDatasets for AllDatasets {
     fn to_vec(&self) -> Vec<&(dyn AnyDataset + Send + Sync)> {
         let vec: Vec<&(dyn AnyDataset + Send + Sync)> = vec![
-            &self.date_metadata,
-            &self.rewards,
+            &self.block_metadata,
             &self.coinblocks,
             &self.coindays,
-            &self.block_metadata,
+            &self.date_metadata,
+            &self.rewards,
         ];
 
         vec![
-            vec,
-            // self.address.to_vec(),
+            self.address.to_vec(),
             self.price.to_vec(),
             self.utxo.to_vec(),
+            vec,
         ]
         .into_iter()
         .flatten()

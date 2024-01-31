@@ -1,4 +1,4 @@
-use std::{fs, thread};
+use std::thread;
 
 use crate::{
     datasets::{AnyDataset, AnyDatasets},
@@ -101,9 +101,11 @@ impl AddressDatasets {
                     AddressFilter::AddressType(RawAddressType::P2WSH),
                 )
             });
-            let p2tr_handle = scope.spawn(|| {
-                AddressDataset::import(&f("p2tr"), AddressFilter::AddressType(RawAddressType::P2TR))
-            });
+
+            let p2tr = AddressDataset::import(
+                &f("p2tr"),
+                AddressFilter::AddressType(RawAddressType::P2TR),
+            )?;
 
             Ok(Self {
                 plankton: plankton_handle.join().unwrap()?,
@@ -120,7 +122,7 @@ impl AddressDatasets {
                 p2sh: p2sh_handle.join().unwrap()?,
                 p2wpkh: p2wpkh_handle.join().unwrap()?,
                 p2wsh: p2wsh_handle.join().unwrap()?,
-                p2tr: p2tr_handle.join().unwrap()?,
+                p2tr,
             })
         })
     }

@@ -2,6 +2,7 @@
 
 use std::{collections::BTreeMap, path::Path};
 
+use color_eyre::eyre::ContextCompat;
 use itertools::Itertools;
 use nohash_hasher::IntMap;
 use serde_json::Value;
@@ -12,19 +13,21 @@ pub struct Binance;
 
 impl Binance {
     pub fn read_har_file() -> color_eyre::Result<IntMap<u32, f32>> {
+        println!("binance: read har file");
+
         let path_binance_har = Path::new(IMPORTS_FOLDER_PATH).join("binance.har");
 
         let json: BTreeMap<String, Value> = Json::import(path_binance_har).unwrap_or_default();
 
         Ok(json
             .get("log")
-            .unwrap()
+            .context("Expect object to have log attribute")?
             .as_object()
-            .unwrap()
+            .context("Expect to be an object")?
             .get("entries")
-            .unwrap()
+            .context("Expect object to have entries")?
             .as_array()
-            .unwrap()
+            .context("Expect to be an array")?
             .iter()
             .filter(|entry| {
                 entry
@@ -80,6 +83,8 @@ impl Binance {
     }
 
     pub fn fetch_1mn_prices() -> color_eyre::Result<IntMap<u32, f32>> {
+        println!("binance: fetch 1mn");
+
         let body: Value = reqwest::blocking::get(
             "https://api.binance.com/api/v3/uiKlines?symbol=BTCUSDT&interval=1m&limit=1000",
         )?
@@ -87,7 +92,7 @@ impl Binance {
 
         Ok(body
             .as_array()
-            .unwrap()
+            .context("Expect to be an array")?
             .iter()
             .map(|value| {
                 // [timestamp, open, high, low, close, volume, ...]

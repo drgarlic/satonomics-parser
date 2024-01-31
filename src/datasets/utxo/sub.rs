@@ -1,7 +1,6 @@
 use chrono::Datelike;
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
-use rayon::slice::ParallelSliceMut;
 
 use crate::{
     bitcoin::sats_to_btc,
@@ -9,13 +8,13 @@ use crate::{
         AnyDataset, PricePaidSubDataset, ProcessedBlockData, RealizedSubDataset, SupplySubDataset,
         UTXOsMetadataSubDataset, UnrealizedSubDataset,
     },
-    structs::{AnyDateMap, BlockPath},
+    structs::{AnyDateMap, BlockPath, WNaiveDate},
     structs::{AnyHeightMap, BlockData},
 };
 
 use super::UTXOFilter;
 
-pub struct UTXODataset {
+pub struct UTXOSubDataset {
     filter: UTXOFilter,
     price_paid: PricePaidSubDataset,
     realized: RealizedSubDataset,
@@ -24,7 +23,7 @@ pub struct UTXODataset {
     utxos_metadata: UTXOsMetadataSubDataset,
 }
 
-impl UTXODataset {
+impl UTXOSubDataset {
     pub fn import(parent_path: &str, name: &str, range: UTXOFilter) -> color_eyre::Result<Self> {
         let folder_path = format!("{parent_path}/{name}");
         Ok(Self {
@@ -38,8 +37,12 @@ impl UTXODataset {
     }
 }
 
-impl AnyDataset for UTXODataset {
-    fn insert_block_data(&self, processed_block_data: &ProcessedBlockData) {
+impl UTXOSubDataset {
+    pub fn insert_block_data(
+        &self,
+        processed_block_data: &ProcessedBlockData,
+        sorted_block_data_vec: Vec<(OrderedFloat<f32>, &WNaiveDate, &u64)>,
+    ) {
         let &ProcessedBlockData {
             block_path_to_spent_value,
             block_price,
@@ -100,7 +103,7 @@ impl AnyDataset for UTXODataset {
         let mut total_supply = 0;
         let mut utxo_count = 0;
 
-        let mut vec = {
+        let vec = {
             match self.filter {
                 UTXOFilter::Full => date_data_vec.iter(),
                 UTXOFilter::From(from) if from < len => date_data_vec[..(len - from)].iter(),
@@ -130,16 +133,7 @@ impl AnyDataset for UTXODataset {
                 true
             }
         })
-        .flat_map(|date_data| &date_data.blocks)
-        .map(|block_data| {
-            total_supply += block_data.amount;
-            utxo_count += block_data.spendable_outputs as usize;
-
-            (OrderedFloat(block_data.price), block_data.amount)
-        })
         .collect_vec();
-
-        vec.par_sort_unstable_by(|a, b| Ord::cmp(&a.0, &b.0));
 
         self.price_paid.insert(
             processed_block_data,
@@ -170,7 +164,7 @@ impl AnyDataset for UTXODataset {
         }
     }
 
-    fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
+    pub fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
         [
             self.price_paid.to_any_height_map_vec(),
             self.realized.to_any_height_map_vec(),
@@ -184,7 +178,7 @@ impl AnyDataset for UTXODataset {
         .collect()
     }
 
-    fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
+    pub fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
         [
             self.price_paid.to_any_date_map_vec(),
             self.realized.to_any_date_map_vec(),
