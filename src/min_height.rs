@@ -1,5 +1,3 @@
-use chrono::NaiveDate;
-
 use crate::{
     databases::Databases,
     datasets::{AllDatasets, AnyDatasets},
@@ -10,9 +8,10 @@ pub fn find_first_unsafe_height(
     states: &mut States,
     databases: &Databases,
     datasets: &AllDatasets,
-    min_initial_last_address_date: &Option<NaiveDate>,
-    min_initial_last_address_height: &Option<usize>,
 ) -> usize {
+    let min_initial_last_address_date = datasets.address.get_min_initial_last_date();
+    let min_initial_last_address_height = datasets.address.get_min_initial_last_height();
+
     states
         .date_data_vec
         .iter()
@@ -41,7 +40,8 @@ pub fn find_first_unsafe_height(
 
             states.reset();
 
-            databases.reset(min_initial_last_address_date.is_none() || min_initial_last_address_height.is_none());
+            let include_addresses = !datasets.address.to_vec().is_empty() && (min_initial_last_address_date.is_none() || min_initial_last_address_height.is_none());
+            databases.reset(include_addresses);
 
             0
         })

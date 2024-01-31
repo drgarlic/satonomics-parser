@@ -1,6 +1,8 @@
+use std::{thread, time::Instant};
+
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
-use rayon::slice::ParallelSliceMut;
+use rayon::prelude::*;
 
 use crate::{
     bitcoin::{btc_to_sats, sats_to_btc},
@@ -148,65 +150,75 @@ impl AnyDataset for AddressDataset {
                     (amount, illiquid_sats, liquid_sats, highly_liquid_sats),
                 )
             })
-            .collect_vec();
+            .collect::<Vec<_>>();
 
         vec.par_sort_unstable_by(|a, b| Ord::cmp(&a.0, &b.0));
 
         let len = vec.len();
 
-        self.full_dataset.insert(
-            processed_block_data,
-            full_realized_loss,
-            full_realized_profit,
-            full_total_supply,
-            full_utxo_count,
-            len,
-            vec.iter().map(|(price, (full, _, _, _))| (price, full)),
-            vec.iter().map(|(price, (full, _, _, _))| (price, full)),
-            vec.iter().map(|(price, (full, _, _, _))| (price, full)),
-        );
+        thread::scope(|scope| {
+            scope.spawn(|| {
+                self.full_dataset.insert(
+                    processed_block_data,
+                    full_realized_loss,
+                    full_realized_profit,
+                    full_total_supply,
+                    full_utxo_count,
+                    len,
+                    vec.iter().map(|(price, (full, _, _, _))| (price, full)),
+                    vec.iter().map(|(price, (full, _, _, _))| (price, full)),
+                    vec.iter().map(|(price, (full, _, _, _))| (price, full)),
+                );
+            });
 
-        self.illiquid_dataset.insert(
-            processed_block_data,
-            illiquid_realized_loss,
-            illiquid_realized_profit,
-            illiquid_total_supply,
-            illiquid_utxo_count,
-            len,
-            vec.iter()
-                .map(|(price, (_, illiquid, _, _))| (price, illiquid)),
-            vec.iter()
-                .map(|(price, (_, illiquid, _, _))| (price, illiquid)),
-            vec.iter()
-                .map(|(price, (_, illiquid, _, _))| (price, illiquid)),
-        );
+            scope.spawn(|| {
+                self.illiquid_dataset.insert(
+                    processed_block_data,
+                    illiquid_realized_loss,
+                    illiquid_realized_profit,
+                    illiquid_total_supply,
+                    illiquid_utxo_count,
+                    len,
+                    vec.iter()
+                        .map(|(price, (_, illiquid, _, _))| (price, illiquid)),
+                    vec.iter()
+                        .map(|(price, (_, illiquid, _, _))| (price, illiquid)),
+                    vec.iter()
+                        .map(|(price, (_, illiquid, _, _))| (price, illiquid)),
+                );
+            });
 
-        self.liquid_dataset.insert(
-            processed_block_data,
-            liquid_realized_loss,
-            liquid_realized_profit,
-            liquid_total_supply,
-            liquid_utxo_count,
-            len,
-            vec.iter().map(|(price, (_, _, liquid, _))| (price, liquid)),
-            vec.iter().map(|(price, (_, _, liquid, _))| (price, liquid)),
-            vec.iter().map(|(price, (_, _, liquid, _))| (price, liquid)),
-        );
+            scope.spawn(|| {
+                self.liquid_dataset.insert(
+                    processed_block_data,
+                    liquid_realized_loss,
+                    liquid_realized_profit,
+                    liquid_total_supply,
+                    liquid_utxo_count,
+                    len,
+                    vec.iter().map(|(price, (_, _, liquid, _))| (price, liquid)),
+                    vec.iter().map(|(price, (_, _, liquid, _))| (price, liquid)),
+                    vec.iter().map(|(price, (_, _, liquid, _))| (price, liquid)),
+                );
+            });
 
-        self.highly_liquid_dataset.insert(
-            processed_block_data,
-            highly_liquid_realized_loss,
-            highly_liquid_realized_profit,
-            highly_liquid_total_supply,
-            highly_liquid_utxo_count,
-            len,
-            vec.iter()
-                .map(|(price, (_, _, _, highly_liquid))| (price, highly_liquid)),
-            vec.iter()
-                .map(|(price, (_, _, _, highly_liquid))| (price, highly_liquid)),
-            vec.iter()
-                .map(|(price, (_, _, _, highly_liquid))| (price, highly_liquid)),
-        );
+            scope.spawn(|| {
+                self.highly_liquid_dataset.insert(
+                    processed_block_data,
+                    highly_liquid_realized_loss,
+                    highly_liquid_realized_profit,
+                    highly_liquid_total_supply,
+                    highly_liquid_utxo_count,
+                    len,
+                    vec.iter()
+                        .map(|(price, (_, _, _, highly_liquid))| (price, highly_liquid)),
+                    vec.iter()
+                        .map(|(price, (_, _, _, highly_liquid))| (price, highly_liquid)),
+                    vec.iter()
+                        .map(|(price, (_, _, _, highly_liquid))| (price, highly_liquid)),
+                );
+            });
+        });
     }
 
     fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {

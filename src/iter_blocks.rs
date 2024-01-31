@@ -18,8 +18,7 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
     println!("{:?} - Starting aged", Local::now());
 
     let mut datasets = AllDatasets::import()?;
-    let min_initial_last_address_date = datasets.address.get_min_initial_last_date();
-    let min_initial_last_address_height = datasets.address.get_min_initial_last_height();
+    let address_datasets_is_empty = datasets.address.to_vec().is_empty();
     let min_initial_unsafe_address_date = datasets.address.get_min_initial_first_unsafe_date();
     let min_initial_unsafe_address_height = datasets.address.get_min_initial_first_unsafe_height();
 
@@ -33,13 +32,7 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
 
     println!("{:?} - Imported states", Local::now());
 
-    let mut height = find_first_unsafe_height(
-        &mut states,
-        &databases,
-        &datasets,
-        &min_initial_last_address_date,
-        &min_initial_last_address_height,
-    );
+    let mut height = find_first_unsafe_height(&mut states, &databases, &datasets);
 
     println!("{:?} - Starting parsing at height: {height}", Local::now());
 
@@ -108,10 +101,11 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
                     let is_date_last_block = next_block_date
                         .map_or(true, |next_block_date| current_block_date < next_block_date);
 
-                    let compute_addresses = min_initial_unsafe_address_date
-                        .map_or(true, |min_date| current_block_date >= min_date)
-                        || min_initial_unsafe_address_height
-                            .map_or(true, |min_height| current_block_height >= min_height);
+                    let compute_addresses = !address_datasets_is_empty
+                        && (min_initial_unsafe_address_date
+                            .map_or(true, |min_date| current_block_date >= min_date)
+                            || min_initial_unsafe_address_height
+                                .map_or(true, |min_height| current_block_height >= min_height));
 
                     parse_block(ParseData {
                         bitcoin_db,
