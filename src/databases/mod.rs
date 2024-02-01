@@ -30,8 +30,6 @@ impl Databases {
 
     pub fn reset(&self, include_addresses: bool) {
         if include_addresses {
-            println!("Reset address databases");
-
             let _ = self.address_index_to_empty_address_data.reset();
             let _ = self.raw_address_to_address_index.reset();
         }

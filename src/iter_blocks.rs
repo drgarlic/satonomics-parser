@@ -18,7 +18,7 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
     println!("{:?} - Starting aged", Local::now());
 
     let mut datasets = AllDatasets::import()?;
-    let address_datasets_is_empty = datasets.address.to_vec().is_empty();
+    let address_datasets_is_empty = datasets.address.is_empty();
     let min_initial_unsafe_address_date = datasets.address.get_min_initial_first_unsafe_date();
     let min_initial_unsafe_address_height = datasets.address.get_min_initial_first_unsafe_height();
 

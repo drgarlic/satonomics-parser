@@ -8,6 +8,7 @@ pub trait AnyDatabaseGroup {
     fn folder<'a>() -> &'a str;
 
     fn reset(&self) -> color_eyre::Result<(), io::Error> {
+        println!("Reset {}", Self::folder());
         fs::remove_dir_all(databases_folder_path(Self::folder()))
     }
 }

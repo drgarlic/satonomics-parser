@@ -40,7 +40,8 @@ pub fn find_first_unsafe_height(
 
             states.reset();
 
-            let include_addresses = !datasets.address.to_vec().is_empty() && (min_initial_last_address_date.is_none() || min_initial_last_address_height.is_none());
+            let include_addresses = !datasets.address.is_empty() && (min_initial_last_address_date.is_none() || min_initial_last_address_height.is_none());
+
             databases.reset(include_addresses);
 
             0

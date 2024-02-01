@@ -1,4 +1,4 @@
-use std::{thread, time::Instant};
+use std::thread;
 
 use itertools::Itertools;
 use ordered_float::OrderedFloat;

@@ -88,6 +88,10 @@ pub trait AnyDataset {
     fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
         vec![]
     }
+
+    fn is_empty(&self) -> bool {
+        self.to_any_height_map_vec().is_empty() || self.to_any_date_map_vec().is_empty()
+    }
 }
 
 pub trait AnyDatasets {
@@ -163,4 +167,8 @@ pub trait AnyDatasets {
     }
 
     fn to_vec(&self) -> Vec<&(dyn AnyDataset + Send + Sync)>;
+
+    fn is_empty(&self) -> bool {
+        self.to_vec().iter().all(|dataset| dataset.is_empty())
+    }
 }
