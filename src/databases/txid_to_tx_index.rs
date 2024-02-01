@@ -1,6 +1,7 @@
+use std::{collections::BTreeMap, mem};
+
 use bitcoin::Txid;
 use derive_deref::{Deref, DerefMut};
-use nohash_hasher::IntMap;
 use rayon::prelude::*;
 
 use crate::structs::{SizedDatabase, U8x31};
@@ -12,7 +13,7 @@ type Value = u32;
 type Database = SizedDatabase<Key, Value>;
 
 #[derive(Deref, DerefMut, Default)]
-pub struct TxidToTxIndex(IntMap<u8, Database>);
+pub struct TxidToTxIndex(BTreeMap<u8, Database>);
 
 impl TxidToTxIndex {
     pub fn insert(&mut self, txid: &Txid, tx_index: Value) -> Option<Value> {
@@ -59,11 +60,17 @@ impl TxidToTxIndex {
     fn db_index(txid: &Txid) -> u8 {
         txid[0]
     }
+
+    fn inner_mut(&mut self) -> &mut BTreeMap<u8, Database> {
+        &mut self.0
+    }
 }
 
 impl AnyDatabaseGroup for TxidToTxIndex {
     fn export(&mut self) -> color_eyre::Result<()> {
-        self.par_drain().try_for_each(|(_, db)| db.export())?;
+        mem::take(self.inner_mut())
+            .into_par_iter()
+            .try_for_each(|(_, db)| db.export())?;
 
         Ok(())
     }

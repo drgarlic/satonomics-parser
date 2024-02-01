@@ -1,6 +1,5 @@
-use std::thread;
+use std::{collections::BTreeMap, mem, thread};
 
-use nohash_hasher::IntMap;
 use rayon::prelude::*;
 
 use crate::structs::{
@@ -27,12 +26,12 @@ type MultisigDatabase = UnsizedDatabase;
 
 #[derive(Default)]
 pub struct RawAddressToAddressIndex {
-    p2pk: IntMap<u16, P2PKDatabase>,
-    p2pkh: IntMap<u16, P2PKHDatabase>,
-    p2sh: IntMap<u16, P2SHDatabase>,
-    p2wpkh: IntMap<u16, P2WPKHDatabase>,
-    p2wsh: IntMap<u16, P2WSHDatabase>,
-    p2tr: IntMap<u16, P2TRDatabase>,
+    p2pk: BTreeMap<u16, P2PKDatabase>,
+    p2pkh: BTreeMap<u16, P2PKHDatabase>,
+    p2sh: BTreeMap<u16, P2SHDatabase>,
+    p2wpkh: BTreeMap<u16, P2WPKHDatabase>,
+    p2wsh: BTreeMap<u16, P2WSHDatabase>,
+    p2tr: BTreeMap<u16, P2TRDatabase>,
     unknown: Option<UnknownDatabase>,
     empty: Option<EmptyDatabase>,
     multisig: Option<MultisigDatabase>,
@@ -218,12 +217,37 @@ impl RawAddressToAddressIndex {
 impl AnyDatabaseGroup for RawAddressToAddressIndex {
     fn export(&mut self) -> color_eyre::Result<()> {
         thread::scope(|s| {
-            s.spawn(|| self.p2pk.par_drain().try_for_each(|(_, db)| db.export()));
-            s.spawn(|| self.p2pkh.par_drain().try_for_each(|(_, db)| db.export()));
-            s.spawn(|| self.p2sh.par_drain().try_for_each(|(_, db)| db.export()));
-            s.spawn(|| self.p2wpkh.par_drain().try_for_each(|(_, db)| db.export()));
-            s.spawn(|| self.p2wsh.par_drain().try_for_each(|(_, db)| db.export()));
-            s.spawn(|| self.p2tr.par_drain().try_for_each(|(_, db)| db.export()));
+            s.spawn(|| {
+                mem::take(&mut self.p2pk)
+                    .into_par_iter()
+                    .try_for_each(|(_, db)| db.export())
+            });
+            s.spawn(|| {
+                mem::take(&mut self.p2pkh)
+                    .into_par_iter()
+                    .try_for_each(|(_, db)| db.export())
+            });
+            s.spawn(|| {
+                mem::take(&mut self.p2sh)
+                    .into_par_iter()
+                    .try_for_each(|(_, db)| db.export())
+            });
+            s.spawn(|| {
+                mem::take(&mut self.p2wpkh)
+                    .into_par_iter()
+                    .try_for_each(|(_, db)| db.export())
+            });
+            s.spawn(|| {
+                mem::take(&mut self.p2wsh)
+                    .into_par_iter()
+                    .try_for_each(|(_, db)| db.export())
+            });
+            s.spawn(|| {
+                mem::take(&mut self.p2tr)
+                    .into_par_iter()
+                    .try_for_each(|(_, db)| db.export())
+            });
+
             s.spawn(|| self.unknown.take().map(|db| db.export()));
             s.spawn(|| self.empty.take().map(|db| db.export()));
             s.spawn(|| self.multisig.take().map(|db| db.export()));

@@ -1,9 +1,8 @@
 #![allow(dead_code)]
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use color_eyre::eyre::ContextCompat;
-use nohash_hasher::IntMap;
 use serde_json::Value;
 
 use crate::utils::timestamp_to_naive_date;
@@ -11,7 +10,7 @@ use crate::utils::timestamp_to_naive_date;
 pub struct Kraken;
 
 impl Kraken {
-    pub fn fetch_1mn_prices() -> color_eyre::Result<IntMap<u32, f32>> {
+    pub fn fetch_1mn_prices() -> color_eyre::Result<BTreeMap<u32, f32>> {
         println!("kraken: fetch 1mn");
 
         let body: Value =
@@ -45,7 +44,7 @@ impl Kraken {
 
                 (timestamp, price)
             })
-            .collect::<IntMap<_, _>>())
+            .collect::<BTreeMap<_, _>>())
     }
 
     pub fn fetch_daily_prices() -> color_eyre::Result<HashMap<String, f32>> {

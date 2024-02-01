@@ -1,5 +1,6 @@
+use std::{collections::BTreeMap, mem};
+
 use derive_deref::{Deref, DerefMut};
-use nohash_hasher::IntMap;
 use rayon::prelude::*;
 
 use crate::structs::{EmptyAddressData, SizedDatabase};
@@ -11,7 +12,7 @@ type Value = EmptyAddressData;
 type Database = SizedDatabase<Key, Value>;
 
 #[derive(Deref, DerefMut, Default)]
-pub struct AddressIndexToEmptyAddressData(IntMap<usize, Database>);
+pub struct AddressIndexToEmptyAddressData(BTreeMap<usize, Database>);
 
 const DB_MAX_SIZE: usize = 1_000_000;
 
@@ -53,11 +54,17 @@ impl AddressIndexToEmptyAddressData {
     fn db_index(key: &Key) -> usize {
         *key as usize / DB_MAX_SIZE
     }
+
+    fn inner_mut(&mut self) -> &mut BTreeMap<usize, Database> {
+        &mut self.0
+    }
 }
 
 impl AnyDatabaseGroup for AddressIndexToEmptyAddressData {
     fn export(&mut self) -> color_eyre::Result<()> {
-        self.par_drain().try_for_each(|(_, db)| db.export())?;
+        mem::take(self.inner_mut())
+            .into_par_iter()
+            .try_for_each(|(_, db)| db.export())?;
 
         Ok(())
     }

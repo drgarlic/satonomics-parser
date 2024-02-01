@@ -24,6 +24,18 @@ pub struct AddressDataset {
     highly_liquid_dataset: AddressSubDataset,
 }
 
+struct RealizedData {
+    full_realized_profit: f32,
+    illiquid_realized_profit: f32,
+    liquid_realized_profit: f32,
+    highly_liquid_realized_profit: f32,
+
+    full_realized_loss: f32,
+    illiquid_realized_loss: f32,
+    liquid_realized_loss: f32,
+    highly_liquid_realized_loss: f32,
+}
+
 impl AddressDataset {
     pub fn import(path: &str, filter: AddressFilter) -> color_eyre::Result<Self> {
         let f = |s: &str| format!("{path}/{s}");
@@ -36,17 +48,16 @@ impl AddressDataset {
             highly_liquid_dataset: AddressSubDataset::import(&f("highly_liquid"))?,
         })
     }
-}
 
-impl AnyDataset for AddressDataset {
-    fn insert_block_data(&self, processed_block_data: &ProcessedBlockData) {
-        let &ProcessedBlockData {
-            states,
+    fn compute_realized_data(
+        &self,
+        &ProcessedBlockData {
             address_index_to_address_realized_data,
             address_index_to_removed_address_data,
+            states,
             ..
-        } = processed_block_data;
-
+        }: &ProcessedBlockData,
+    ) -> RealizedData {
         let address_index_to_address_data = &states.address_index_to_address_data;
 
         let mut full_realized_profit = 0.0;
@@ -102,6 +113,37 @@ impl AnyDataset for AddressDataset {
                 liquid_realized_loss += split_loss.liquid as f32;
                 highly_liquid_realized_loss += split_loss.highly_liquid as f32;
             });
+
+        RealizedData {
+            full_realized_profit,
+            illiquid_realized_profit,
+            liquid_realized_profit,
+            highly_liquid_realized_profit,
+
+            full_realized_loss,
+            illiquid_realized_loss,
+            liquid_realized_loss,
+            highly_liquid_realized_loss,
+        }
+    }
+}
+
+impl AnyDataset for AddressDataset {
+    fn insert_block_data(&self, processed_block_data: &ProcessedBlockData) {
+        let RealizedData {
+            full_realized_profit,
+            illiquid_realized_profit,
+            liquid_realized_profit,
+            highly_liquid_realized_profit,
+            full_realized_loss,
+            illiquid_realized_loss,
+            liquid_realized_loss,
+            highly_liquid_realized_loss,
+        } = self.compute_realized_data(processed_block_data);
+
+        let &ProcessedBlockData { states, .. } = processed_block_data;
+
+        let address_index_to_address_data = &states.address_index_to_address_data;
 
         let mut full_total_supply = 0;
         let mut illiquid_total_supply = 0;

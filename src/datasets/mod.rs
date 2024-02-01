@@ -1,6 +1,7 @@
 use std::{collections::BTreeMap, sync::RwLockReadGuard, thread};
 
 use chrono::NaiveDate;
+use itertools::Itertools;
 
 mod _traits;
 mod address;
@@ -19,7 +20,6 @@ use block_metadata::*;
 use coinblocks::*;
 use coindays::*;
 use date_metadata::*;
-use itertools::Itertools;
 use price::*;
 use rewards::*;
 use subs::*;
@@ -106,19 +106,17 @@ impl AllDatasets {
 
 impl AnyDatasets for AllDatasets {
     fn to_vec(&self) -> Vec<&(dyn AnyDataset + Send + Sync)> {
-        let vec: Vec<&(dyn AnyDataset + Send + Sync)> = vec![
-            &self.block_metadata,
-            &self.coinblocks,
-            &self.coindays,
-            &self.date_metadata,
-            &self.rewards,
-        ];
-
         vec![
             self.address.to_vec(),
             self.price.to_vec(),
             self.utxo.to_vec(),
-            vec,
+            vec![
+                &self.block_metadata,
+                &self.coinblocks,
+                &self.coindays,
+                &self.date_metadata,
+                &self.rewards,
+            ],
         ]
         .into_iter()
         .flatten()

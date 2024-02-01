@@ -1,6 +1,7 @@
+use std::collections::BTreeMap;
+
 use chrono::{NaiveDateTime, NaiveTime, TimeZone, Timelike, Utc};
 use color_eyre::eyre::Error;
-use nohash_hasher::IntMap;
 
 use crate::{
     datasets::AnyDataset,
@@ -9,9 +10,9 @@ use crate::{
 
 pub struct HeightDataset {
     closes: HeightMap<f32>,
-    kraken_1mn: Option<IntMap<u32, f32>>,
-    binance_1mn: Option<IntMap<u32, f32>>,
-    binance_har: Option<IntMap<u32, f32>>,
+    kraken_1mn: Option<BTreeMap<u32, f32>>,
+    binance_1mn: Option<BTreeMap<u32, f32>>,
+    binance_har: Option<BTreeMap<u32, f32>>,
 }
 
 impl HeightDataset {

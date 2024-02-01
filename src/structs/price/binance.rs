@@ -4,7 +4,6 @@ use std::{collections::BTreeMap, path::Path};
 
 use color_eyre::eyre::ContextCompat;
 use itertools::Itertools;
-use nohash_hasher::IntMap;
 use serde_json::Value;
 
 use crate::structs::{Json, IMPORTS_FOLDER_PATH};
@@ -12,7 +11,7 @@ use crate::structs::{Json, IMPORTS_FOLDER_PATH};
 pub struct Binance;
 
 impl Binance {
-    pub fn read_har_file() -> color_eyre::Result<IntMap<u32, f32>> {
+    pub fn read_har_file() -> color_eyre::Result<BTreeMap<u32, f32>> {
         println!("binance: read har file");
 
         let path_binance_har = Path::new(IMPORTS_FOLDER_PATH).join("binance.har");
@@ -79,10 +78,10 @@ impl Binance {
                     })
                     .collect_vec()
             })
-            .collect::<IntMap<_, _>>())
+            .collect::<BTreeMap<_, _>>())
     }
 
-    pub fn fetch_1mn_prices() -> color_eyre::Result<IntMap<u32, f32>> {
+    pub fn fetch_1mn_prices() -> color_eyre::Result<BTreeMap<u32, f32>> {
         println!("binance: fetch 1mn");
 
         let body: Value = reqwest::blocking::get(
@@ -110,6 +109,6 @@ impl Binance {
 
                 (timestamp, price)
             })
-            .collect::<IntMap<_, _>>())
+            .collect::<BTreeMap<_, _>>())
     }
 }
