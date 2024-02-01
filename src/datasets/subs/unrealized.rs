@@ -1,9 +1,8 @@
-use ordered_float::OrderedFloat;
+use chrono::NaiveDate;
 
 use crate::{
-    bitcoin::sats_to_btc,
     datasets::ProcessedBlockData,
-    structs::{AnyDateMap, AnyHeightMap, BiMap},
+    structs::{AnyBiMap, AnyDateMap, AnyHeightMap, BiMap},
 };
 
 pub struct UnrealizedSubDataset {
@@ -12,10 +11,22 @@ pub struct UnrealizedSubDataset {
     unrealized_loss: BiMap<f32>,
 }
 
-struct ComputedResult {
+#[derive(Default)]
+pub struct UnrealizedState {
     supply_in_profit: u64,
-    unrealized_profit: f32,
-    unrealized_loss: f32,
+    unrealized_profit: f64,
+    unrealized_loss: f64,
+}
+
+impl UnrealizedState {
+    pub fn iterate(&mut self, price_paid: f32, ref_price: f32, sat_amount: u64, btc_amount: f64) {
+        if price_paid < ref_price {
+            self.unrealized_profit += btc_amount * (ref_price - price_paid) as f64;
+            self.supply_in_profit += sat_amount;
+        } else if price_paid > ref_price {
+            self.unrealized_loss += btc_amount * (price_paid - ref_price) as f64
+        }
+    }
 }
 
 impl UnrealizedSubDataset {
@@ -32,87 +43,42 @@ impl UnrealizedSubDataset {
         })
     }
 
-    pub fn insert_height<'a>(
-        &self,
-        &ProcessedBlockData {
-            height,
-            block_price: price,
-            ..
-        }: &ProcessedBlockData,
-        sorted_price_to_amount: impl Iterator<Item = (&'a OrderedFloat<f32>, &'a u64)>,
-    ) {
-        let ComputedResult {
-            supply_in_profit,
-            unrealized_loss,
-            unrealized_profit,
-        } = self.compute(price, sorted_price_to_amount);
+    pub fn are_date_and_height_safe(&self, date: NaiveDate, height: usize) -> bool {
+        self.to_vec()
+            .iter()
+            .any(|bi| bi.are_date_and_height_safe(date, height))
+    }
 
+    pub fn insert(
+        &self,
+        &ProcessedBlockData { height, date, .. }: &ProcessedBlockData,
+        height_state: UnrealizedState,
+        date_state: Option<UnrealizedState>,
+    ) {
         self.supply_in_profit
             .height
-            .insert(height, supply_in_profit);
+            .insert(height, height_state.supply_in_profit);
 
         self.unrealized_profit
             .height
-            .insert(height, unrealized_profit);
+            .insert(height, height_state.unrealized_profit as f32);
 
-        self.unrealized_loss.height.insert(height, unrealized_loss);
-    }
+        self.unrealized_loss
+            .height
+            .insert(height, height_state.unrealized_loss as f32);
 
-    pub fn insert_date<'a>(
-        &self,
-        &ProcessedBlockData {
-            date,
-            date_price: price,
-            is_date_last_block,
-            ..
-        }: &ProcessedBlockData,
-        sorted_price_to_amount: impl Iterator<Item = (&'a OrderedFloat<f32>, &'a u64)>,
-    ) {
-        if !is_date_last_block {
-            unreachable!()
-        }
+        if let Some(date_state) = date_state {
+            self.supply_in_profit
+                .date
+                .insert(date, date_state.supply_in_profit);
 
-        let ComputedResult {
-            supply_in_profit,
-            unrealized_loss,
-            unrealized_profit,
-        } = self.compute(price, sorted_price_to_amount);
+            self.unrealized_profit
+                .date
+                .insert(date, date_state.unrealized_profit as f32);
 
-        self.supply_in_profit.date.insert(date, supply_in_profit);
-
-        self.unrealized_profit.date.insert(date, unrealized_profit);
-
-        self.unrealized_loss.date.insert(date, unrealized_loss);
-    }
-
-    fn compute<'a>(
-        &self,
-        ref_price: f32,
-        sorted_price_to_amount: impl Iterator<Item = (&'a OrderedFloat<f32>, &'a u64)>,
-    ) -> ComputedResult {
-        let mut unrealized_profit = 0.0;
-        let mut unrealized_loss = 0.0;
-
-        let mut supply_in_profit = 0;
-
-        sorted_price_to_amount.for_each(|(price_acquired, sat_amount)| {
-            let price = price_acquired.0;
-            let sat_amount = *sat_amount;
-
-            let btc_amount = sats_to_btc(sat_amount);
-
-            if price < ref_price {
-                unrealized_profit += btc_amount * (ref_price - price) as f64;
-                supply_in_profit += sat_amount;
-            } else if price > ref_price {
-                unrealized_loss += btc_amount * (price - ref_price) as f64
-            }
-        });
-
-        ComputedResult {
-            supply_in_profit,
-            unrealized_loss: unrealized_loss as f32,
-            unrealized_profit: unrealized_profit as f32,
+            self.unrealized_loss
+                .date
+                .insert(date, date_state.unrealized_loss as f32);
         }
     }
 
@@ -129,6 +95,14 @@ impl UnrealizedSubDataset {
             &self.supply_in_profit.date,
             &self.unrealized_profit.date,
             &self.unrealized_loss.date,
+        ]
+    }
+
+    pub fn to_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
+        vec![
+            &self.supply_in_profit,
+            &self.unrealized_profit,
+            &self.unrealized_loss,
         ]
     }
 }

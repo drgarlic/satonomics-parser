@@ -41,16 +41,17 @@ pub struct ProcessedBlockData<'a> {
     pub address_index_to_address_realized_data: &'a BTreeMap<u32, AddressRealizedData<'a>>,
     pub address_index_to_removed_address_data: &'a BTreeMap<u32, AddressData>,
     pub block_path_to_spent_value: &'a BTreeMap<BlockPath, u64>,
+    pub block_price: f32,
     pub coinbase_vec: &'a Vec<u64>,
     pub coinblocks_destroyed_vec: &'a Vec<f64>,
     pub coindays_destroyed_vec: &'a Vec<f64>,
     pub date: NaiveDate,
     pub date_price: f32,
-    pub states: &'a States,
     pub fees_vec: &'a Vec<Vec<u64>>,
     pub height: usize,
     pub is_date_last_block: bool,
-    pub block_price: f32,
+    pub sorted_address_data: Option<Vec<&'a AddressData>>,
+    pub states: &'a States,
     pub timestamp: u32,
 }
 
@@ -80,11 +81,11 @@ impl AllDatasets {
 
             let block_metadata_handle = scope.spawn(|| BlockMetadataDataset::import(path));
 
-            let price_handle = scope.spawn(|| PriceDatasets::import(path));
-
             let utxo_handle = scope.spawn(|| UTXODatasets::import(path));
 
             let address = AddressDatasets::import(path)?;
+
+            let price_handle = PriceDatasets::import()?;
 
             Ok(Self {
                 address,
@@ -92,7 +93,7 @@ impl AllDatasets {
                 coinblocks: coinblocks_handle.join().unwrap()?,
                 coindays: coindays_handle.join().unwrap()?,
                 date_metadata: date_metadata_handle.join().unwrap()?,
-                price: price_handle.join().unwrap()?,
+                price: price_handle,
                 rewards: rewards_handle.join().unwrap()?,
                 utxo: utxo_handle.join().unwrap()?,
             })

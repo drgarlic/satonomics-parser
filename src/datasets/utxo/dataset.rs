@@ -6,8 +6,8 @@ use rayon::slice::ParallelSliceMut;
 use crate::{
     bitcoin::sats_to_btc,
     datasets::{
-        AnyDataset, PricePaidSubDataset, ProcessedBlockData, RealizedSubDataset, SupplySubDataset,
-        UTXOsMetadataSubDataset, UnrealizedSubDataset,
+        AnyDataset, PricePaidState, PricePaidSubDataset, ProcessedBlockData, RealizedSubDataset,
+        SupplySubDataset, UTXOsMetadataSubDataset, UnrealizedState, UnrealizedSubDataset,
     },
     structs::{AnyDateMap, BlockPath},
     structs::{AnyHeightMap, BlockData},
@@ -44,6 +44,9 @@ impl AnyDataset for UTXODataset {
             block_path_to_spent_value,
             block_price,
             is_date_last_block,
+            date,
+            height,
+            date_price,
             states,
             ..
         } = processed_block_data;
@@ -51,51 +54,6 @@ impl AnyDataset for UTXODataset {
         let date_data_vec = &states.date_data_vec;
 
         let len = date_data_vec.len();
-
-        let mut realized_profit = 0.0;
-        let mut realized_loss = 0.0;
-
-        block_path_to_spent_value
-            .iter()
-            .map(|(block_path, value)| {
-                let &BlockPath {
-                    date_index,
-                    block_index,
-                } = block_path;
-
-                let date_data = date_data_vec.get(date_index as usize).unwrap();
-
-                (date_data, date_index, block_index, value)
-            })
-            .filter(|(date_data, date_index, _, _)| {
-                let diff = len - 1 - (*date_index as usize);
-
-                match self.filter {
-                    UTXOFilter::Full => true,
-                    UTXOFilter::From(from) => from <= diff,
-                    UTXOFilter::To(to) => to > diff,
-                    UTXOFilter::FromTo { from, to } => from <= diff && to > diff,
-                    UTXOFilter::Year(year) => year == date_data.date.year() as usize,
-                }
-            })
-            .map(|(date_data, _, block_index, value)| {
-                let BlockData {
-                    price: previous_price,
-                    ..
-                } = date_data.blocks.get(block_index as usize).unwrap();
-
-                (previous_price, value)
-            })
-            .for_each(|(previous_price, value)| {
-                let previous_dollar_amount = *previous_price as f64 * sats_to_btc(*value);
-                let current_dollar_amount = block_price as f64 * sats_to_btc(*value);
-
-                if previous_dollar_amount < current_dollar_amount {
-                    realized_profit += (current_dollar_amount - previous_dollar_amount) as f32
-                } else if current_dollar_amount < previous_dollar_amount {
-                    realized_loss += (previous_dollar_amount - current_dollar_amount) as f32
-                }
-            });
 
         let mut total_supply = 0;
         let mut utxo_count = 0;
@@ -132,41 +90,109 @@ impl AnyDataset for UTXODataset {
         })
         .flat_map(|date_data| &date_data.blocks)
         .map(|block_data| {
-            total_supply += block_data.amount;
+            let sat_amount = block_data.amount;
+
+            total_supply += sat_amount;
+
             utxo_count += block_data.spendable_outputs as usize;
 
-            (OrderedFloat(block_data.price), block_data.amount)
+            (OrderedFloat(block_data.price), sat_amount)
         })
         .collect_vec();
 
         vec.par_sort_unstable_by(|a, b| Ord::cmp(&a.0, &b.0));
 
-        self.price_paid.insert(
-            processed_block_data,
-            total_supply,
-            #[allow(clippy::map_identity)]
-            vec.iter().map(|(price, amount)| (price, amount)),
-        );
+        let total_supply_in_btc = sats_to_btc(total_supply);
 
-        self.realized
-            .insert(processed_block_data, realized_loss, realized_profit);
+        let mut pp_state = PricePaidState::default();
+
+        let mut unrealized_height_state = UnrealizedState::default();
+
+        let mut unrealized_date_state = {
+            if is_date_last_block {
+                Some(UnrealizedState::default())
+            } else {
+                None
+            }
+        };
 
         self.supply.insert(processed_block_data, total_supply);
 
-        self.unrealized.insert_height(
-            processed_block_data,
-            #[allow(clippy::map_identity)]
-            vec.iter().map(|(price, amount)| (price, amount)),
-        );
-
         self.utxos_metadata.insert(processed_block_data, utxo_count);
 
-        if is_date_last_block {
-            self.unrealized.insert_date(
+        if !self.price_paid.are_date_and_height_safe(date, height)
+            || !self.unrealized.are_date_and_height_safe(date, height)
+        {
+            vec.iter().for_each(|(price, sat_amount)| {
+                let price = price.0;
+                let sat_amount = *sat_amount;
+
+                let btc_amount = sats_to_btc(sat_amount);
+
+                pp_state.iterate(price, btc_amount, sat_amount, total_supply);
+
+                unrealized_height_state.iterate(price, block_price, sat_amount, btc_amount);
+
+                if is_date_last_block {
+                    unrealized_date_state
+                        .as_mut()
+                        .unwrap()
+                        .iterate(price, date_price, sat_amount, btc_amount);
+                }
+            });
+
+            self.price_paid
+                .insert(processed_block_data, pp_state, total_supply_in_btc);
+
+            self.unrealized.insert(
                 processed_block_data,
-                #[allow(clippy::map_identity)]
-                vec.iter().map(|(price, amount)| (price, amount)),
+                unrealized_height_state,
+                unrealized_date_state,
             );
+        }
+
+        if !self.realized.are_date_and_height_safe(date, height) {
+            let mut realized_profit = 0.0;
+            let mut realized_loss = 0.0;
+
+            block_path_to_spent_value
+                .iter()
+                .map(|(block_path, value)| {
+                    let date_data = date_data_vec.get(block_path.date_index as usize).unwrap();
+                    (block_path, date_data, value)
+                })
+                .filter(|(block_path, date_data, _)| {
+                    let diff = len - 1 - (block_path.date_index as usize);
+
+                    match self.filter {
+                        UTXOFilter::Full => true,
+                        UTXOFilter::From(from) => from <= diff,
+                        UTXOFilter::To(to) => to > diff,
+                        UTXOFilter::FromTo { from, to } => from <= diff && to > diff,
+                        UTXOFilter::Year(year) => year == date_data.date.year() as usize,
+                    }
+                })
+                .for_each(|(block_path, date_data, value)| {
+                    let BlockData {
+                        price: previous_price,
+                        ..
+                    } = date_data
+                        .blocks
+                        .get(block_path.block_index as usize)
+                        .unwrap();
+
+                    let previous_dollar_amount = *previous_price as f64 * sats_to_btc(*value);
+                    let current_dollar_amount = block_price as f64 * sats_to_btc(*value);
+
+                    if previous_dollar_amount < current_dollar_amount {
+                        realized_profit += (current_dollar_amount - previous_dollar_amount) as f32
+                    } else if current_dollar_amount < previous_dollar_amount {
+                        realized_loss += (previous_dollar_amount - current_dollar_amount) as f32
+                    }
+                });
+
+            self.realized
+                .insert(processed_block_data, realized_loss, realized_profit);
         }
     }
 

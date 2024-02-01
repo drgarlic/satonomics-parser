@@ -3,6 +3,7 @@ use std::{collections::BTreeMap, ops::ControlFlow};
 use bitcoin::{Block, TxOut, Txid};
 use chrono::NaiveDate;
 use itertools::Itertools;
+use ordered_float::OrderedFloat;
 use rayon::prelude::*;
 
 use crate::{
@@ -457,6 +458,23 @@ pub fn parse_block(
             );
         });
 
+    let sorted_address_data = {
+        if compute_addresses && datasets.address.needs_sorted_address_data(date, height) {
+            let mut vec = states.address_index_to_address_data.values().collect_vec();
+
+            vec.par_sort_unstable_by(|a, b| {
+                Ord::cmp(
+                    &OrderedFloat(a.mean_price_paid),
+                    &OrderedFloat(b.mean_price_paid),
+                )
+            });
+
+            Some(vec)
+        } else {
+            None
+        }
+    };
+
     coinblocks_destroyed_vec.push(coinblocks_destroyed);
     coindays_destroyed_vec.push(coindays_destroyed);
 
@@ -473,6 +491,7 @@ pub fn parse_block(
         fees_vec,
         height,
         is_date_last_block,
+        sorted_address_data,
         states,
         timestamp,
     });

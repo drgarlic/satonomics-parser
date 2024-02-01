@@ -61,6 +61,8 @@ impl States {
     }
 
     pub fn reset(&mut self) {
+        println!("Reseting all states...");
+
         let _ = self.address_index_to_address_data.reset();
         let _ = self.counters.reset();
         let _ = self.date_data_vec.reset();

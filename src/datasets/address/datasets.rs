@@ -1,5 +1,7 @@
 use std::thread;
 
+use chrono::NaiveDate;
+
 use crate::{
     datasets::{AnyDataset, AnyDatasets},
     structs::RawAddressType,
@@ -126,11 +128,9 @@ impl AddressDatasets {
             })
         })
     }
-}
 
-impl AnyDatasets for AddressDatasets {
-    fn to_vec(&self) -> Vec<&(dyn AnyDataset + Send + Sync)> {
-        vec![
+    pub fn needs_sorted_address_data(&self, date: NaiveDate, height: usize) -> bool {
+        [
             &self.plankton,
             &self.shrimp,
             &self.crab,
@@ -145,6 +145,29 @@ impl AnyDatasets for AddressDatasets {
             &self.p2wpkh,
             &self.p2wsh,
             &self.p2tr,
+        ]
+        .iter()
+        .any(|dataset| dataset.needs_sorted_address_data(date, height))
+    }
+}
+
+impl AnyDatasets for AddressDatasets {
+    fn to_vec(&self) -> Vec<&(dyn AnyDataset + Send + Sync)> {
+        vec![
+            // &self.plankton,
+            // &self.shrimp,
+            // &self.crab,
+            // &self.fish,
+            // &self.shark,
+            // &self.whale,
+            // &self.humpback,
+            // &self.megalodon,
+            // &self.p2pk,
+            // &self.p2pkh,
+            // &self.p2sh,
+            // &self.p2wpkh,
+            // &self.p2wsh,
+            // &self.p2tr,
         ]
     }
 }

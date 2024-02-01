@@ -1,6 +1,9 @@
+use chrono::NaiveDate;
+use itertools::Itertools;
+
 use crate::{
     datasets::ProcessedBlockData,
-    structs::{AnyDateMap, AnyHeightMap, BiMap},
+    structs::{AnyBiMap, AnyDateMap, AnyHeightMap, BiMap},
 };
 
 /// NOTE: Fees not taken into account
@@ -40,11 +43,27 @@ impl RealizedSubDataset {
         }
     }
 
+    pub fn are_date_and_height_safe(&self, date: NaiveDate, height: usize) -> bool {
+        self.to_vec()
+            .iter()
+            .any(|bi| bi.are_date_and_height_safe(date, height))
+    }
+
     pub fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
-        vec![&self.profit.height, &self.loss.height]
+        self.to_vec()
+            .into_iter()
+            .map(|bi| &bi.height as &(dyn AnyHeightMap + Send + Sync))
+            .collect_vec()
     }
 
     pub fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
-        vec![&self.profit.date, &self.loss.date]
+        self.to_vec()
+            .into_iter()
+            .map(|bi| &bi.date as &(dyn AnyDateMap + Send + Sync))
+            .collect_vec()
+    }
+
+    pub fn to_vec(&self) -> Vec<&BiMap<f32>> {
+        vec![&self.profit, &self.loss]
     }
 }

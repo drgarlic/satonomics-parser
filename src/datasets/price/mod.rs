@@ -13,12 +13,12 @@ pub struct PriceDatasets {
 }
 
 impl PriceDatasets {
-    pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
-        let dir = format!("{parent_path}/price");
+    pub fn import() -> color_eyre::Result<Self> {
+        let path = "./price";
 
         Ok(Self {
-            date: DateDataset::import(&dir)?,
-            height: HeightDataset::import(&dir)?,
+            date: DateDataset::import(path)?,
+            height: HeightDataset::import(path)?,
         })
     }
 

@@ -1,10 +1,9 @@
 use chrono::NaiveDate;
-use ordered_float::OrderedFloat;
+use itertools::Itertools;
 
 use crate::{
-    bitcoin::sats_to_btc,
     datasets::ProcessedBlockData,
-    structs::{AnyDateMap, AnyHeightMap, BiMap},
+    structs::{AnyBiMap, AnyDateMap, AnyHeightMap, BiMap},
 };
 
 pub struct PricePaidSubDataset {
@@ -28,6 +27,141 @@ pub struct PricePaidSubDataset {
     pp_15p: BiMap<f32>,
     pp_10p: BiMap<f32>,
     pp_05p: BiMap<f32>,
+}
+
+#[derive(Default)]
+pub struct PricePaidState {
+    pub price_mean_sum: f64,
+
+    pub pp_05p: Option<f32>,
+    pub pp_10p: Option<f32>,
+    pub pp_15p: Option<f32>,
+    pub pp_20p: Option<f32>,
+    pub pp_25p: Option<f32>,
+    pub pp_30p: Option<f32>,
+    pub pp_35p: Option<f32>,
+    pub pp_40p: Option<f32>,
+    pub pp_45p: Option<f32>,
+    pub pp_median: Option<f32>,
+    pub pp_55p: Option<f32>,
+    pub pp_60p: Option<f32>,
+    pub pp_65p: Option<f32>,
+    pub pp_70p: Option<f32>,
+    pub pp_75p: Option<f32>,
+    pub pp_80p: Option<f32>,
+    pub pp_85p: Option<f32>,
+    pub pp_90p: Option<f32>,
+    pub pp_95p: Option<f32>,
+
+    pub processed_amount: u64,
+}
+
+impl PricePaidState {
+    pub fn iterate(&mut self, price: f32, btc_amount: f64, sat_amount: u64, total_supply: u64) {
+        let PricePaidState {
+            processed_amount,
+            price_mean_sum,
+            pp_05p,
+            pp_10p,
+            pp_15p,
+            pp_20p,
+            pp_25p,
+            pp_30p,
+            pp_35p,
+            pp_40p,
+            pp_45p,
+            pp_median,
+            pp_55p,
+            pp_60p,
+            pp_65p,
+            pp_70p,
+            pp_75p,
+            pp_80p,
+            pp_85p,
+            pp_90p,
+            pp_95p,
+        } = self;
+
+        *price_mean_sum += btc_amount * (price as f64);
+
+        *processed_amount += sat_amount;
+
+        if pp_05p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.05 {
+            pp_05p.replace(price);
+        }
+
+        if pp_10p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.1 {
+            pp_10p.replace(price);
+        }
+
+        if pp_15p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.15 {
+            pp_15p.replace(price);
+        }
+
+        if pp_20p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.2 {
+            pp_20p.replace(price);
+        }
+
+        if pp_25p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.25 {
+            pp_25p.replace(price);
+        }
+
+        if pp_30p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.3 {
+            pp_30p.replace(price);
+        }
+
+        if pp_35p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.35 {
+            pp_35p.replace(price);
+        }
+
+        if pp_40p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.4 {
+            pp_40p.replace(price);
+        }
+
+        if pp_45p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.45 {
+            pp_45p.replace(price);
+        }
+
+        if pp_median.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.5 {
+            pp_median.replace(price);
+        }
+
+        if pp_55p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.55 {
+            pp_55p.replace(price);
+        }
+
+        if pp_60p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.6 {
+            pp_60p.replace(price);
+        }
+
+        if pp_65p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.65 {
+            pp_65p.replace(price);
+        }
+
+        if pp_70p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.7 {
+            pp_70p.replace(price);
+        }
+
+        if pp_75p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.75 {
+            pp_75p.replace(price);
+        }
+
+        if pp_80p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.8 {
+            pp_80p.replace(price);
+        }
+
+        if pp_85p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.85 {
+            pp_85p.replace(price);
+        }
+
+        if pp_90p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.9 {
+            pp_90p.replace(price);
+        }
+
+        if pp_95p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.95 {
+            pp_95p.replace(price);
+        }
+    }
 }
 
 impl PricePaidSubDataset {
@@ -80,142 +214,46 @@ impl PricePaidSubDataset {
         })
     }
 
-    pub fn insert<'a>(
+    pub fn are_date_and_height_safe(&self, date: NaiveDate, height: usize) -> bool {
+        self.to_vec()
+            .iter()
+            .any(|bi| bi.are_date_and_height_safe(date, height))
+    }
+
+    pub fn insert(
         &self,
         &ProcessedBlockData {
             date,
             height,
-            block_price,
             is_date_last_block,
             ..
         }: &ProcessedBlockData,
-        total_supply: u64,
-        sorted_price_to_amount: impl Iterator<Item = (&'a OrderedFloat<f32>, &'a u64)>,
+        state: PricePaidState,
+        total_supply_in_btc: f64,
     ) {
-        let mut unrealized_profit = 0.0;
-        let mut unrealized_loss = 0.0;
-
-        let mut supply_in_profit = 0;
-
-        let mut undivided_price_mean = 0.0;
-
-        let mut pp_05p = None;
-        let mut pp_10p = None;
-        let mut pp_15p = None;
-        let mut pp_20p = None;
-        let mut pp_25p = None;
-        let mut pp_30p = None;
-        let mut pp_35p = None;
-        let mut pp_40p = None;
-        let mut pp_45p = None;
-        let mut pp_median = None;
-        let mut pp_55p = None;
-        let mut pp_60p = None;
-        let mut pp_65p = None;
-        let mut pp_70p = None;
-        let mut pp_75p = None;
-        let mut pp_80p = None;
-        let mut pp_85p = None;
-        let mut pp_90p = None;
-        let mut pp_95p = None;
-
-        let mut processed_amount_in_btc = 0.0;
-
-        let total_supply_in_btc = sats_to_btc(total_supply);
-
-        sorted_price_to_amount.for_each(|(price, sat_amount)| {
-            let price = price.0;
-            let sat_amount = *sat_amount;
-
-            let btc_amount = sats_to_btc(sat_amount);
-
-            if price < block_price {
-                unrealized_profit += btc_amount * (block_price - price) as f64;
-                supply_in_profit += sat_amount;
-            } else if price > block_price {
-                unrealized_loss += btc_amount * (price - block_price) as f64
-            }
-
-            undivided_price_mean += btc_amount * (price as f64);
-
-            processed_amount_in_btc += btc_amount;
-
-            if pp_05p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.05 {
-                pp_05p.replace(price);
-            }
-
-            if pp_10p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.1 {
-                pp_10p.replace(price);
-            }
-
-            if pp_15p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.15 {
-                pp_15p.replace(price);
-            }
-
-            if pp_20p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.2 {
-                pp_20p.replace(price);
-            }
-
-            if pp_25p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.25 {
-                pp_25p.replace(price);
-            }
-
-            if pp_30p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.3 {
-                pp_30p.replace(price);
-            }
-
-            if pp_35p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.35 {
-                pp_35p.replace(price);
-            }
-
-            if pp_40p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.4 {
-                pp_40p.replace(price);
-            }
-
-            if pp_45p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.45 {
-                pp_45p.replace(price);
-            }
-
-            if pp_median.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.5 {
-                pp_median.replace(price);
-            }
-
-            if pp_55p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.55 {
-                pp_55p.replace(price);
-            }
-
-            if pp_60p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.6 {
-                pp_60p.replace(price);
-            }
-
-            if pp_65p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.65 {
-                pp_65p.replace(price);
-            }
-
-            if pp_70p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.7 {
-                pp_70p.replace(price);
-            }
-
-            if pp_75p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.75 {
-                pp_75p.replace(price);
-            }
-
-            if pp_80p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.8 {
-                pp_80p.replace(price);
-            }
-
-            if pp_85p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.85 {
-                pp_85p.replace(price);
-            }
-
-            if pp_90p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.9 {
-                pp_90p.replace(price);
-            }
-
-            if pp_95p.is_none() && processed_amount_in_btc >= total_supply_in_btc * 0.95 {
-                pp_95p.replace(price);
-            }
-        });
+        let PricePaidState {
+            price_mean_sum,
+            pp_05p,
+            pp_10p,
+            pp_15p,
+            pp_20p,
+            pp_25p,
+            pp_30p,
+            pp_35p,
+            pp_40p,
+            pp_45p,
+            pp_median,
+            pp_55p,
+            pp_60p,
+            pp_65p,
+            pp_70p,
+            pp_75p,
+            pp_80p,
+            pp_85p,
+            pp_90p,
+            pp_95p,
+            ..
+        } = state;
 
         // Check if iter was empty
         if pp_05p.is_none() {
@@ -230,7 +268,7 @@ impl PricePaidSubDataset {
 
         let mean_price = {
             if total_supply_in_btc != 0.0 {
-                (undivided_price_mean / total_supply_in_btc) as f32
+                (price_mean_sum / total_supply_in_btc) as f32
             } else {
                 0.0
             }
@@ -282,98 +320,53 @@ impl PricePaidSubDataset {
     }
 
     fn insert_height_default(&self, height: usize) {
-        self.pp_mean.height.insert_default(height);
-        self.pp_05p.height.insert_default(height);
-        self.pp_10p.height.insert_default(height);
-        self.pp_15p.height.insert_default(height);
-        self.pp_20p.height.insert_default(height);
-        self.pp_25p.height.insert_default(height);
-        self.pp_30p.height.insert_default(height);
-        self.pp_35p.height.insert_default(height);
-        self.pp_40p.height.insert_default(height);
-        self.pp_45p.height.insert_default(height);
-        self.pp_median.height.insert_default(height);
-        self.pp_55p.height.insert_default(height);
-        self.pp_60p.height.insert_default(height);
-        self.pp_65p.height.insert_default(height);
-        self.pp_70p.height.insert_default(height);
-        self.pp_75p.height.insert_default(height);
-        self.pp_80p.height.insert_default(height);
-        self.pp_85p.height.insert_default(height);
-        self.pp_90p.height.insert_default(height);
-        self.pp_95p.height.insert_default(height);
+        self.to_vec()
+            .iter()
+            .for_each(|bi| bi.height.insert_default(height))
     }
 
     fn insert_date_default(&self, date: NaiveDate) {
-        self.pp_mean.date.insert_default(date);
-        self.pp_05p.date.insert_default(date);
-        self.pp_10p.date.insert_default(date);
-        self.pp_15p.date.insert_default(date);
-        self.pp_20p.date.insert_default(date);
-        self.pp_25p.date.insert_default(date);
-        self.pp_30p.date.insert_default(date);
-        self.pp_35p.date.insert_default(date);
-        self.pp_40p.date.insert_default(date);
-        self.pp_45p.date.insert_default(date);
-        self.pp_median.date.insert_default(date);
-        self.pp_55p.date.insert_default(date);
-        self.pp_60p.date.insert_default(date);
-        self.pp_65p.date.insert_default(date);
-        self.pp_70p.date.insert_default(date);
-        self.pp_75p.date.insert_default(date);
-        self.pp_80p.date.insert_default(date);
-        self.pp_85p.date.insert_default(date);
-        self.pp_90p.date.insert_default(date);
-        self.pp_95p.date.insert_default(date);
+        self.to_vec()
+            .iter()
+            .for_each(|bi| bi.date.insert_default(date))
     }
 
     pub fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
-        vec![
-            &self.pp_mean.height,
-            &self.pp_95p.height,
-            &self.pp_90p.height,
-            &self.pp_85p.height,
-            &self.pp_80p.height,
-            &self.pp_75p.height,
-            &self.pp_70p.height,
-            &self.pp_65p.height,
-            &self.pp_60p.height,
-            &self.pp_55p.height,
-            &self.pp_median.height,
-            &self.pp_45p.height,
-            &self.pp_40p.height,
-            &self.pp_35p.height,
-            &self.pp_30p.height,
-            &self.pp_25p.height,
-            &self.pp_20p.height,
-            &self.pp_15p.height,
-            &self.pp_10p.height,
-            &self.pp_05p.height,
-        ]
+        self.to_vec()
+            .into_iter()
+            .map(|bi| &bi.height as &(dyn AnyHeightMap + Send + Sync))
+            .collect_vec()
     }
 
     pub fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
+        self.to_vec()
+            .into_iter()
+            .map(|bi| &bi.date as &(dyn AnyDateMap + Send + Sync))
+            .collect_vec()
+    }
+
+    pub fn to_vec(&self) -> Vec<&BiMap<f32>> {
         vec![
-            &self.pp_mean.date,
-            &self.pp_95p.date,
-            &self.pp_90p.date,
-            &self.pp_85p.date,
-            &self.pp_80p.date,
-            &self.pp_75p.date,
-            &self.pp_70p.date,
-            &self.pp_65p.date,
-            &self.pp_60p.date,
-            &self.pp_55p.date,
-            &self.pp_median.date,
-            &self.pp_45p.date,
-            &self.pp_40p.date,
-            &self.pp_35p.date,
-            &self.pp_30p.date,
-            &self.pp_25p.date,
-            &self.pp_20p.date,
-            &self.pp_15p.date,
-            &self.pp_10p.date,
-            &self.pp_05p.date,
+            &self.pp_mean,
+            &self.pp_95p,
+            &self.pp_90p,
+            &self.pp_85p,
+            &self.pp_80p,
+            &self.pp_75p,
+            &self.pp_70p,
+            &self.pp_65p,
+            &self.pp_60p,
+            &self.pp_55p,
+            &self.pp_median,
+            &self.pp_45p,
+            &self.pp_40p,
+            &self.pp_35p,
+            &self.pp_30p,
+            &self.pp_25p,
+            &self.pp_20p,
+            &self.pp_15p,
+            &self.pp_10p,
+            &self.pp_05p,
         ]
     }
 }

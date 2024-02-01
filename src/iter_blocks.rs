@@ -99,7 +99,8 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
                     }
 
                     let is_date_last_block = next_block_date
-                        .map_or(true, |next_block_date| current_block_date < next_block_date);
+                        // Do NOT change `blocks_loop_date` to `current_block_date` !!!
+                        .map_or(true, |next_block_date| blocks_loop_date < next_block_date);
 
                     let compute_addresses = !address_datasets_is_empty
                         && (min_initial_unsafe_address_date
