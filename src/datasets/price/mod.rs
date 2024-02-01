@@ -32,7 +32,7 @@ impl PriceDatasets {
 }
 
 impl AnyDatasets for PriceDatasets {
-    fn to_vec(&self) -> Vec<&(dyn super::AnyDataset + Send + Sync)> {
+    fn to_any_dataset_vec(&self) -> Vec<&(dyn super::AnyDataset + Send + Sync)> {
         vec![&self.date, &self.height]
     }
 }

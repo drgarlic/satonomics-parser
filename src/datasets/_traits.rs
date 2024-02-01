@@ -96,7 +96,7 @@ pub trait AnyDataset {
 
 pub trait AnyDatasets {
     fn get_min_initial_last_date(&self) -> Option<NaiveDate> {
-        self.to_vec()
+        self.to_any_dataset_vec()
             .iter()
             .filter(|dataset| !dataset.to_any_date_map_vec().is_empty())
             .map(|dataset| dataset.get_min_initial_last_date())
@@ -105,7 +105,7 @@ pub trait AnyDatasets {
     }
 
     fn get_min_initial_last_height(&self) -> Option<usize> {
-        self.to_vec()
+        self.to_any_dataset_vec()
             .iter()
             .filter(|dataset| !dataset.to_any_height_map_vec().is_empty())
             .map(|dataset| dataset.get_min_initial_last_height())
@@ -114,7 +114,7 @@ pub trait AnyDatasets {
     }
 
     fn get_min_initial_first_unsafe_date(&self) -> Option<NaiveDate> {
-        self.to_vec()
+        self.to_any_dataset_vec()
             .iter()
             .filter(|dataset| !dataset.to_any_date_map_vec().is_empty())
             .map(|dataset| dataset.get_min_initial_first_unsafe_date())
@@ -123,7 +123,7 @@ pub trait AnyDatasets {
     }
 
     fn get_min_initial_first_unsafe_height(&self) -> Option<usize> {
-        self.to_vec()
+        self.to_any_dataset_vec()
             .iter()
             .filter(|dataset| !dataset.to_any_height_map_vec().is_empty())
             .map(|dataset| dataset.get_min_initial_first_unsafe_height())
@@ -134,7 +134,7 @@ pub trait AnyDatasets {
     fn insert_date_data(&self, processed_date_data: ProcessedDateData) {
         let ProcessedDateData { date, .. } = processed_date_data;
 
-        self.to_vec()
+        self.to_any_dataset_vec()
             .par_iter()
             .filter(|dataset| dataset.process_date(date))
             .for_each(|dataset| dataset.insert_date_data(&processed_date_data));
@@ -143,14 +143,14 @@ pub trait AnyDatasets {
     fn insert_block_data(&self, processed_block_data: ProcessedBlockData) {
         let ProcessedBlockData { height, .. } = processed_block_data;
 
-        self.to_vec()
+        self.to_any_dataset_vec()
             .par_iter()
             .filter(|dataset| dataset.process_height(height))
             .for_each(|dataset| dataset.insert_block_data(&processed_block_data));
     }
 
     fn export_if_needed(&self, date: NaiveDate, height: usize) -> color_eyre::Result<()> {
-        self.to_vec()
+        self.to_any_dataset_vec()
             .par_iter()
             .filter(|dataset| dataset.process_height(height) || dataset.process_date(date))
             .try_for_each(|dataset| dataset.export())?;
@@ -159,16 +159,18 @@ pub trait AnyDatasets {
     }
 
     fn export(&self) -> color_eyre::Result<()> {
-        self.to_vec()
+        self.to_any_dataset_vec()
             .par_iter()
             .try_for_each(|dataset| dataset.export())?;
 
         Ok(())
     }
 
-    fn to_vec(&self) -> Vec<&(dyn AnyDataset + Send + Sync)>;
+    fn to_any_dataset_vec(&self) -> Vec<&(dyn AnyDataset + Send + Sync)>;
 
     fn is_empty(&self) -> bool {
-        self.to_vec().iter().all(|dataset| dataset.is_empty())
+        self.to_any_dataset_vec()
+            .iter()
+            .all(|dataset| dataset.is_empty())
     }
 }

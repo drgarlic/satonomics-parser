@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, ops::ControlFlow};
 
 use bitcoin::{Block, TxOut, Txid};
-use chrono::NaiveDate;
+use chrono::{Datelike, NaiveDate};
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
 use rayon::prelude::*;
@@ -475,6 +475,33 @@ pub fn parse_block(
         }
     };
 
+    let sorted_block_data_vec = {
+        if datasets.utxo.needs_sorted_block_data_vec(date, height) {
+            let date_data_vec = &states.date_data_vec;
+            let len = date_data_vec.len();
+
+            let mut sorted_block_data_vec = date_data_vec
+                .iter()
+                .enumerate()
+                .map(|(index, date_data)| (len - index - 1, date_data))
+                .flat_map(|(reversed_index, date_data)| {
+                    date_data
+                        .blocks
+                        .iter()
+                        .map(move |block_data| (reversed_index, date_data.date.year(), block_data))
+                })
+                .collect_vec();
+
+            sorted_block_data_vec.par_sort_unstable_by(|a, b| {
+                Ord::cmp(&OrderedFloat(a.2.price), &OrderedFloat(b.2.price))
+            });
+
+            Some(sorted_block_data_vec)
+        } else {
+            None
+        }
+    };
+
     coinblocks_destroyed_vec.push(coinblocks_destroyed);
     coindays_destroyed_vec.push(coindays_destroyed);
 
@@ -492,6 +519,7 @@ pub fn parse_block(
         height,
         is_date_last_block,
         sorted_address_data,
+        sorted_block_data_vec,
         states,
         timestamp,
     });

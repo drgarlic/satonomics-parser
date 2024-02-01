@@ -1,7 +1,4 @@
-use chrono::Datelike;
-use itertools::Itertools;
-use ordered_float::OrderedFloat;
-use rayon::slice::ParallelSliceMut;
+use chrono::{Datelike, NaiveDate};
 
 use crate::{
     bitcoin::sats_to_btc,
@@ -9,7 +6,7 @@ use crate::{
         AnyDataset, PricePaidState, PricePaidSubDataset, ProcessedBlockData, RealizedSubDataset,
         SupplySubDataset, UTXOsMetadataSubDataset, UnrealizedState, UnrealizedSubDataset,
     },
-    structs::{AnyDateMap, BlockPath},
+    structs::AnyDateMap,
     structs::{AnyHeightMap, BlockData},
 };
 
@@ -36,6 +33,22 @@ impl UTXODataset {
             utxos_metadata: UTXOsMetadataSubDataset::import(&folder_path)?,
         })
     }
+
+    pub fn needs_sorted_block_data_vec(&self, date: NaiveDate, height: usize) -> bool {
+        self.needs_price_paid(date, height)
+    }
+
+    fn needs_price_paid(&self, date: NaiveDate, height: usize) -> bool {
+        !self.price_paid.are_date_and_height_safe(date, height)
+    }
+
+    fn needs_unrealized(&self, date: NaiveDate, height: usize) -> bool {
+        !self.unrealized.are_date_and_height_safe(date, height)
+    }
+
+    fn needs_realized(&self, date: NaiveDate, height: usize) -> bool {
+        !self.realized.are_date_and_height_safe(date, height)
+    }
 }
 
 impl AnyDataset for UTXODataset {
@@ -53,12 +66,30 @@ impl AnyDataset for UTXODataset {
 
         let date_data_vec = &states.date_data_vec;
 
-        let len = date_data_vec.len();
-
         let mut total_supply = 0;
         let mut utxo_count = 0;
 
-        let mut vec = {
+        let mut pp_state = PricePaidState::default();
+
+        let mut unrealized_height_state = UnrealizedState::default();
+
+        let mut unrealized_date_state = {
+            if is_date_last_block {
+                Some(UnrealizedState::default())
+            } else {
+                None
+            }
+        };
+
+        let date_data_vec_len = states.date_data_vec.len();
+
+        let needs_price_paid = self.needs_price_paid(date, height);
+        let needs_unrealized = self.needs_unrealized(date, height);
+        let needs_realized = self.needs_realized(date, height);
+
+        {
+            let len = date_data_vec_len;
+
             match self.filter {
                 UTXOFilter::Full => date_data_vec.iter(),
                 UTXOFilter::From(from) if from < len => date_data_vec[..(len - from)].iter(),
@@ -89,61 +120,33 @@ impl AnyDataset for UTXODataset {
             }
         })
         .flat_map(|date_data| &date_data.blocks)
-        .map(|block_data| {
+        .for_each(|block_data| {
+            let price = block_data.price;
             let sat_amount = block_data.amount;
-
-            total_supply += sat_amount;
+            let btc_amount = sats_to_btc(sat_amount);
 
             utxo_count += block_data.spendable_outputs as usize;
+            total_supply += sat_amount;
 
-            (OrderedFloat(block_data.price), sat_amount)
-        })
-        .collect_vec();
+            if needs_unrealized {
+                unrealized_height_state.iterate(price, block_price, sat_amount, btc_amount);
+            }
 
-        vec.par_sort_unstable_by(|a, b| Ord::cmp(&a.0, &b.0));
+            if is_date_last_block {
+                unrealized_date_state
+                    .as_mut()
+                    .unwrap()
+                    .iterate(price, date_price, sat_amount, btc_amount);
+            }
+        });
 
         let total_supply_in_btc = sats_to_btc(total_supply);
-
-        let mut pp_state = PricePaidState::default();
-
-        let mut unrealized_height_state = UnrealizedState::default();
-
-        let mut unrealized_date_state = {
-            if is_date_last_block {
-                Some(UnrealizedState::default())
-            } else {
-                None
-            }
-        };
 
         self.supply.insert(processed_block_data, total_supply);
 
         self.utxos_metadata.insert(processed_block_data, utxo_count);
 
-        if !self.price_paid.are_date_and_height_safe(date, height)
-            || !self.unrealized.are_date_and_height_safe(date, height)
-        {
-            vec.iter().for_each(|(price, sat_amount)| {
-                let price = price.0;
-                let sat_amount = *sat_amount;
-
-                let btc_amount = sats_to_btc(sat_amount);
-
-                pp_state.iterate(price, btc_amount, sat_amount, total_supply);
-
-                unrealized_height_state.iterate(price, block_price, sat_amount, btc_amount);
-
-                if is_date_last_block {
-                    unrealized_date_state
-                        .as_mut()
-                        .unwrap()
-                        .iterate(price, date_price, sat_amount, btc_amount);
-                }
-            });
-
-            self.price_paid
-                .insert(processed_block_data, pp_state, total_supply_in_btc);
-
+        if needs_unrealized {
             self.unrealized.insert(
                 processed_block_data,
                 unrealized_height_state,
@@ -151,7 +154,42 @@ impl AnyDataset for UTXODataset {
             );
         }
 
-        if !self.realized.are_date_and_height_safe(date, height) {
+        if needs_price_paid {
+            processed_block_data
+                .sorted_block_data_vec
+                .as_ref()
+                .unwrap()
+                .iter()
+                // Must be the exact same as before but on a different kind of array
+                .filter(|(reversed_date_index, year, _)| {
+                    let reversed_date_index = *reversed_date_index;
+
+                    match self.filter {
+                        UTXOFilter::Full => true,
+                        UTXOFilter::From(from) if from < date_data_vec_len => {
+                            reversed_date_index >= from
+                        }
+                        UTXOFilter::To(to) => reversed_date_index < to,
+                        UTXOFilter::FromTo { from, to } if from < date_data_vec_len => {
+                            reversed_date_index >= from && reversed_date_index < to
+                        }
+                        UTXOFilter::Year(_year) => *year == _year as i32,
+                        _ => false,
+                    }
+                })
+                .for_each(|(_, _, block_data)| {
+                    let price = block_data.price;
+                    let sat_amount = block_data.amount;
+                    let btc_amount = sats_to_btc(sat_amount);
+
+                    pp_state.iterate(price, btc_amount, sat_amount, total_supply);
+                });
+
+            self.price_paid
+                .insert(processed_block_data, pp_state, total_supply_in_btc);
+        }
+
+        if needs_realized {
             let mut realized_profit = 0.0;
             let mut realized_loss = 0.0;
 
@@ -162,7 +200,7 @@ impl AnyDataset for UTXODataset {
                     (block_path, date_data, value)
                 })
                 .filter(|(block_path, date_data, _)| {
-                    let diff = len - 1 - (block_path.date_index as usize);
+                    let diff = date_data_vec_len - 1 - (block_path.date_index as usize);
 
                     match self.filter {
                         UTXOFilter::Full => true,

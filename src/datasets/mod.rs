@@ -27,7 +27,7 @@ use utxo::*;
 
 use crate::{
     states::States,
-    structs::{AddressData, AddressRealizedData, BlockPath},
+    structs::{AddressData, AddressRealizedData, BlockData, BlockPath},
 };
 
 pub struct ProcessedDateData {
@@ -51,19 +51,21 @@ pub struct ProcessedBlockData<'a> {
     pub height: usize,
     pub is_date_last_block: bool,
     pub sorted_address_data: Option<Vec<&'a AddressData>>,
+    pub sorted_block_data_vec: Option<Vec<(usize, i32, &'a BlockData)>>,
     pub states: &'a States,
     pub timestamp: u32,
 }
 
 pub struct AllDatasets {
     pub address: AddressDatasets,
+    pub price: PriceDatasets,
+    pub utxo: UTXODatasets,
+
+    block_metadata: BlockMetadataDataset,
     coinblocks: CoinblocksDataset,
     coindays: CoindaysDataset,
-    rewards: RewardsDataset,
-    block_metadata: BlockMetadataDataset,
-    utxo: UTXODatasets,
     date_metadata: DateMetadataDataset,
-    pub price: PriceDatasets,
+    rewards: RewardsDataset,
 }
 
 impl AllDatasets {
@@ -106,11 +108,11 @@ impl AllDatasets {
 }
 
 impl AnyDatasets for AllDatasets {
-    fn to_vec(&self) -> Vec<&(dyn AnyDataset + Send + Sync)> {
+    fn to_any_dataset_vec(&self) -> Vec<&(dyn AnyDataset + Send + Sync)> {
         vec![
-            self.address.to_vec(),
-            self.price.to_vec(),
-            self.utxo.to_vec(),
+            self.address.to_any_dataset_vec(),
+            self.price.to_any_dataset_vec(),
+            self.utxo.to_any_dataset_vec(),
             vec![
                 &self.block_metadata,
                 &self.coinblocks,

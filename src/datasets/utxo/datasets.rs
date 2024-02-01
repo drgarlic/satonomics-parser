@@ -1,6 +1,6 @@
 use std::thread;
 
-use chrono::Datelike;
+use chrono::{Datelike, NaiveDate};
 use itertools::Itertools;
 
 use crate::datasets::{AnyDataset, AnyDatasets};
@@ -184,11 +184,15 @@ impl UTXODatasets {
             })
         })
     }
-}
 
-impl AnyDatasets for UTXODatasets {
-    fn to_vec(&self) -> Vec<&(dyn AnyDataset + Send + Sync)> {
-        let flats: Vec<&(dyn AnyDataset + Send + Sync)> = vec![
+    pub fn needs_sorted_block_data_vec(&self, date: NaiveDate, height: usize) -> bool {
+        self.to_vec()
+            .iter()
+            .any(|dataset| dataset.needs_sorted_block_data_vec(date, height))
+    }
+
+    fn to_vec(&self) -> Vec<&UTXODataset> {
+        let flats = vec![
             &self.all,
             &self.up_to_1d,
             &self.up_to_7d,
@@ -219,12 +223,18 @@ impl AnyDatasets for UTXODatasets {
             &self.lth,
         ];
 
-        let yearly = self
-            .yearly
-            .iter()
-            .map(|dataset| dataset as &(dyn AnyDataset + Send + Sync))
-            .collect_vec();
+        let yearly = self.yearly.iter().collect_vec();
 
         [flats, yearly].iter().flatten().copied().collect()
+    }
+}
+
+impl AnyDatasets for UTXODatasets {
+    fn to_any_dataset_vec(&self) -> Vec<&(dyn AnyDataset + Send + Sync)> {
+        self.to_vec()
+            .iter()
+            .cloned()
+            .map(|dataset| dataset as &(dyn AnyDataset + Send + Sync))
+            .collect_vec()
     }
 }

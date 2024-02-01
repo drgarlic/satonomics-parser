@@ -152,7 +152,7 @@ impl AddressDatasets {
 }
 
 impl AnyDatasets for AddressDatasets {
-    fn to_vec(&self) -> Vec<&(dyn AnyDataset + Send + Sync)> {
+    fn to_any_dataset_vec(&self) -> Vec<&(dyn AnyDataset + Send + Sync)> {
         vec![
             // &self.plankton,
             // &self.shrimp,
