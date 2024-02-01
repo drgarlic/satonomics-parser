@@ -53,13 +53,9 @@ impl AddressDataset {
         &self,
         &ProcessedBlockData {
             address_index_to_address_realized_data,
-            address_index_to_removed_address_data,
-            states,
             ..
         }: &ProcessedBlockData,
     ) -> RealizedData {
-        let address_index_to_address_data = &states.address_index_to_address_data;
-
         let mut full_realized_profit = 0.0;
         let mut illiquid_realized_profit = 0.0;
         let mut liquid_realized_profit = 0.0;
@@ -71,26 +67,16 @@ impl AddressDataset {
         let mut highly_liquid_realized_loss = 0.0;
 
         address_index_to_address_realized_data
-            .iter()
-            .map(|(address_index, address_realized_data)| {
-                let address_data = address_index_to_address_data
-                    .get(address_index)
-                    .unwrap_or_else(|| {
-                        address_index_to_removed_address_data
-                            .get(address_index)
-                            .unwrap()
-                    });
-
-                let previous_amount = address_data.amount + address_realized_data.sent
-                    - address_realized_data.received;
-
-                (address_data, previous_amount, address_realized_data)
+            .values()
+            .filter(|address_realized_data| {
+                self.filter.check(
+                    address_realized_data.previous_amount_opt.as_ref().unwrap(),
+                    &address_realized_data.address_data_opt.unwrap().address_type,
+                )
             })
-            .filter(|(address_data, previous_amount, _)| {
-                self.filter
-                    .check(previous_amount, &address_data.address_type)
-            })
-            .for_each(|(address_data, _, address_realized_data)| {
+            .for_each(|address_realized_data| {
+                let address_data = address_realized_data.address_data_opt.unwrap();
+
                 full_realized_profit += address_realized_data.profit;
                 full_realized_loss += address_realized_data.loss;
 
@@ -141,9 +127,8 @@ impl AnyDataset for AddressDataset {
             highly_liquid_realized_loss,
         } = self.compute_realized_data(processed_block_data);
 
-        let &ProcessedBlockData { states, .. } = processed_block_data;
-
-        let address_index_to_address_data = &states.address_index_to_address_data;
+        let address_index_to_address_data =
+            &processed_block_data.states.address_index_to_address_data;
 
         let mut full_total_supply = 0;
         let mut illiquid_total_supply = 0;

@@ -402,7 +402,7 @@ pub fn parse_block(
                                 .insert(input_address_index, address_data);
                         }
 
-                        let address_realized_data = address_index_to_address_realized_data
+                        let address_realized_data = &mut address_index_to_address_realized_data
                             .entry(input_address_index)
                             .or_default();
 
@@ -437,6 +437,25 @@ pub fn parse_block(
 
         ControlFlow::Continue(())
     });
+
+    address_index_to_address_realized_data
+        .par_iter_mut()
+        .for_each(|(address_index, address_realized_data)| {
+            let address_data = states
+                .address_index_to_address_data
+                .get(address_index)
+                .unwrap_or_else(|| {
+                    address_index_to_removed_address_data
+                        .get(address_index)
+                        .unwrap()
+                });
+
+            address_realized_data.address_data_opt.replace(address_data);
+
+            address_realized_data.previous_amount_opt.replace(
+                address_data.amount + address_realized_data.sent - address_realized_data.received,
+            );
+        });
 
     coinblocks_destroyed_vec.push(coinblocks_destroyed);
     coindays_destroyed_vec.push(coindays_destroyed);

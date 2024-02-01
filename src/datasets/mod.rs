@@ -38,7 +38,7 @@ pub struct ProcessedDateData {
 }
 
 pub struct ProcessedBlockData<'a> {
-    pub address_index_to_address_realized_data: &'a BTreeMap<u32, AddressRealizedData>,
+    pub address_index_to_address_realized_data: &'a BTreeMap<u32, AddressRealizedData<'a>>,
     pub address_index_to_removed_address_data: &'a BTreeMap<u32, AddressData>,
     pub block_path_to_spent_value: &'a BTreeMap<BlockPath, u64>,
     pub coinbase_vec: &'a Vec<u64>,
