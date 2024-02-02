@@ -1,6 +1,8 @@
+use chrono::NaiveDate;
+
 use crate::{
     datasets::ProcessedBlockData,
-    structs::{AnyDateMap, AnyHeightMap, BiMap},
+    structs::{AnyBiMap, AnyDateMap, AnyHeightMap, BiMap},
 };
 
 pub struct SupplySubDataset {
@@ -40,5 +42,9 @@ impl SupplySubDataset {
 
     pub fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
         vec![&self.total.date]
+    }
+
+    pub fn are_date_and_height_safe(&self, date: NaiveDate, height: usize) -> bool {
+        self.total.are_date_and_height_safe(date, height)
     }
 }

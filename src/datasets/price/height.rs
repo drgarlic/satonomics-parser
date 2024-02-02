@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use chrono::{NaiveDateTime, NaiveTime, TimeZone, Timelike, Utc};
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Timelike, Utc};
 use color_eyre::eyre::Error;
 
 use crate::{
@@ -9,6 +9,9 @@ use crate::{
 };
 
 pub struct HeightDataset {
+    name: &'static str,
+    min_initial_first_unsafe_date: Option<NaiveDate>,
+    min_initial_first_unsafe_height: Option<usize>,
     closes: HeightMap<f32>,
     kraken_1mn: Option<BTreeMap<u32, f32>>,
     binance_1mn: Option<BTreeMap<u32, f32>>,
@@ -17,14 +20,24 @@ pub struct HeightDataset {
 
 impl HeightDataset {
     pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
-        let closes = HeightMap::new_in_memory_json(&format!("{parent_path}/close"));
+        let name = "close";
 
-        Ok(Self {
+        let closes = HeightMap::new_in_memory_json(&format!("{parent_path}/{name}"));
+
+        let mut s = Self {
+            name,
+            min_initial_first_unsafe_date: None,
+            min_initial_first_unsafe_height: None,
             closes,
             binance_1mn: None,
             binance_har: None,
             kraken_1mn: None,
-        })
+        };
+
+        s.min_initial_first_unsafe_date = s.compute_min_initial_first_unsafe_date();
+        s.min_initial_first_unsafe_height = s.compute_min_initial_first_unsafe_height();
+
+        Ok(s)
     }
 
     pub fn get(&mut self, height: usize, timestamp: u32) -> color_eyre::Result<f32> {
@@ -96,5 +109,17 @@ impl HeightDataset {
 impl AnyDataset for HeightDataset {
     fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
         vec![&self.closes]
+    }
+
+    fn name(&self) -> &str {
+        self.name
+    }
+
+    fn get_min_initial_first_unsafe_date(&self) -> &Option<NaiveDate> {
+        &self.min_initial_first_unsafe_date
+    }
+
+    fn get_min_initial_first_unsafe_height(&self) -> &Option<usize> {
+        &self.min_initial_first_unsafe_height
     }
 }

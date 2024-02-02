@@ -21,6 +21,9 @@ pub fn find_first_unsafe_height(
             let min_datasets_last_height = datasets.get_min_initial_last_height();
             let min_datasets_last_date = datasets.get_min_initial_last_date();
 
+            println!("min_datasets_last_height: {:?}", min_datasets_last_height);
+            println!("min_datasets_last_date: {:?}", min_datasets_last_date);
+
             if min_datasets_last_date.map_or(true, |min_datasets_last_date| min_datasets_last_date < *last_safe_date) {
                 return None;
             }

@@ -59,6 +59,7 @@ impl<T> AnyBiMap for BiMap<T>
 where
     T: Clone + Default + Debug + Decode + Encode + Serialize + DeserializeOwned,
 {
+    #[inline(always)]
     fn are_date_and_height_safe(&self, date: NaiveDate, height: usize) -> bool {
         self.date.is_date_safe(date) && self.height.is_height_safe(height)
     }

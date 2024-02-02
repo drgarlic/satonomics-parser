@@ -77,6 +77,7 @@ impl AddressData {
         (priced_btc_value - (btc_value * previous_mean_price_paid)) as f32
     }
 
+    #[inline(always)]
     pub fn is_empty(&self) -> bool {
         self.amount == 0
     }

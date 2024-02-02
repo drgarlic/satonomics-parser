@@ -1,3 +1,5 @@
+use chrono::NaiveDate;
+
 use crate::{
     datasets::AnyDataset,
     structs::{AnyHeightMap, BiMap},
@@ -6,17 +8,29 @@ use crate::{
 use super::ProcessedBlockData;
 
 pub struct CoinblocksDataset {
+    name: &'static str,
+    min_initial_first_unsafe_date: Option<NaiveDate>,
+    min_initial_first_unsafe_height: Option<usize>,
     pub destroyed: BiMap<f64>,
 }
 
 impl CoinblocksDataset {
     pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
-        let folder_path = format!("{parent_path}/coinblocks");
-        let f = |s: &str| format!("{folder_path}/{s}");
+        let name = "coinblocks";
 
-        Ok(Self {
+        let f = |s: &str| format!("{parent_path}/{name}/{s}");
+
+        let mut s = Self {
+            name,
+            min_initial_first_unsafe_date: None,
+            min_initial_first_unsafe_height: None,
             destroyed: BiMap::new_on_disk_bin(&f("destroyed")),
-        })
+        };
+
+        s.min_initial_first_unsafe_date = s.compute_min_initial_first_unsafe_date();
+        s.min_initial_first_unsafe_height = s.compute_min_initial_first_unsafe_height();
+
+        Ok(s)
     }
 }
 
@@ -48,5 +62,17 @@ impl AnyDataset for CoinblocksDataset {
 
     fn to_any_date_map_vec(&self) -> Vec<&(dyn crate::structs::AnyDateMap + Send + Sync)> {
         vec![&self.destroyed.date]
+    }
+
+    fn name(&self) -> &str {
+        self.name
+    }
+
+    fn get_min_initial_first_unsafe_date(&self) -> &Option<chrono::prelude::NaiveDate> {
+        &self.min_initial_first_unsafe_date
+    }
+
+    fn get_min_initial_first_unsafe_height(&self) -> &Option<usize> {
+        &self.min_initial_first_unsafe_height
     }
 }

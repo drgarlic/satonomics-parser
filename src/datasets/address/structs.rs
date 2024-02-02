@@ -2,6 +2,7 @@ use std::f64::EPSILON;
 
 use crate::{bitcoin::sats_to_btc, structs::RawAddressType};
 
+#[derive(Debug)]
 pub enum AddressFilter {
     FromTo { from: u64, to: u64 },
     AddressType(RawAddressType),
@@ -12,6 +13,7 @@ impl AddressFilter {
         Self::FromTo { from, to }
     }
 
+    #[inline(always)]
     pub fn check(&self, amount: &u64, address_type: &RawAddressType) -> bool {
         match self {
             Self::FromTo { from, to } => amount >= from && amount < to,
@@ -51,6 +53,7 @@ impl LiquidityClassification {
         }
     }
 
+    #[inline(always)]
     pub fn split(&self, value: f64) -> LiquidityClassificationResult {
         LiquidityClassificationResult {
             illiquid: value * self.illiquid,
@@ -60,15 +63,18 @@ impl LiquidityClassification {
     }
 
     /// Returns value in range 0.0..1.0
+    #[inline(always)]
     fn compute_illiquid(x: f64) -> f64 {
         Self::compute_ratio(x, 0.25)
     }
 
     /// Returns value in range 0.0..1.0
+    #[inline(always)]
     fn compute_liquid(x: f64) -> f64 {
         Self::compute_ratio(x, 0.75)
     }
 
+    #[inline(always)]
     fn compute_ratio(x: f64, x0: f64) -> f64 {
         let l = 1.0;
         let k = 25.0;

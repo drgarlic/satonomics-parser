@@ -78,10 +78,12 @@ where
         self.db_get(key)
     }
 
+    #[inline(always)]
     pub fn get_from_puts(&self, key: &KeyTree) -> Option<&Value> {
         self.cached_puts.get(key)
     }
 
+    #[inline(always)]
     pub fn remove(&mut self, key: &KeyTree) {
         if self.cached_puts.remove(key).is_none() {
             self.cached_dels.insert(key.clone());
@@ -102,10 +104,12 @@ where
         }
     }
 
+    #[inline(always)]
     pub fn remove_from_puts(&mut self, key: &KeyTree) -> Option<Value> {
         self.cached_puts.remove(key)
     }
 
+    #[inline(always)]
     pub fn insert(&mut self, key: KeyTree, value: Value) -> Option<Value> {
         self.cached_dels.remove(&key);
         self.cached_puts.insert(key, value)

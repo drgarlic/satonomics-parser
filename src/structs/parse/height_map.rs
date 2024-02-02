@@ -67,10 +67,14 @@ where
         s.initial_last_height = s.get_last_height();
         s.initial_first_unsafe_height = last_height_to_first_unsafe_height(s.initial_last_height);
 
+        // dbg!(&s.path, &s.initial_first_unsafe_height);
+
         s
     }
 
     pub fn insert(&self, height: usize, value: T) {
+        // dbg!(&self.path);
+
         if !self.is_height_safe(height) {
             *self.called_insert.write().unwrap() = true;
 
@@ -86,6 +90,7 @@ where
         self.insert(height, T::default())
     }
 
+    #[inline(always)]
     pub fn is_height_safe(&self, height: usize) -> bool {
         self.initial_first_unsafe_height.unwrap_or(0) > height
     }
@@ -94,6 +99,7 @@ where
         self.inner.as_ref().unwrap().read().unwrap()
     }
 
+    #[inline(always)]
     pub fn unsafe_len(&self) -> usize {
         self.unsafe_inner().len()
     }
@@ -136,14 +142,17 @@ impl<T> AnyHeightMap for HeightMap<T>
 where
     T: Clone + Default + Debug + Decode + Encode + Serialize + DeserializeOwned,
 {
+    #[inline(always)]
     fn get_initial_first_unsafe_height(&self) -> Option<usize> {
         self.initial_first_unsafe_height
     }
 
+    #[inline(always)]
     fn get_initial_last_height(&self) -> Option<usize> {
         self.initial_last_height
     }
 
+    #[inline(always)]
     fn get_last_height(&self) -> Option<usize> {
         self.get_last_height()
     }

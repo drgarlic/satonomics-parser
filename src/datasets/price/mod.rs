@@ -14,11 +14,11 @@ pub struct PriceDatasets {
 
 impl PriceDatasets {
     pub fn import() -> color_eyre::Result<Self> {
-        let path = "./price";
+        let path = format!("./{}", Self::name());
 
         Ok(Self {
-            date: DateDataset::import(path)?,
-            height: HeightDataset::import(path)?,
+            date: DateDataset::import(&path)?,
+            height: HeightDataset::import(&path)?,
         })
     }
 
@@ -34,5 +34,9 @@ impl PriceDatasets {
 impl AnyDatasets for PriceDatasets {
     fn to_any_dataset_vec(&self) -> Vec<&(dyn super::AnyDataset + Send + Sync)> {
         vec![&self.date, &self.height]
+    }
+
+    fn name<'a>() -> &'a str {
+        "price"
     }
 }

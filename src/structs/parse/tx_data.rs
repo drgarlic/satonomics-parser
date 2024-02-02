@@ -16,6 +16,7 @@ impl TxData {
         }
     }
 
+    #[inline(always)]
     pub fn is_empty(&self) -> bool {
         self.spendable_outputs == 0
     }

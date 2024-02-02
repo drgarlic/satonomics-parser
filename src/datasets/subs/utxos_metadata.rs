@@ -1,6 +1,8 @@
+use chrono::NaiveDate;
+
 use crate::{
     datasets::ProcessedBlockData,
-    structs::{AnyDateMap, AnyHeightMap, BiMap},
+    structs::{AnyBiMap, AnyDateMap, AnyHeightMap, BiMap},
 };
 
 pub struct UTXOsMetadataSubDataset {
@@ -40,5 +42,9 @@ impl UTXOsMetadataSubDataset {
 
     pub fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
         vec![&self.count.date]
+    }
+
+    pub fn are_date_and_height_safe(&self, date: NaiveDate, height: usize) -> bool {
+        self.count.are_date_and_height_safe(date, height)
     }
 }

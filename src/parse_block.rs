@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, ops::ControlFlow};
 
 use bitcoin::{Block, TxOut, Txid};
-use chrono::{Datelike, NaiveDate};
+use chrono::NaiveDate;
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
 use rayon::prelude::*;
@@ -9,7 +9,7 @@ use rayon::prelude::*;
 use crate::{
     bitcoin::{sats_to_btc, BitcoinDB},
     databases::Databases,
-    datasets::{AllDatasets, AnyDatasets, ProcessedBlockData},
+    datasets::{AllDatasets, AnyDatasets, ProcessedBlockData, SortedBlockData},
     states::States,
     structs::{
         AddressData, AddressRealizedData, BlockData, BlockPath, EmptyAddressData, PartialTxoutData,
@@ -478,22 +478,27 @@ pub fn parse_block(
     let sorted_block_data_vec = {
         if datasets.utxo.needs_sorted_block_data_vec(date, height) {
             let date_data_vec = &states.date_data_vec;
-            let len = date_data_vec.len();
+            let len = date_data_vec.len() as u16;
 
             let mut sorted_block_data_vec = date_data_vec
                 .iter()
-                .enumerate()
-                .map(|(index, date_data)| (len - index - 1, date_data))
-                .flat_map(|(reversed_index, date_data)| {
+                .flat_map(|date_data| {
                     date_data
                         .blocks
                         .iter()
-                        .map(move |block_data| (reversed_index, date_data.date.year(), block_data))
+                        .map(move |block_data| SortedBlockData {
+                            reversed_date_index: date_data.reverse_index(len),
+                            year: date_data.year,
+                            block_data,
+                        })
                 })
                 .collect_vec();
 
             sorted_block_data_vec.par_sort_unstable_by(|a, b| {
-                Ord::cmp(&OrderedFloat(a.2.price), &OrderedFloat(b.2.price))
+                Ord::cmp(
+                    &OrderedFloat(a.block_data.price),
+                    &OrderedFloat(b.block_data.price),
+                )
             });
 
             Some(sorted_block_data_vec)

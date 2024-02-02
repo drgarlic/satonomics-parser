@@ -22,6 +22,8 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
     let min_initial_unsafe_address_date = datasets.address.get_min_initial_first_unsafe_date();
     let min_initial_unsafe_address_height = datasets.address.get_min_initial_first_unsafe_height();
 
+    // panic!();
+
     println!("{:?} - Imported datasets", Local::now());
 
     let mut databases = Databases::default();
@@ -40,6 +42,8 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
 
     let mut next_block_opt = None;
     let mut blocks_loop_date = None;
+
+    let export = true;
 
     'parsing: loop {
         let time = Instant::now();
@@ -81,9 +85,13 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
                             .map(|date_data| *date_data.date < current_block_date)
                             .unwrap_or(true)
                         {
-                            states
-                                .date_data_vec
-                                .push(DateData::new(current_block_date, vec![]));
+                            let index = states.date_data_vec.len() as u16;
+
+                            states.date_data_vec.push(DateData::new(
+                                index,
+                                current_block_date,
+                                vec![],
+                            ));
                         }
 
                         println!(
@@ -104,9 +112,15 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
 
                     let compute_addresses = !address_datasets_is_empty
                         && (min_initial_unsafe_address_date
-                            .map_or(true, |min_date| current_block_date >= min_date)
-                            || min_initial_unsafe_address_height
-                                .map_or(true, |min_height| current_block_height >= min_height));
+                            .map_or(true, |min_initial_unsafe_date| {
+                                current_block_date >= min_initial_unsafe_date
+                            })
+                            || min_initial_unsafe_address_height.map_or(
+                                true,
+                                |min_initial_unsafe_height| {
+                                    current_block_height >= min_initial_unsafe_height
+                                },
+                            ));
 
                     parse_block(ParseData {
                         bitcoin_db,
@@ -160,17 +174,25 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
             time.elapsed().as_secs_f32(),
         );
 
-        export_all(ExportedData {
-            block_count,
-            databases: &mut databases,
-            datasets: &datasets,
-            date: blocks_loop_date.unwrap(),
-            height: last_height,
-            states: &states,
-        })?;
+        // if true {
+        //     panic!();
+        // }
+
+        if export {
+            export_all(ExportedData {
+                block_count,
+                databases: &mut databases,
+                datasets: &datasets,
+                date: blocks_loop_date.unwrap(),
+                height: last_height,
+                states: &states,
+            })?;
+        }
     }
 
-    datasets.export()?;
+    if export {
+        datasets.export()?;
+    }
 
     Ok(())
 }

@@ -86,80 +86,119 @@ impl PricePaidState {
 
         *processed_amount += sat_amount;
 
-        if pp_05p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.05 {
-            pp_05p.replace(price);
+        if pp_95p.is_some() {
+            return;
+        } else if *processed_amount as f64 >= total_supply as f64 * 0.95 {
+            pp_95p.replace(price);
         }
 
-        if pp_10p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.1 {
-            pp_10p.replace(price);
-        }
-
-        if pp_15p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.15 {
-            pp_15p.replace(price);
-        }
-
-        if pp_20p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.2 {
-            pp_20p.replace(price);
-        }
-
-        if pp_25p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.25 {
-            pp_25p.replace(price);
-        }
-
-        if pp_30p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.3 {
-            pp_30p.replace(price);
-        }
-
-        if pp_35p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.35 {
-            pp_35p.replace(price);
-        }
-
-        if pp_40p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.4 {
-            pp_40p.replace(price);
-        }
-
-        if pp_45p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.45 {
-            pp_45p.replace(price);
-        }
-
-        if pp_median.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.5 {
-            pp_median.replace(price);
-        }
-
-        if pp_55p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.55 {
-            pp_55p.replace(price);
-        }
-
-        if pp_60p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.6 {
-            pp_60p.replace(price);
-        }
-
-        if pp_65p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.65 {
-            pp_65p.replace(price);
-        }
-
-        if pp_70p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.7 {
-            pp_70p.replace(price);
-        }
-
-        if pp_75p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.75 {
-            pp_75p.replace(price);
-        }
-
-        if pp_80p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.8 {
-            pp_80p.replace(price);
-        }
-
-        if pp_85p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.85 {
-            pp_85p.replace(price);
-        }
-
-        if pp_90p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.9 {
+        if pp_90p.is_some() {
+            return;
+        } else if *processed_amount as f64 >= total_supply as f64 * 0.9 {
             pp_90p.replace(price);
         }
 
-        if pp_95p.is_none() && *processed_amount as f64 >= total_supply as f64 * 0.95 {
-            pp_95p.replace(price);
+        if pp_85p.is_some() {
+            return;
+        } else if *processed_amount as f64 >= total_supply as f64 * 0.85 {
+            pp_85p.replace(price);
+        }
+
+        if pp_80p.is_some() {
+            return;
+        } else if *processed_amount as f64 >= total_supply as f64 * 0.8 {
+            pp_80p.replace(price);
+        }
+
+        if pp_75p.is_some() {
+            return;
+        } else if *processed_amount as f64 >= total_supply as f64 * 0.75 {
+            pp_75p.replace(price);
+        }
+
+        if pp_70p.is_some() {
+            return;
+        } else if *processed_amount as f64 >= total_supply as f64 * 0.7 {
+            pp_70p.replace(price);
+        }
+
+        if pp_65p.is_some() {
+            return;
+        } else if *processed_amount as f64 >= total_supply as f64 * 0.65 {
+            pp_65p.replace(price);
+        }
+
+        if pp_60p.is_some() {
+            return;
+        } else if *processed_amount as f64 >= total_supply as f64 * 0.6 {
+            pp_60p.replace(price);
+        }
+
+        if pp_55p.is_some() {
+            return;
+        } else if *processed_amount as f64 >= total_supply as f64 * 0.55 {
+            pp_55p.replace(price);
+        }
+
+        if pp_median.is_some() {
+            return;
+        } else if *processed_amount as f64 >= total_supply as f64 * 0.5 {
+            pp_median.replace(price);
+        }
+
+        if pp_45p.is_some() {
+            return;
+        } else if *processed_amount as f64 >= total_supply as f64 * 0.45 {
+            pp_45p.replace(price);
+        }
+
+        if pp_40p.is_some() {
+            return;
+        } else if *processed_amount as f64 >= total_supply as f64 * 0.4 {
+            pp_40p.replace(price);
+        }
+
+        if pp_35p.is_some() {
+            return;
+        } else if *processed_amount as f64 >= total_supply as f64 * 0.35 {
+            pp_35p.replace(price);
+        }
+
+        if pp_30p.is_some() {
+            return;
+        } else if *processed_amount as f64 >= total_supply as f64 * 0.3 {
+            pp_30p.replace(price);
+        }
+
+        if pp_25p.is_some() {
+            return;
+        } else if *processed_amount as f64 >= total_supply as f64 * 0.25 {
+            pp_25p.replace(price);
+        }
+
+        if pp_20p.is_some() {
+            return;
+        } else if *processed_amount as f64 >= total_supply as f64 * 0.2 {
+            pp_20p.replace(price);
+        }
+
+        if pp_15p.is_some() {
+            return;
+        } else if *processed_amount as f64 >= total_supply as f64 * 0.15 {
+            pp_15p.replace(price);
+        }
+
+        if pp_10p.is_some() {
+            return;
+        } else if *processed_amount as f64 >= total_supply as f64 * 0.1 {
+            pp_10p.replace(price);
+        }
+
+        if pp_05p.is_some() {
+            #[allow(clippy::needless_return)]
+            return;
+        } else if *processed_amount as f64 >= total_supply as f64 * 0.05 {
+            pp_05p.replace(price);
         }
     }
 }

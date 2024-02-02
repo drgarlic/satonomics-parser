@@ -22,13 +22,7 @@ pub trait AnyDataset {
             .and_then(|opt| opt)
     }
 
-    fn get_min_initial_first_unsafe_date(&self) -> Option<NaiveDate> {
-        self.to_any_date_map_vec()
-            .iter()
-            .map(|map| map.get_initial_first_unsafe_date())
-            .min()
-            .and_then(|opt| opt)
-    }
+    fn get_min_initial_first_unsafe_date(&self) -> &Option<NaiveDate>;
 
     fn get_min_initial_last_height(&self) -> Option<usize> {
         self.to_any_height_map_vec()
@@ -46,7 +40,17 @@ pub trait AnyDataset {
             .and_then(|opt| opt)
     }
 
-    fn get_min_initial_first_unsafe_height(&self) -> Option<usize> {
+    fn get_min_initial_first_unsafe_height(&self) -> &Option<usize>;
+
+    fn compute_min_initial_first_unsafe_date(&self) -> Option<NaiveDate> {
+        self.to_any_date_map_vec()
+            .iter()
+            .map(|map| map.get_initial_first_unsafe_date())
+            .min()
+            .and_then(|opt| opt)
+    }
+
+    fn compute_min_initial_first_unsafe_height(&self) -> Option<usize> {
         self.to_any_height_map_vec()
             .iter()
             .map(|map| map.get_initial_first_unsafe_height())
@@ -54,15 +58,20 @@ pub trait AnyDataset {
             .and_then(|opt| opt)
     }
 
+    #[inline(always)]
     fn process_height(&self, height: usize) -> bool {
-        self.get_min_initial_first_unsafe_height().unwrap_or(0) <= height
+        !self.to_any_height_map_vec().is_empty()
+            && self.get_min_initial_first_unsafe_height().unwrap_or(0) <= height
     }
 
+    #[inline(always)]
     fn process_date(&self, date: NaiveDate) -> bool {
-        self.get_min_initial_first_unsafe_date()
-            .map_or(true, |min_initial_first_unsafe_date| {
-                min_initial_first_unsafe_date <= date
-            })
+        !self.to_any_date_map_vec().is_empty()
+            && self
+                .get_min_initial_first_unsafe_date()
+                .map_or(true, |min_initial_first_unsafe_date| {
+                    min_initial_first_unsafe_date <= date
+                })
     }
 
     fn export(&self) -> color_eyre::Result<()> {
@@ -89,9 +98,12 @@ pub trait AnyDataset {
         vec![]
     }
 
+    #[inline(always)]
     fn is_empty(&self) -> bool {
         self.to_any_height_map_vec().is_empty() || self.to_any_date_map_vec().is_empty()
     }
+
+    fn name(&self) -> &str;
 }
 
 pub trait AnyDatasets {
@@ -117,18 +129,26 @@ pub trait AnyDatasets {
         self.to_any_dataset_vec()
             .iter()
             .filter(|dataset| !dataset.to_any_date_map_vec().is_empty())
-            .map(|dataset| dataset.get_min_initial_first_unsafe_date())
+            .map(|dataset| {
+                let x = dataset.get_min_initial_first_unsafe_date();
+                dbg!(x, dataset.name());
+                x
+            })
             .min()
-            .and_then(|opt| opt)
+            .and_then(|opt| opt.to_owned())
     }
 
     fn get_min_initial_first_unsafe_height(&self) -> Option<usize> {
         self.to_any_dataset_vec()
             .iter()
             .filter(|dataset| !dataset.to_any_height_map_vec().is_empty())
-            .map(|dataset| dataset.get_min_initial_first_unsafe_height())
+            .map(|dataset| {
+                let x = dataset.get_min_initial_first_unsafe_height();
+                dbg!(x, dataset.name());
+                x
+            })
             .min()
-            .and_then(|opt| opt)
+            .and_then(|opt| opt.to_owned())
     }
 
     fn insert_date_data(&self, processed_date_data: ProcessedDateData) {
@@ -153,7 +173,7 @@ pub trait AnyDatasets {
         self.to_any_dataset_vec()
             .par_iter()
             .filter(|dataset| dataset.process_height(height) || dataset.process_date(date))
-            .try_for_each(|dataset| dataset.export())?;
+            .try_for_each(|dataset| -> color_eyre::Result<()> { dataset.export() })?;
 
         Ok(())
     }
@@ -173,4 +193,6 @@ pub trait AnyDatasets {
             .iter()
             .all(|dataset| dataset.is_empty())
     }
+
+    fn name<'a>() -> &'a str;
 }

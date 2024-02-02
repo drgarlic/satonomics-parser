@@ -1,3 +1,4 @@
+use chrono::NaiveDate;
 use itertools::Itertools;
 
 use crate::{
@@ -8,19 +9,31 @@ use crate::{
 use super::ProcessedBlockData;
 
 pub struct RewardsDataset {
+    name: &'static str,
+    min_initial_first_unsafe_date: Option<NaiveDate>,
+    min_initial_first_unsafe_height: Option<usize>,
     pub fees_sumed: BiMap<u64>,
     pub subsidy: BiMap<u64>,
 }
 
 impl RewardsDataset {
     pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
-        let folder_path = format!("{parent_path}/rewards");
-        let f = |s: &str| format!("{folder_path}/{s}");
+        let name = "rewards";
 
-        Ok(Self {
+        let f = |s: &str| format!("{parent_path}/{s}");
+
+        let mut s = Self {
+            name,
+            min_initial_first_unsafe_date: None,
+            min_initial_first_unsafe_height: None,
             fees_sumed: BiMap::new_on_disk_bin(&f("fees/sumed")),
             subsidy: BiMap::new_on_disk_bin(&f("subsidy")),
-        })
+        };
+
+        s.min_initial_first_unsafe_date = s.compute_min_initial_first_unsafe_date();
+        s.min_initial_first_unsafe_height = s.compute_min_initial_first_unsafe_height();
+
+        Ok(s)
     }
 }
 
@@ -69,5 +82,17 @@ impl AnyDataset for RewardsDataset {
 
     fn to_any_date_map_vec(&self) -> Vec<&(dyn crate::structs::AnyDateMap + Send + Sync)> {
         vec![&self.fees_sumed.date, &self.subsidy.date]
+    }
+
+    fn name(&self) -> &str {
+        self.name
+    }
+
+    fn get_min_initial_first_unsafe_date(&self) -> &Option<NaiveDate> {
+        &self.min_initial_first_unsafe_date
+    }
+
+    fn get_min_initial_first_unsafe_height(&self) -> &Option<usize> {
+        &self.min_initial_first_unsafe_height
     }
 }

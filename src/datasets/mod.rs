@@ -37,6 +37,12 @@ pub struct ProcessedDateData {
     pub date: NaiveDate,
 }
 
+pub struct SortedBlockData<'a> {
+    pub reversed_date_index: u16,
+    pub year: u16,
+    pub block_data: &'a BlockData,
+}
+
 pub struct ProcessedBlockData<'a> {
     pub address_index_to_address_realized_data: &'a BTreeMap<u32, AddressRealizedData<'a>>,
     pub address_index_to_removed_address_data: &'a BTreeMap<u32, AddressData>,
@@ -51,7 +57,7 @@ pub struct ProcessedBlockData<'a> {
     pub height: usize,
     pub is_date_last_block: bool,
     pub sorted_address_data: Option<Vec<&'a AddressData>>,
-    pub sorted_block_data_vec: Option<Vec<(usize, i32, &'a BlockData)>>,
+    pub sorted_block_data_vec: Option<Vec<SortedBlockData<'a>>>,
     pub states: &'a States,
     pub timestamp: u32,
 }
@@ -124,5 +130,9 @@ impl AnyDatasets for AllDatasets {
         .into_iter()
         .flatten()
         .collect_vec()
+    }
+
+    fn name<'a>() -> &'a str {
+        "datasets"
     }
 }

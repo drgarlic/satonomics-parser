@@ -69,10 +69,14 @@ where
         s.initial_last_date = s.get_last_date();
         s.initial_first_unsafe_date = last_date_to_first_unsafe_date(s.initial_last_date);
 
+        // dbg!(&s.path, &s.initial_first_unsafe_date);
+
         s
     }
 
     pub fn insert(&self, date: NaiveDate, value: T) {
+        // dbg!(&self.path);
+
         if !self.is_date_safe(date) {
             *self.called_insert.write().unwrap() = true;
 
@@ -89,6 +93,7 @@ where
         self.insert(date, T::default())
     }
 
+    #[inline(always)]
     pub fn is_date_safe(&self, date: NaiveDate) -> bool {
         self.initial_first_unsafe_date
             .map_or(false, |initial_first_unsafe_date| {
@@ -139,18 +144,22 @@ impl<T> AnyDateMap for DateMap<T>
 where
     T: Clone + Default + Encode + Decode + Debug + Serialize + DeserializeOwned,
 {
+    #[inline(always)]
     fn get_last_date(&self) -> Option<NaiveDate> {
         self.get_last_date()
     }
 
+    #[inline(always)]
     fn get_first_unsafe_date(&self) -> Option<NaiveDate> {
         self.get_first_unsafe_date()
     }
 
+    #[inline(always)]
     fn get_initial_first_unsafe_date(&self) -> Option<NaiveDate> {
         self.initial_first_unsafe_date
     }
 
+    #[inline(always)]
     fn get_initial_last_date(&self) -> Option<NaiveDate> {
         self.initial_last_date
     }

@@ -8,18 +8,31 @@ use crate::{
 };
 
 pub struct DateDataset {
+    name: &'static str,
+    min_initial_first_unsafe_date: Option<NaiveDate>,
+    min_initial_first_unsafe_height: Option<usize>,
     closes: DateMap<f32>,
     kraken_daily: Option<HashMap<String, f32>>,
 }
 
 impl DateDataset {
     pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
-        let closes = DateMap::new_in_memory_json(&format!("{parent_path}/close"));
+        let name = "close";
 
-        Ok(Self {
+        let closes = DateMap::new_in_memory_json(&format!("{parent_path}/{name}"));
+
+        let mut s = Self {
+            name,
+            min_initial_first_unsafe_date: None,
+            min_initial_first_unsafe_height: None,
             closes,
             kraken_daily: None,
-        })
+        };
+
+        s.min_initial_first_unsafe_date = s.compute_min_initial_first_unsafe_date();
+        s.min_initial_first_unsafe_height = s.compute_min_initial_first_unsafe_height();
+
+        Ok(s)
     }
 
     pub fn get(&mut self, date: NaiveDate) -> color_eyre::Result<f32> {
@@ -54,5 +67,17 @@ impl DateDataset {
 impl AnyDataset for DateDataset {
     fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
         vec![&self.closes]
+    }
+
+    fn name(&self) -> &str {
+        self.name
+    }
+
+    fn get_min_initial_first_unsafe_date(&self) -> &Option<NaiveDate> {
+        &self.min_initial_first_unsafe_date
+    }
+
+    fn get_min_initial_first_unsafe_height(&self) -> &Option<usize> {
+        &self.min_initial_first_unsafe_height
     }
 }

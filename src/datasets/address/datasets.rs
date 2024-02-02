@@ -28,84 +28,104 @@ pub struct AddressDatasets {
 }
 
 impl AddressDatasets {
-    pub fn import(path: &str) -> color_eyre::Result<Self> {
-        let path = format!("{path}/address");
-        let f = |s: &str| format!("{path}/{s}");
-
+    pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
         thread::scope(|scope| {
             let plankton_handle = scope.spawn(|| {
-                AddressDataset::import(&f("plankton"), AddressFilter::new_from_to(0, 10_000_000))
+                AddressDataset::import(
+                    parent_path,
+                    "plankton",
+                    AddressFilter::new_from_to(0, 10_000_000),
+                )
             });
             let shrimp_handle = scope.spawn(|| {
                 AddressDataset::import(
-                    &f("shrimp"),
+                    parent_path,
+                    "shrimp",
                     AddressFilter::new_from_to(10_000_000, 100_000_000),
                 )
             });
             let crab_handle = scope.spawn(|| {
                 AddressDataset::import(
-                    &f("crab"),
+                    parent_path,
+                    "crab",
                     AddressFilter::new_from_to(100_000_000, 1_000_000_000),
                 )
             });
             let fish_handle = scope.spawn(|| {
                 AddressDataset::import(
-                    &f("fish"),
+                    parent_path,
+                    "fish",
                     AddressFilter::new_from_to(1_000_000_000, 10_000_000_000),
                 )
             });
             let shark_handle = scope.spawn(|| {
                 AddressDataset::import(
-                    &f("shark"),
+                    parent_path,
+                    "shark",
                     AddressFilter::new_from_to(10_000_000_000, 100_000_000_000),
                 )
             });
             let whale_handle = scope.spawn(|| {
                 AddressDataset::import(
-                    &f("whale"),
+                    parent_path,
+                    "whale",
                     AddressFilter::new_from_to(100_000_000_000, 1_000_000_000_000),
                 )
             });
             let humpback_handle = scope.spawn(|| {
                 AddressDataset::import(
-                    &f("humpback"),
+                    parent_path,
+                    "humpback",
                     AddressFilter::new_from_to(1_000_000_000_000, 10_000_000_000_000),
                 )
             });
             let megalodon_handle = scope.spawn(|| {
                 AddressDataset::import(
-                    &f("megalodon"),
+                    parent_path,
+                    "megalodon",
                     AddressFilter::new_from_to(10_000_000_000_000, u64::MAX),
                 )
             });
 
             let p2pk_handle = scope.spawn(|| {
-                AddressDataset::import(&f("p2pk"), AddressFilter::AddressType(RawAddressType::P2PK))
+                AddressDataset::import(
+                    parent_path,
+                    "p2pk",
+                    AddressFilter::AddressType(RawAddressType::P2PK),
+                )
             });
             let p2pkh_handle = scope.spawn(|| {
                 AddressDataset::import(
-                    &f("p2pkh"),
+                    parent_path,
+                    "p2pkh",
                     AddressFilter::AddressType(RawAddressType::P2PKH),
                 )
             });
             let p2sh_handle = scope.spawn(|| {
-                AddressDataset::import(&f("p2sh"), AddressFilter::AddressType(RawAddressType::P2SH))
+                AddressDataset::import(
+                    parent_path,
+                    "p2sh",
+                    AddressFilter::AddressType(RawAddressType::P2SH),
+                )
             });
             let p2wpkh_handle = scope.spawn(|| {
                 AddressDataset::import(
-                    &f("p2wpkh"),
+                    parent_path,
+                    "p2wpkh",
                     AddressFilter::AddressType(RawAddressType::P2WPKH),
                 )
             });
             let p2wsh_handle = scope.spawn(|| {
                 AddressDataset::import(
-                    &f("p2wsh"),
+                    parent_path,
+                    "p2wsh",
                     AddressFilter::AddressType(RawAddressType::P2WSH),
                 )
             });
 
             let p2tr = AddressDataset::import(
-                &f("p2tr"),
+                parent_path,
+                "p2tr",
                 AddressFilter::AddressType(RawAddressType::P2TR),
             )?;
 
@@ -169,5 +189,9 @@ impl AnyDatasets for AddressDatasets {
             // &self.p2wsh,
             // &self.p2tr,
         ]
+    }
+
+    fn name<'a>() -> &'a str {
+        "address"
     }
 }
