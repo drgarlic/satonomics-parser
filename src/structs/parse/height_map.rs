@@ -95,11 +95,13 @@ where
         self.initial_first_unsafe_height.unwrap_or(0) > height
     }
 
+    #[inline(always)]
     pub fn unsafe_inner(&self) -> RwLockReadGuard<'_, Vec<T>> {
         self.inner.as_ref().unwrap().read().unwrap()
     }
 
     #[inline(always)]
+    #[allow(dead_code)]
     pub fn unsafe_len(&self) -> usize {
         self.unsafe_inner().len()
     }

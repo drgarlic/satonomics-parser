@@ -6,9 +6,9 @@ mod raw_address_to_address_index;
 mod txid_to_tx_index;
 
 use _trait::*;
-use address_index_to_empty_address_data::*;
-use raw_address_to_address_index::*;
-use txid_to_tx_index::*;
+pub use address_index_to_empty_address_data::*;
+pub use raw_address_to_address_index::*;
+pub use txid_to_tx_index::*;
 
 #[derive(Default)]
 pub struct Databases {

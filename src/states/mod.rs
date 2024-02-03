@@ -1,3 +1,5 @@
+use std::thread;
+
 mod _trait;
 mod address_index_to_address_data;
 mod counters;
@@ -5,8 +7,6 @@ mod date_data_vec;
 mod tx_index_to_tx_data;
 mod txout_index_to_address_index;
 mod txout_index_to_sats;
-
-use std::thread;
 
 use _trait::*;
 use address_index_to_address_data::*;

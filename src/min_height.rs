@@ -34,12 +34,17 @@ pub fn find_first_unsafe_height(
 
                      None
                 } else {
+
                     Some(*last_safe_height + 1)
                 }
             })
         })
         .unwrap_or_else(|| {
             println!("Starting over...");
+
+            if true {
+                panic!();
+            }
 
             states.reset();
 

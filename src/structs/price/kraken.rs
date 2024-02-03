@@ -48,6 +48,8 @@ impl Kraken {
     }
 
     pub fn fetch_daily_prices() -> color_eyre::Result<HashMap<String, f32>> {
+        println!("fetch kraken daily");
+
         let body: Value = reqwest::blocking::get(
             "https://api.kraken.com/0/public/OHLC?pair=XBTUSD&interval=1440",
         )?

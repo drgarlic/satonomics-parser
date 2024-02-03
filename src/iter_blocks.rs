@@ -15,6 +15,9 @@ use crate::{
 };
 
 pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Result<()> {
+    let insert = true;
+    let export = true;
+
     println!("{:?} - Starting aged", Local::now());
 
     let mut datasets = AllDatasets::import()?;
@@ -42,8 +45,6 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
 
     let mut next_block_opt = None;
     let mut blocks_loop_date = None;
-
-    let export = true;
 
     'parsing: loop {
         let time = Instant::now();
@@ -122,33 +123,37 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
                                 },
                             ));
 
-                    parse_block(ParseData {
-                        bitcoin_db,
-                        block: current_block,
-                        block_index: blocks_loop_i,
-                        coinbase_vec: &mut coinbase_vec,
-                        coinblocks_destroyed_vec: &mut coinblocks_destroyed_vec,
-                        coindays_destroyed_vec: &mut coindays_destroyed_vec,
-                        compute_addresses,
-                        databases: &mut databases,
-                        datasets: &mut datasets,
-                        date: current_block_date,
-                        fees_vec: &mut fees_vec,
-                        height: current_block_height,
-                        is_date_last_block,
-                        states: &mut states,
-                        timestamp,
-                    });
+                    if insert {
+                        parse_block(ParseData {
+                            bitcoin_db,
+                            block: current_block,
+                            block_index: blocks_loop_i,
+                            coinbase_vec: &mut coinbase_vec,
+                            coinblocks_destroyed_vec: &mut coinblocks_destroyed_vec,
+                            coindays_destroyed_vec: &mut coindays_destroyed_vec,
+                            compute_addresses,
+                            databases: &mut databases,
+                            datasets: &mut datasets,
+                            date: current_block_date,
+                            fees_vec: &mut fees_vec,
+                            height: current_block_height,
+                            is_date_last_block,
+                            states: &mut states,
+                            timestamp,
+                        });
+                    }
 
                     blocks_loop_i += 1;
 
                     if is_date_last_block {
-                        datasets.insert_date_data(ProcessedDateData {
-                            block_count,
-                            first_height: height,
-                            height: current_block_height,
-                            date: blocks_loop_date,
-                        });
+                        if insert {
+                            datasets.insert_date_data(ProcessedDateData {
+                                block_count,
+                                first_height: height,
+                                height: current_block_height,
+                                date: blocks_loop_date,
+                            });
+                        }
 
                         height += blocks_loop_i;
 
@@ -173,10 +178,6 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
             "Parsing month took {} seconds (last height: {last_height})\n",
             time.elapsed().as_secs_f32(),
         );
-
-        // if true {
-        //     panic!();
-        // }
 
         if export {
             export_all(ExportedData {

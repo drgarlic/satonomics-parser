@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use chrono::NaiveDate;
+use color_eyre::eyre::Error;
 
 use crate::{
     datasets::AnyDataset,
@@ -44,9 +45,7 @@ impl DateDataset {
                 .unwrap()
                 .to_owned())
         } else {
-            let price = self
-                .get_from_daily_kraken(&date.to_string())
-                .unwrap_or_else(|_| panic!("Can't find price for {date}"));
+            let price = self.get_from_daily_kraken(&date.to_string())?;
 
             self.closes.insert(date, price);
 
@@ -55,12 +54,16 @@ impl DateDataset {
     }
 
     fn get_from_daily_kraken(&mut self, date: &str) -> color_eyre::Result<f32> {
-        Ok(self
-            .kraken_daily
-            .get_or_insert(Kraken::fetch_daily_prices()?)
+        if self.kraken_daily.is_none() {
+            self.kraken_daily.replace(Kraken::fetch_daily_prices()?);
+        }
+
+        self.kraken_daily
+            .as_ref()
+            .unwrap()
             .get(date)
             .cloned()
-            .unwrap())
+            .ok_or(Error::msg("Couldn't find date in daily kraken"))
     }
 }
 

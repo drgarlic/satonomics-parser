@@ -56,7 +56,6 @@ pub struct ProcessedBlockData<'a> {
     pub fees_vec: &'a Vec<Vec<u64>>,
     pub height: usize,
     pub is_date_last_block: bool,
-    pub sorted_address_data: Option<Vec<&'a AddressData>>,
     pub sorted_block_data_vec: Option<Vec<SortedBlockData<'a>>>,
     pub states: &'a States,
     pub timestamp: u32,

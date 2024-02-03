@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, ops::ControlFlow};
+use std::{collections::BTreeMap, ops::ControlFlow, thread};
 
 use bitcoin::{Block, TxOut, Txid};
 use chrono::NaiveDate;
@@ -8,7 +8,9 @@ use rayon::prelude::*;
 
 use crate::{
     bitcoin::{sats_to_btc, BitcoinDB},
-    databases::Databases,
+    databases::{
+        AddressIndexToEmptyAddressData, Databases, RawAddressToAddressIndex, TxidToTxIndex,
+    },
     datasets::{AllDatasets, AnyDatasets, ProcessedBlockData, SortedBlockData},
     states::States,
     structs::{
@@ -83,27 +85,54 @@ pub fn parse_block(
     let mut coinblocks_destroyed = 0.0;
     let mut coindays_destroyed = 0.0;
 
-    let TxoutsParsingResults {
-        mut partial_txout_data_vec,
-        op_returns: _op_returns,
-        provably_unspendable: _provably_unspendable,
-    } = parse_txouts(&block, states, databases, compute_addresses);
+    let (
+        (
+            TxoutsParsingResults {
+                op_returns: _op_returns,
+                mut partial_txout_data_vec,
+                provably_unspendable: _provably_unspendable,
+            },
+            mut empty_address_index_to_empty_address_data,
+        ),
+        mut txin_ordered_tx_indexes,
+    ) = thread::scope(|scope| {
+        let output_handle = scope.spawn(|| {
+            let mut txouts_parsing_results = parse_txouts(
+                &block,
+                states,
+                &mut databases.raw_address_to_address_index,
+                compute_addresses,
+            );
 
-    let mut empty_address_index_to_empty_address_data =
-        take_empty_address_index_to_empty_address_data(
-            states,
-            databases,
-            &partial_txout_data_vec,
-            compute_addresses,
-        );
+            let empty_address_index_to_empty_address_data =
+                take_empty_address_index_to_empty_address_data(
+                    states,
+                    &mut databases.address_index_to_empty_address_data,
+                    &txouts_parsing_results.partial_txout_data_vec,
+                    compute_addresses,
+                );
 
-    // Reverse to get in order via pop later
-    partial_txout_data_vec.reverse();
+            // Reverse to get in order via pop later
+            txouts_parsing_results.partial_txout_data_vec.reverse();
 
-    let mut txin_ordered_tx_indexes = query_txin_ordered_tx_indexes(&block, databases);
+            (
+                txouts_parsing_results,
+                empty_address_index_to_empty_address_data,
+            )
+        });
 
-    // Reverse to get in order via pop later
-    txin_ordered_tx_indexes.reverse();
+        let input_handle = scope.spawn(|| {
+            let mut txin_ordered_tx_indexes =
+                query_txin_ordered_tx_indexes(&block, &mut databases.txid_to_tx_index);
+
+            // Reverse to get in order via pop later
+            txin_ordered_tx_indexes.reverse();
+
+            txin_ordered_tx_indexes
+        });
+
+        (output_handle.join().unwrap(), input_handle.join().unwrap())
+    });
 
     block.txdata.into_iter().try_for_each(|tx| {
         let txid = tx.txid();
@@ -439,76 +468,68 @@ pub fn parse_block(
         ControlFlow::Continue(())
     });
 
-    address_index_to_address_realized_data
-        .par_iter_mut()
-        .for_each(|(address_index, address_realized_data)| {
-            let address_data = states
-                .address_index_to_address_data
-                .get(address_index)
-                .unwrap_or_else(|| {
-                    address_index_to_removed_address_data
-                        .get(address_index)
-                        .unwrap()
-                });
-
-            address_realized_data.address_data_opt.replace(address_data);
-
-            address_realized_data.previous_amount_opt.replace(
-                address_data.amount + address_realized_data.sent - address_realized_data.received,
-            );
-        });
-
-    let sorted_address_data = {
-        if compute_addresses && datasets.address.needs_sorted_address_data(date, height) {
-            let mut vec = states.address_index_to_address_data.values().collect_vec();
-
-            vec.par_sort_unstable_by(|a, b| {
-                Ord::cmp(
-                    &OrderedFloat(a.mean_price_paid),
-                    &OrderedFloat(b.mean_price_paid),
-                )
-            });
-
-            Some(vec)
-        } else {
-            None
-        }
-    };
-
-    let sorted_block_data_vec = {
-        if datasets.utxo.needs_sorted_block_data_vec(date, height) {
-            let date_data_vec = &states.date_data_vec;
-            let len = date_data_vec.len() as u16;
-
-            let mut sorted_block_data_vec = date_data_vec
-                .iter()
-                .flat_map(|date_data| {
-                    date_data
-                        .blocks
-                        .iter()
-                        .map(move |block_data| SortedBlockData {
-                            reversed_date_index: date_data.reverse_index(len),
-                            year: date_data.year,
-                            block_data,
-                        })
-                })
-                .collect_vec();
-
-            sorted_block_data_vec.par_sort_unstable_by(|a, b| {
-                Ord::cmp(
-                    &OrderedFloat(a.block_data.price),
-                    &OrderedFloat(b.block_data.price),
-                )
-            });
-
-            Some(sorted_block_data_vec)
-        } else {
-            None
-        }
-    };
-
     coinblocks_destroyed_vec.push(coinblocks_destroyed);
     coindays_destroyed_vec.push(coindays_destroyed);
+
+    let sorted_block_data_vec = thread::scope(|scope| {
+        let sorted_block_data_vec_handle = scope.spawn(|| {
+            if datasets.utxo.needs_sorted_block_data_vec(date, height) {
+                let date_data_vec = &states.date_data_vec;
+                let len = date_data_vec.len() as u16;
+
+                let mut sorted_block_data_vec = date_data_vec
+                    .par_iter()
+                    .flat_map(|date_data| {
+                        date_data
+                            .blocks
+                            .par_iter()
+                            .map(move |block_data| SortedBlockData {
+                                reversed_date_index: date_data.reverse_index(len),
+                                year: date_data.year,
+                                block_data,
+                            })
+                    })
+                    .collect::<Vec<_>>();
+
+                sorted_block_data_vec.par_sort_unstable_by(|a, b| {
+                    Ord::cmp(
+                        &OrderedFloat(a.block_data.price),
+                        &OrderedFloat(b.block_data.price),
+                    )
+                });
+
+                Some(sorted_block_data_vec)
+            } else {
+                None
+            }
+        });
+
+        if compute_addresses {
+            scope.spawn(|| {
+                address_index_to_address_realized_data
+                    .par_iter_mut()
+                    .for_each(|(address_index, address_realized_data)| {
+                        let address_data = states
+                            .address_index_to_address_data
+                            .get(address_index)
+                            .unwrap_or_else(|| {
+                                address_index_to_removed_address_data
+                                    .get(address_index)
+                                    .unwrap()
+                            });
+
+                        address_realized_data.address_data_opt.replace(address_data);
+
+                        address_realized_data.previous_amount_opt.replace(
+                            address_data.amount + address_realized_data.sent
+                                - address_realized_data.received,
+                        );
+                    });
+            });
+        }
+
+        sorted_block_data_vec_handle.join().unwrap()
+    });
 
     datasets.insert_block_data(ProcessedBlockData {
         address_index_to_address_realized_data: &address_index_to_address_realized_data,
@@ -523,7 +544,6 @@ pub fn parse_block(
         fees_vec,
         height,
         is_date_last_block,
-        sorted_address_data,
         sorted_block_data_vec,
         states,
         timestamp,
@@ -549,11 +569,9 @@ pub struct TxoutsParsingResults {
 fn parse_txouts(
     block: &Block,
     states: &mut States,
-    databases: &mut Databases,
+    raw_address_to_address_index: &mut RawAddressToAddressIndex,
     compute_addresses: bool,
 ) -> TxoutsParsingResults {
-    let raw_address_to_address_index = &mut databases.raw_address_to_address_index;
-
     let mut provably_unspendable = 0;
     let mut op_returns = 0;
 
@@ -619,15 +637,13 @@ fn parse_txouts(
 
 fn take_empty_address_index_to_empty_address_data(
     states: &mut States,
-    databases: &mut Databases,
+    address_index_to_empty_address_data: &mut AddressIndexToEmptyAddressData,
     partial_txout_data_vec: &[Option<PartialTxoutData>],
     compute_addresses: bool,
 ) -> BTreeMap<u32, EmptyAddressData> {
     if !compute_addresses {
         return BTreeMap::default();
     }
-
-    let address_index_to_empty_address_data = &mut databases.address_index_to_empty_address_data;
 
     let address_index_to_address_data = &mut states.address_index_to_address_data;
 
@@ -666,9 +682,10 @@ fn take_empty_address_index_to_empty_address_data(
     empty_address_index_to_empty_address_data
 }
 
-fn query_txin_ordered_tx_indexes(block: &Block, databases: &mut Databases) -> Vec<Option<u32>> {
-    let txid_to_tx_index = &mut databases.txid_to_tx_index;
-
+fn query_txin_ordered_tx_indexes(
+    block: &Block,
+    txid_to_tx_index: &mut TxidToTxIndex,
+) -> Vec<Option<u32>> {
     block
         .txdata
         .iter()

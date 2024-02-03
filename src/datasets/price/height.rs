@@ -41,17 +41,22 @@ impl HeightDataset {
     }
 
     pub fn get(&mut self, height: usize, timestamp: u32) -> color_eyre::Result<f32> {
-        if height < self.closes.unsafe_len() - 1 {
-            Ok(self.closes.unsafe_inner().get(height).unwrap().to_owned())
-        } else {
-            let date_time = Utc.timestamp_opt(i64::from(timestamp), 0).unwrap();
-            let timestamp = NaiveDateTime::new(
-                date_time.date_naive(),
-                NaiveTime::from_hms_opt(date_time.hour(), date_time.minute(), 0).unwrap(),
-            )
-            .timestamp() as u32;
+        {
+            let closes = &self.closes.unsafe_inner();
 
-            let price = self.get_from_1mn_kraken(timestamp).unwrap_or_else(|_| {
+            if height < closes.len() - 1 {
+                return Ok(closes.get(height).unwrap().to_owned());
+            }
+        };
+
+        let date_time = Utc.timestamp_opt(i64::from(timestamp), 0).unwrap();
+        let timestamp = NaiveDateTime::new(
+            date_time.date_naive(),
+            NaiveTime::from_hms_opt(date_time.hour(), date_time.minute(), 0).unwrap(),
+        )
+        .timestamp() as u32;
+
+        let price = self.get_from_1mn_kraken(timestamp).unwrap_or_else(|_| {
                 self.get_from_1mn_binance(timestamp)
                     .unwrap_or_else(|_| self.get_from_har_binance(timestamp).unwrap_or_else(|_| {
                         panic!(
@@ -60,10 +65,9 @@ impl HeightDataset {
                     }))
             });
 
-            self.closes.insert(height, price);
+        self.closes.insert(height, price);
 
-            Ok(price)
-        }
+        Ok(price)
     }
 
     fn get_from_1mn_kraken(&mut self, timestamp: u32) -> color_eyre::Result<f32> {

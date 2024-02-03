@@ -129,11 +129,7 @@ pub trait AnyDatasets {
         self.to_any_dataset_vec()
             .iter()
             .filter(|dataset| !dataset.to_any_date_map_vec().is_empty())
-            .map(|dataset| {
-                let x = dataset.get_min_initial_first_unsafe_date();
-                dbg!(x, dataset.name());
-                x
-            })
+            .map(|dataset| dataset.get_min_initial_first_unsafe_date())
             .min()
             .and_then(|opt| opt.to_owned())
     }
@@ -142,11 +138,7 @@ pub trait AnyDatasets {
         self.to_any_dataset_vec()
             .iter()
             .filter(|dataset| !dataset.to_any_height_map_vec().is_empty())
-            .map(|dataset| {
-                let x = dataset.get_min_initial_first_unsafe_height();
-                dbg!(x, dataset.name());
-                x
-            })
+            .map(|dataset| dataset.get_min_initial_first_unsafe_height())
             .min()
             .and_then(|opt| opt.to_owned())
     }

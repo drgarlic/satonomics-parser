@@ -82,6 +82,7 @@ impl UnrealizedSubDataset {
         }
     }
 
+    #[inline]
     pub fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
         vec![
             &self.supply_in_profit.height,
@@ -90,6 +91,7 @@ impl UnrealizedSubDataset {
         ]
     }
 
+    #[inline]
     pub fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
         vec![
             &self.supply_in_profit.date,
@@ -98,6 +100,7 @@ impl UnrealizedSubDataset {
         ]
     }
 
+    #[inline]
     pub fn to_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         vec![
             &self.supply_in_profit,

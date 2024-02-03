@@ -9,20 +9,7 @@ use crate::{
     structs::{U8x19, U8x31, SANAKIRJA_MAX_KEY_SIZE},
 };
 
-// https://unchained.com/blog/bitcoin-address-types-compared/
-#[derive(Debug, Encode, Decode, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default)]
-pub enum RawAddressType {
-    Empty,
-    #[default]
-    Unknown,
-    MultiSig,
-    P2PK,
-    P2PKH,
-    P2SH,
-    P2WPKH,
-    P2WSH,
-    P2TR,
-}
+use super::RawAddressType;
 
 #[derive(Encode, Decode, Debug, Clone, PartialEq, PartialOrd, Ord, Eq)]
 pub enum RawAddress {
