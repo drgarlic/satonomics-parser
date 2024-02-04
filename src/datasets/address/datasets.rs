@@ -2,10 +2,10 @@ use std::thread;
 
 use crate::{
     datasets::{AnyDataset, AnyDatasets},
-    structs::RawAddressType,
+    structs::{RawAddressSize, RawAddressSplit, RawAddressType},
 };
 
-use super::{AddressDataset, AddressFilter};
+use super::{AddressDataset, RawAddressFilter};
 
 pub struct AddressDatasets {
     plankton: AddressDataset,
@@ -32,56 +32,64 @@ impl AddressDatasets {
                 AddressDataset::import(
                     parent_path,
                     "plankton",
-                    AddressFilter::new_from_to(0, 10_000_000),
+                    RawAddressFilter::new_from_to(0, 10_000_000),
+                    RawAddressSplit::Size(RawAddressSize::Plankton),
                 )
             });
             let shrimp_handle = scope.spawn(|| {
                 AddressDataset::import(
                     parent_path,
                     "shrimp",
-                    AddressFilter::new_from_to(10_000_000, 100_000_000),
+                    RawAddressFilter::new_from_to(10_000_000, 100_000_000),
+                    RawAddressSplit::Size(RawAddressSize::Shrimp),
                 )
             });
             let crab_handle = scope.spawn(|| {
                 AddressDataset::import(
                     parent_path,
                     "crab",
-                    AddressFilter::new_from_to(100_000_000, 1_000_000_000),
+                    RawAddressFilter::new_from_to(100_000_000, 1_000_000_000),
+                    RawAddressSplit::Size(RawAddressSize::Crab),
                 )
             });
             let fish_handle = scope.spawn(|| {
                 AddressDataset::import(
                     parent_path,
                     "fish",
-                    AddressFilter::new_from_to(1_000_000_000, 10_000_000_000),
+                    RawAddressFilter::new_from_to(1_000_000_000, 10_000_000_000),
+                    RawAddressSplit::Size(RawAddressSize::Fish),
                 )
             });
             let shark_handle = scope.spawn(|| {
                 AddressDataset::import(
                     parent_path,
                     "shark",
-                    AddressFilter::new_from_to(10_000_000_000, 100_000_000_000),
+                    RawAddressFilter::new_from_to(10_000_000_000, 100_000_000_000),
+                    RawAddressSplit::Size(RawAddressSize::Shark),
                 )
             });
             let whale_handle = scope.spawn(|| {
                 AddressDataset::import(
                     parent_path,
                     "whale",
-                    AddressFilter::new_from_to(100_000_000_000, 1_000_000_000_000),
+                    RawAddressFilter::new_from_to(100_000_000_000, 1_000_000_000_000),
+                    RawAddressSplit::Size(RawAddressSize::Whale),
                 )
             });
             let humpback_handle = scope.spawn(|| {
                 AddressDataset::import(
                     parent_path,
                     "humpback",
-                    AddressFilter::new_from_to(1_000_000_000_000, 10_000_000_000_000),
+                    RawAddressFilter::new_from_to(1_000_000_000_000, 10_000_000_000_000),
+                    RawAddressSplit::Size(RawAddressSize::Humpback),
                 )
             });
             let megalodon_handle = scope.spawn(|| {
                 AddressDataset::import(
                     parent_path,
                     "megalodon",
-                    AddressFilter::new_from_to(10_000_000_000_000, u64::MAX),
+                    RawAddressFilter::new_from_to(10_000_000_000_000, u64::MAX),
+                    RawAddressSplit::Size(RawAddressSize::Megalodon),
                 )
             });
 
@@ -89,42 +97,48 @@ impl AddressDatasets {
                 AddressDataset::import(
                     parent_path,
                     "p2pk",
-                    AddressFilter::AddressType(RawAddressType::P2PK),
+                    RawAddressFilter::AddressType(RawAddressType::P2PK),
+                    RawAddressSplit::Type(RawAddressType::P2PK),
                 )
             });
             let p2pkh_handle = scope.spawn(|| {
                 AddressDataset::import(
                     parent_path,
                     "p2pkh",
-                    AddressFilter::AddressType(RawAddressType::P2PKH),
+                    RawAddressFilter::AddressType(RawAddressType::P2PKH),
+                    RawAddressSplit::Type(RawAddressType::P2PKH),
                 )
             });
             let p2sh_handle = scope.spawn(|| {
                 AddressDataset::import(
                     parent_path,
                     "p2sh",
-                    AddressFilter::AddressType(RawAddressType::P2SH),
+                    RawAddressFilter::AddressType(RawAddressType::P2SH),
+                    RawAddressSplit::Type(RawAddressType::P2SH),
                 )
             });
             let p2wpkh_handle = scope.spawn(|| {
                 AddressDataset::import(
                     parent_path,
                     "p2wpkh",
-                    AddressFilter::AddressType(RawAddressType::P2WPKH),
+                    RawAddressFilter::AddressType(RawAddressType::P2WPKH),
+                    RawAddressSplit::Type(RawAddressType::P2WPKH),
                 )
             });
             let p2wsh_handle = scope.spawn(|| {
                 AddressDataset::import(
                     parent_path,
                     "p2wsh",
-                    AddressFilter::AddressType(RawAddressType::P2WSH),
+                    RawAddressFilter::AddressType(RawAddressType::P2WSH),
+                    RawAddressSplit::Type(RawAddressType::P2WSH),
                 )
             });
 
             let p2tr = AddressDataset::import(
                 parent_path,
                 "p2tr",
-                AddressFilter::AddressType(RawAddressType::P2TR),
+                RawAddressFilter::AddressType(RawAddressType::P2TR),
+                RawAddressSplit::Type(RawAddressType::P2TR),
             )?;
 
             Ok(Self {

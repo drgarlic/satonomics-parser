@@ -1,12 +1,12 @@
 use crate::structs::RawAddressType;
 
 #[derive(Debug)]
-pub enum AddressFilter {
+pub enum RawAddressFilter {
     FromTo { from: u64, to: u64 },
     AddressType(RawAddressType),
 }
 
-impl AddressFilter {
+impl RawAddressFilter {
     pub fn new_from_to(from: u64, to: u64) -> Self {
         Self::FromTo { from, to }
     }

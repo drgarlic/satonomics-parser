@@ -10,13 +10,13 @@ use crate::{
     min_height::find_first_unsafe_height,
     parse_block::{parse_block, ParseData},
     states::States,
-    structs::DateData,
+    structs::{DateData, SplitAddressIndexToAddressDataRef},
     utils::timestamp_to_naive_date,
 };
 
 pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Result<()> {
     let insert = true;
-    let export = true;
+    let export = false;
 
     println!("{:?} - Starting aged", Local::now());
 
@@ -34,6 +34,16 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
     println!("{:?} - Imported databases", Local::now());
 
     let mut states = States::import().unwrap_or_default();
+
+    let mut split_address_index_to_address_data = {
+        if !address_datasets_is_empty {
+            Some(SplitAddressIndexToAddressDataRef::init(
+                &states.address_index_to_address_data,
+            ))
+        } else {
+            None
+        }
+    };
 
     println!("{:?} - Imported states", Local::now());
 
@@ -138,6 +148,8 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
                             fees_vec: &mut fees_vec,
                             height: current_block_height,
                             is_date_last_block,
+                            split_address_index_to_address_data:
+                                &mut split_address_index_to_address_data,
                             states: &mut states,
                             timestamp,
                         });

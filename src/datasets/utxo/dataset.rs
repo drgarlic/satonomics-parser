@@ -84,14 +84,7 @@ impl AnyDataset for UTXODataset {
         let mut pp_state = PricePaidState::default();
 
         let mut unrealized_height_state = UnrealizedState::default();
-
-        let mut unrealized_date_state = {
-            if is_date_last_block {
-                Some(UnrealizedState::default())
-            } else {
-                None
-            }
-        };
+        let mut unrealized_date_state = UnrealizedState::default();
 
         let date_data_vec_len = states.date_data_vec.len() as u16;
 
@@ -118,10 +111,7 @@ impl AnyDataset for UTXODataset {
                     unrealized_height_state.iterate(price, block_price, sat_amount, btc_amount);
 
                     if is_date_last_block {
-                        unrealized_date_state
-                            .as_mut()
-                            .unwrap()
-                            .iterate(price, date_price, sat_amount, btc_amount);
+                        unrealized_date_state.iterate(price, date_price, sat_amount, btc_amount);
                     }
                 }
             });
@@ -137,6 +127,7 @@ impl AnyDataset for UTXODataset {
                 processed_block_data,
                 unrealized_height_state,
                 unrealized_date_state,
+                is_date_last_block,
             );
         }
 

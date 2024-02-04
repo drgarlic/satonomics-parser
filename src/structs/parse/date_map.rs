@@ -1,27 +1,25 @@
-use std::{
-    collections::BTreeMap,
-    fmt::Debug,
-    fs,
-    sync::{RwLock, RwLockReadGuard},
-};
+use std::{collections::BTreeMap, fmt::Debug, fs};
 
 use bincode::{Decode, Encode};
 use chrono::{Days, NaiveDate};
+use parking_lot::{lock_api::MutexGuard, RawMutex};
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{structs::Serialization, utils::string_to_naive_date};
+
+use super::WMutex;
 
 // Should use number of unsafe blocks instead of avoid useless re-computation
 // Actually maybe not ?
 const NUMBER_OF_UNSAFE_DATES: usize = 2;
 
 pub struct DateMap<T> {
-    batch: RwLock<Vec<(NaiveDate, T)>>,
+    batch: WMutex<Vec<(NaiveDate, T)>>,
     path: String,
     initial_last_date: Option<NaiveDate>,
     initial_first_unsafe_date: Option<NaiveDate>,
-    inner: Option<RwLock<BTreeMap<String, T>>>,
-    called_insert: RwLock<bool>,
+    inner: Option<WMutex<BTreeMap<String, T>>>,
+    called_insert: WMutex<bool>,
     serialization: Serialization,
 }
 
@@ -53,17 +51,17 @@ where
         fs::create_dir_all(path).unwrap();
 
         let mut s = Self {
-            batch: RwLock::new(vec![]),
+            batch: WMutex::new(vec![]),
             initial_last_date: None,
             initial_first_unsafe_date: None,
             path: serialization.append_extension(&format!("{path}/date")),
             inner: None,
-            called_insert: RwLock::new(false),
+            called_insert: WMutex::new(false),
             serialization,
         };
 
         if in_memory {
-            s.inner.replace(RwLock::new(s.import()));
+            s.inner.replace(WMutex::new(s.import()));
         }
 
         s.initial_last_date = s.get_last_date();
@@ -78,12 +76,12 @@ where
         // dbg!(&self.path);
 
         if !self.is_date_safe(date) {
-            *self.called_insert.write().unwrap() = true;
+            *self.called_insert.lock() = true;
 
             if let Some(map) = &self.inner {
-                map.write().unwrap().insert(date.to_string(), value);
+                map.lock().insert(date.to_string(), value);
             } else {
-                self.batch.write().unwrap().push((date, value));
+                self.batch.lock().push((date, value));
             }
         }
     }
@@ -101,8 +99,8 @@ where
             })
     }
 
-    pub fn unsafe_inner(&self) -> RwLockReadGuard<'_, BTreeMap<String, T>> {
-        self.inner.as_ref().unwrap().read().unwrap()
+    pub fn unsafe_inner(&self) -> MutexGuard<'_, RawMutex, BTreeMap<String, T>> {
+        self.inner.as_ref().unwrap().lock()
     }
 
     pub fn import(&self) -> BTreeMap<String, T> {
@@ -165,28 +163,24 @@ where
     }
 
     fn export(&self) -> color_eyre::Result<()> {
-        if !self.called_insert.read().unwrap().to_owned() {
+        if !self.called_insert.lock().to_owned() {
             return Ok(());
         }
 
-        *self.called_insert.write().unwrap() = false;
+        *self.called_insert.lock() = false;
 
         if let Some(inner) = self.inner.as_ref() {
             self.serialization.export(&self.path, inner)
         } else {
-            if self.batch.read().unwrap().is_empty() {
+            if self.batch.lock().is_empty() {
                 return Ok(());
             }
 
             let mut map = self.import();
 
-            self.batch
-                .write()
-                .unwrap()
-                .drain(..)
-                .for_each(|(date, value)| {
-                    map.insert(date.to_string(), value);
-                });
+            self.batch.lock().drain(..).for_each(|(date, value)| {
+                map.insert(date.to_string(), value);
+            });
 
             self.serialization.export(&self.path, &map)
         }

@@ -9,7 +9,7 @@ mod txout_index_to_address_index;
 mod txout_index_to_sats;
 
 use _trait::*;
-use address_index_to_address_data::*;
+pub use address_index_to_address_data::*;
 use counters::*;
 use date_data_vec::*;
 use tx_index_to_tx_data::*;
@@ -51,12 +51,12 @@ impl States {
         let address_index_to_address_data = address_index_to_address_data_handle.join().unwrap()?;
 
         Ok(Self {
-            date_data_vec,
+            address_index_to_address_data,
             counters,
+            date_data_vec,
             tx_index_to_tx_data,
             txout_index_to_address_index,
             txout_index_to_sats,
-            address_index_to_address_data,
         })
     }
 

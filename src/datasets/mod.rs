@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, sync::RwLockReadGuard, thread};
+use std::{collections::BTreeMap, sync::Arc, thread};
 
 use chrono::NaiveDate;
 use itertools::Itertools;
@@ -20,6 +20,7 @@ use block_metadata::*;
 use coinblocks::*;
 use coindays::*;
 use date_metadata::*;
+use parking_lot::{lock_api::MutexGuard, RawMutex};
 use price::*;
 use rewards::*;
 use subs::*;
@@ -27,7 +28,10 @@ use utxo::*;
 
 use crate::{
     states::States,
-    structs::{AddressData, AddressRealizedData, BlockData, BlockPath},
+    structs::{
+        AddressData, AddressRealizedData, BlockData, BlockPath, SplitAddressIndexToAddressDataRef,
+        WMutex,
+    },
 };
 
 pub struct ProcessedDateData {
@@ -44,8 +48,8 @@ pub struct SortedBlockData<'a> {
 }
 
 pub struct ProcessedBlockData<'a> {
-    pub address_index_to_address_realized_data: &'a BTreeMap<u32, AddressRealizedData<'a>>,
-    pub address_index_to_removed_address_data: &'a BTreeMap<u32, AddressData>,
+    pub address_index_to_address_realized_data: &'a BTreeMap<u32, AddressRealizedData>,
+    pub address_index_to_removed_address_data: &'a BTreeMap<u32, Arc<WMutex<AddressData>>>,
     pub block_path_to_spent_value: &'a BTreeMap<BlockPath, u64>,
     pub block_price: f32,
     pub coinbase_vec: &'a Vec<u64>,
@@ -57,6 +61,7 @@ pub struct ProcessedBlockData<'a> {
     pub height: usize,
     pub is_date_last_block: bool,
     pub sorted_block_data_vec: Option<Vec<SortedBlockData<'a>>>,
+    pub split_address_index_to_address_data: &'a Option<SplitAddressIndexToAddressDataRef>,
     pub states: &'a States,
     pub timestamp: u32,
 }
@@ -107,7 +112,7 @@ impl AllDatasets {
         })
     }
 
-    pub fn get_date_to_last_height(&self) -> RwLockReadGuard<'_, BTreeMap<String, usize>> {
+    pub fn get_date_to_last_height(&self) -> MutexGuard<'_, RawMutex, BTreeMap<String, usize>> {
         self.date_metadata.last_height.unsafe_inner()
     }
 }

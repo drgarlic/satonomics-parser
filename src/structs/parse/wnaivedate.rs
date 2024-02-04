@@ -48,8 +48,8 @@ impl Decode for WNaiveDate {
 
 impl<'de> BorrowDecode<'de> for WNaiveDate {
     fn borrow_decode<D: BorrowDecoder<'de>>(decoder: &mut D) -> Result<Self, DecodeError> {
-        Ok(Self(
-            NaiveDate::from_str(BorrowDecode::borrow_decode(decoder)?).unwrap(),
-        ))
+        let str: String = BorrowDecode::borrow_decode(decoder)?;
+
+        Ok(Self(NaiveDate::from_str(&str).unwrap()))
     }
 }

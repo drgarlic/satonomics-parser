@@ -1,15 +1,14 @@
 use chrono::NaiveDate;
 use itertools::Itertools;
-use ordered_float::OrderedFloat;
 use rayon::prelude::*;
 
 use crate::{
     bitcoin::{btc_to_sats, sats_to_btc},
     datasets::{AnyDataset, PricePaidState, ProcessedBlockData, UnrealizedState},
-    structs::{AnyDateMap, AnyHeightMap, BiMap, LiquidityClassification},
+    structs::{AnyDateMap, AnyHeightMap, BiMap, LiquidityClassification, RawAddressSplit},
 };
 
-use super::{AddressFilter, AddressSubDataset};
+use super::{AddressSubDataset, RawAddressFilter};
 
 pub struct AddressDataset {
     name: String,
@@ -17,7 +16,8 @@ pub struct AddressDataset {
     min_initial_first_unsafe_date: Option<NaiveDate>,
     min_initial_first_unsafe_height: Option<usize>,
 
-    filter: AddressFilter,
+    split: RawAddressSplit,
+    filter: RawAddressFilter,
 
     address_count: BiMap<usize>,
     all_dataset: AddressSubDataset,
@@ -30,7 +30,8 @@ impl AddressDataset {
     pub fn import(
         parent_path: &str,
         name: &str,
-        filter: AddressFilter,
+        filter: RawAddressFilter,
+        split: RawAddressSplit,
     ) -> color_eyre::Result<Self> {
         let f = |s: &str| format!("{parent_path}/{name}/{s}");
 
@@ -39,6 +40,7 @@ impl AddressDataset {
             min_initial_first_unsafe_date: None,
             min_initial_first_unsafe_height: None,
             filter,
+            split,
             address_count: BiMap::new_on_disk_bin(&f("address_count")),
             all_dataset: AddressSubDataset::import(&f("all"))?,
             illiquid_dataset: AddressSubDataset::import(&f("illiquid"))?,
@@ -113,11 +115,25 @@ impl AddressDataset {
             .filter(|address_realized_data| {
                 self.filter.check(
                     address_realized_data.previous_amount_opt.as_ref().unwrap(),
-                    &address_realized_data.address_data_opt.unwrap().address_type,
+                    &address_realized_data
+                        .address_data_opt
+                        .as_ref()
+                        .unwrap()
+                        .upgrade()
+                        .unwrap()
+                        .lock()
+                        .address_type,
                 )
             })
             .for_each(|address_realized_data| {
-                let address_data = address_realized_data.address_data_opt.unwrap();
+                let arc = address_realized_data
+                    .address_data_opt
+                    .as_ref()
+                    .unwrap()
+                    .upgrade()
+                    .unwrap();
+
+                let address_data = arc.lock();
 
                 all_realized_profit += address_realized_data.profit;
                 all_realized_loss += address_realized_data.loss;
@@ -187,62 +203,66 @@ impl AddressDataset {
         let mut liquid_pp_state = PricePaidState::default();
         let mut highly_liquid_pp_state = PricePaidState::default();
 
-        let mut sorted_address_data = processed_block_data
-            .states
-            .address_index_to_address_data
-            .values()
-            .filter(|address_data| {
-                self.filter
-                    .check(&address_data.amount, &address_data.address_type)
-            })
-            .collect_vec();
+        // if let Some(address_data) = processed_block_data
+        //     .states
+        //     .address_index_to_address_data
+        //     .get(&73228051)
+        // {
+        //     println!(
+        //         "73228051: strong count = {}, weak count = {}",
+        //         Arc::strong_count(address_data),
+        //         Arc::weak_count(address_data)
+        //     )
+        // }
 
-        sorted_address_data.par_sort_unstable_by(|a, b| {
-            Ord::cmp(
-                &OrderedFloat(a.mean_price_paid),
-                &OrderedFloat(b.mean_price_paid),
-            )
-        });
+        processed_block_data
+            .split_address_index_to_address_data
+            .as_ref()
+            .unwrap()
+            .get(&self.split)
+            .iter()
+            .for_each(|(_, address_data)| {
+                let address_data_arc = address_data.upgrade().unwrap();
+                let address_data = address_data_arc.lock();
 
-        sorted_address_data.iter().for_each(|address_data| {
-            let sat_amount = address_data.amount;
-            let price = address_data.mean_price_paid;
+                let sat_amount = address_data.amount;
+                let price = address_data.mean_price_paid;
 
-            let liquidity_classification =
-                LiquidityClassification::new(address_data.sent, address_data.received);
+                let liquidity_classification =
+                    LiquidityClassification::new(address_data.sent, address_data.received);
 
-            let btc_amount = sats_to_btc(sat_amount);
+                let btc_amount = sats_to_btc(sat_amount);
 
-            let split_amount = liquidity_classification.split(btc_amount);
+                let split_amount = liquidity_classification.split(btc_amount);
 
-            let illiquid_btc_amount = split_amount.illiquid;
-            let liquid_btc_amount = split_amount.liquid;
-            let highly_liquid_btc_amount = split_amount.highly_liquid;
+                let illiquid_btc_amount = split_amount.illiquid;
+                let liquid_btc_amount = split_amount.liquid;
+                let highly_liquid_btc_amount = split_amount.highly_liquid;
 
-            let illiquid_sat_amount = btc_to_sats(illiquid_btc_amount);
-            let liquid_sat_amount = btc_to_sats(liquid_btc_amount);
-            let highly_liquid_sat_amount = btc_to_sats(highly_liquid_btc_amount);
+                let illiquid_sat_amount = btc_to_sats(illiquid_btc_amount);
+                let liquid_sat_amount = btc_to_sats(liquid_btc_amount);
+                let highly_liquid_sat_amount = btc_to_sats(highly_liquid_btc_amount);
 
-            all_pp_state.iterate(price, btc_amount, sat_amount, all_total_supply);
-            illiquid_pp_state.iterate(
-                price,
-                illiquid_btc_amount,
-                illiquid_sat_amount,
-                illiquid_total_supply,
-            );
-            liquid_pp_state.iterate(
-                price,
-                liquid_btc_amount,
-                liquid_sat_amount,
-                liquid_total_supply,
-            );
-            highly_liquid_pp_state.iterate(
-                price,
-                highly_liquid_btc_amount,
-                highly_liquid_sat_amount,
-                highly_liquid_total_supply,
-            );
-        });
+                all_pp_state.iterate(price, btc_amount, sat_amount, all_total_supply);
+                illiquid_pp_state.iterate(
+                    price,
+                    illiquid_btc_amount,
+                    illiquid_sat_amount,
+                    illiquid_total_supply,
+                );
+                liquid_pp_state.iterate(
+                    price,
+                    liquid_btc_amount,
+                    liquid_sat_amount,
+                    liquid_total_supply,
+                );
+                highly_liquid_pp_state.iterate(
+                    price,
+                    highly_liquid_btc_amount,
+                    highly_liquid_sat_amount,
+                    highly_liquid_total_supply,
+                );
+            });
 
         self.all_dataset.price_paid.insert(
             processed_block_data,
@@ -275,55 +295,8 @@ impl AnyDataset for AddressDataset {
             is_date_last_block,
             block_price,
             date_price,
-            states,
             ..
         } = processed_block_data;
-
-        let mut all_total_supply = 0;
-        let mut illiquid_total_supply = 0;
-        let mut liquid_total_supply = 0;
-        let mut highly_liquid_total_supply = 0;
-
-        let mut all_utxo_count = 0;
-        let mut illiquid_utxo_count = 0;
-        let mut liquid_utxo_count = 0;
-        let mut highly_liquid_utxo_count = 0;
-
-        let mut all_unrealized_height_state = UnrealizedState::default();
-        let mut illiquid_unrealized_height_state = UnrealizedState::default();
-        let mut liquid_unrealized_height_state = UnrealizedState::default();
-        let mut highly_liquid_unrealized_height_state = UnrealizedState::default();
-
-        let mut all_unrealized_date_state = {
-            if is_date_last_block {
-                Some(UnrealizedState::default())
-            } else {
-                None
-            }
-        };
-        let mut illiquid_unrealized_date_state = {
-            if is_date_last_block {
-                Some(UnrealizedState::default())
-            } else {
-                None
-            }
-        };
-        let mut liquid_unrealized_date_state = {
-            if is_date_last_block {
-                Some(UnrealizedState::default())
-            } else {
-                None
-            }
-        };
-        let mut highly_liquid_unrealized_date_state = {
-            if is_date_last_block {
-                Some(UnrealizedState::default())
-            } else {
-                None
-            }
-        };
-
-        let mut address_count = 0;
 
         let needs_unrealized_data = self.needs_unrealized_data(date, height);
         let needs_realized = self.needs_realized_data(date, height);
@@ -339,21 +312,66 @@ impl AnyDataset for AddressDataset {
         //     needs_utxos_metadata
         // );
 
-        states
-            .address_index_to_address_data
-            .values()
-            .filter(|address_data| {
-                self.filter
-                    .check(&address_data.amount, &address_data.address_type)
-            })
-            .for_each(|address_data| {
-                address_count += 1;
+        let (
+            address_count,
+            all_total_supply,
+            illiquid_total_supply,
+            liquid_total_supply,
+            highly_liquid_total_supply,
+            all_utxo_count,
+            illiquid_utxo_count,
+            liquid_utxo_count,
+            highly_liquid_utxo_count,
+            all_unrealized_height_state,
+            illiquid_unrealized_height_state,
+            liquid_unrealized_height_state,
+            highly_liquid_unrealized_height_state,
+            all_unrealized_date_state,
+            illiquid_unrealized_date_state,
+            liquid_unrealized_date_state,
+            highly_liquid_unrealized_date_state,
+        ) = processed_block_data
+            .split_address_index_to_address_data
+            .as_ref()
+            .unwrap()
+            .get(&self.split)
+            .par_iter()
+            .map(|(tuple, address_data)| {
+                let address_count = 1;
+
+                let mut all_utxo_count = 0;
+                let mut illiquid_utxo_count = 0;
+                let mut liquid_utxo_count = 0;
+                let mut highly_liquid_utxo_count = 0;
+
+                let mut all_total_supply = 0;
+                let mut illiquid_total_supply = 0;
+                let mut liquid_total_supply = 0;
+                let mut highly_liquid_total_supply = 0;
+
+                let mut all_unrealized_height_state = UnrealizedState::default();
+                let mut illiquid_unrealized_height_state = UnrealizedState::default();
+                let mut liquid_unrealized_height_state = UnrealizedState::default();
+                let mut highly_liquid_unrealized_height_state = UnrealizedState::default();
+
+                let mut all_unrealized_date_state = UnrealizedState::default();
+                let mut illiquid_unrealized_date_state = UnrealizedState::default();
+                let mut liquid_unrealized_date_state = UnrealizedState::default();
+                let mut highly_liquid_unrealized_date_state = UnrealizedState::default();
+
+                let address_data_arc = address_data.upgrade().unwrap_or_else(|| {
+                    let address_index = tuple.1;
+                    panic!("arc for address index = {address_index} was freed ")
+                });
+
+                let address_data = address_data_arc.lock();
 
                 if needs_supply || needs_utxos_metadata || needs_unrealized_data {
                     let sat_amount = address_data.amount;
                     let utxo_count = address_data.outputs_len as usize;
                     let price = address_data.mean_price_paid;
 
+                    // TODO: Store and update inside address_data, there is no need to recompute it each time
                     let liquidity_classification =
                         LiquidityClassification::new(address_data.sent, address_data.received);
 
@@ -414,38 +432,97 @@ impl AnyDataset for AddressDataset {
 
                             if is_date_last_block {
                                 all_unrealized_date_state
-                                    .as_mut()
-                                    .unwrap()
                                     .iterate(price, date_price, sat_amount, btc_amount);
 
-                                illiquid_unrealized_date_state.as_mut().unwrap().iterate(
+                                illiquid_unrealized_date_state.iterate(
                                     price,
                                     date_price,
                                     illiquid_sat_amount,
                                     illiquid_btc_amount,
                                 );
 
-                                liquid_unrealized_date_state.as_mut().unwrap().iterate(
+                                liquid_unrealized_date_state.iterate(
                                     price,
                                     date_price,
                                     liquid_sat_amount,
                                     liquid_btc_amount,
                                 );
 
-                                highly_liquid_unrealized_date_state
-                                    .as_mut()
-                                    .unwrap()
-                                    .iterate(
-                                        price,
-                                        date_price,
-                                        highly_liquid_sat_amount,
-                                        highly_liquid_btc_amount,
-                                    );
+                                highly_liquid_unrealized_date_state.iterate(
+                                    price,
+                                    date_price,
+                                    highly_liquid_sat_amount,
+                                    highly_liquid_btc_amount,
+                                );
                             }
                         }
                     }
                 }
-            });
+
+                (
+                    address_count,
+                    all_total_supply,
+                    illiquid_total_supply,
+                    liquid_total_supply,
+                    highly_liquid_total_supply,
+                    all_utxo_count,
+                    illiquid_utxo_count,
+                    liquid_utxo_count,
+                    highly_liquid_utxo_count,
+                    all_unrealized_height_state,
+                    illiquid_unrealized_height_state,
+                    liquid_unrealized_height_state,
+                    highly_liquid_unrealized_height_state,
+                    all_unrealized_date_state,
+                    illiquid_unrealized_date_state,
+                    liquid_unrealized_date_state,
+                    highly_liquid_unrealized_date_state,
+                )
+            })
+            .reduce(
+                || {
+                    (
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        UnrealizedState::default(),
+                        UnrealizedState::default(),
+                        UnrealizedState::default(),
+                        UnrealizedState::default(),
+                        UnrealizedState::default(),
+                        UnrealizedState::default(),
+                        UnrealizedState::default(),
+                        UnrealizedState::default(),
+                    )
+                },
+                |a, b| {
+                    (
+                        a.0 + b.0,
+                        a.1 + b.1,
+                        a.2 + b.2,
+                        a.3 + b.3,
+                        a.4 + b.4,
+                        a.5 + b.5,
+                        a.6 + b.6,
+                        a.7 + b.7,
+                        a.8 + b.8,
+                        a.9 + b.9,
+                        a.10 + b.10,
+                        a.11 + b.11,
+                        a.12 + b.12,
+                        a.13 + b.13,
+                        a.14 + b.14,
+                        a.15 + b.15,
+                        a.16 + b.16,
+                    )
+                },
+            );
 
         self.address_count.height.insert(height, address_count);
 
@@ -488,21 +565,25 @@ impl AnyDataset for AddressDataset {
                 processed_block_data,
                 all_unrealized_height_state,
                 all_unrealized_date_state,
+                is_date_last_block,
             );
             self.illiquid_dataset.unrealized.insert(
                 processed_block_data,
                 illiquid_unrealized_height_state,
                 illiquid_unrealized_date_state,
+                is_date_last_block,
             );
             self.liquid_dataset.unrealized.insert(
                 processed_block_data,
                 liquid_unrealized_height_state,
                 liquid_unrealized_date_state,
+                is_date_last_block,
             );
             self.highly_liquid_dataset.unrealized.insert(
                 processed_block_data,
                 highly_liquid_unrealized_height_state,
                 highly_liquid_unrealized_date_state,
+                is_date_last_block,
             );
         }
 

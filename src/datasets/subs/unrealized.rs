@@ -1,3 +1,5 @@
+use std::ops::Add;
+
 use chrono::NaiveDate;
 
 use crate::{
@@ -19,12 +21,25 @@ pub struct UnrealizedState {
 }
 
 impl UnrealizedState {
+    #[inline]
     pub fn iterate(&mut self, price_paid: f32, ref_price: f32, sat_amount: u64, btc_amount: f64) {
         if price_paid < ref_price {
             self.unrealized_profit += btc_amount * (ref_price - price_paid) as f64;
             self.supply_in_profit += sat_amount;
         } else if price_paid > ref_price {
             self.unrealized_loss += btc_amount * (price_paid - ref_price) as f64
+        }
+    }
+}
+
+impl Add<UnrealizedState> for UnrealizedState {
+    type Output = UnrealizedState;
+
+    fn add(self, other: UnrealizedState) -> UnrealizedState {
+        UnrealizedState {
+            supply_in_profit: self.supply_in_profit + other.supply_in_profit,
+            unrealized_profit: self.unrealized_profit + other.unrealized_profit,
+            unrealized_loss: self.unrealized_loss + other.unrealized_loss,
         }
     }
 }
@@ -53,7 +68,8 @@ impl UnrealizedSubDataset {
         &self,
         &ProcessedBlockData { height, date, .. }: &ProcessedBlockData,
         height_state: UnrealizedState,
-        date_state: Option<UnrealizedState>,
+        date_state: UnrealizedState,
+        is_date_last_block: bool,
     ) {
         self.supply_in_profit
             .height
@@ -67,7 +83,7 @@ impl UnrealizedSubDataset {
             .height
             .insert(height, height_state.unrealized_loss as f32);
 
-        if let Some(date_state) = date_state {
+        if is_date_last_block {
             self.supply_in_profit
                 .date
                 .insert(date, date_state.supply_in_profit);
