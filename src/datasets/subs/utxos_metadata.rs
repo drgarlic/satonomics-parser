@@ -9,6 +9,21 @@ pub struct UTXOsMetadataSubDataset {
     count: BiMap<usize>,
 }
 
+#[derive(Debug, Default)]
+pub struct UTXOsMetadataState {
+    pub count: usize,
+}
+
+impl UTXOsMetadataState {
+    pub fn increment(&mut self, utxo_count: usize) {
+        self.count += utxo_count;
+    }
+
+    pub fn decrement(&mut self, utxo_count: usize) {
+        self.count -= utxo_count;
+    }
+}
+
 impl UTXOsMetadataSubDataset {
     pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
         let folder_path = format!("{parent_path}/utxos");
@@ -27,12 +42,12 @@ impl UTXOsMetadataSubDataset {
             is_date_last_block,
             ..
         }: &ProcessedBlockData,
-        utxo_count: usize,
+        state: &UTXOsMetadataState,
     ) {
-        self.count.height.insert(height, utxo_count);
+        self.count.height.insert(height, state.count);
 
         if is_date_last_block {
-            self.count.date.insert(date, utxo_count);
+            self.count.date.insert(date, state.count);
         }
     }
 

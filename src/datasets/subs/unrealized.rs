@@ -13,7 +13,7 @@ pub struct UnrealizedSubDataset {
     unrealized_loss: BiMap<f32>,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct UnrealizedState {
     supply_in_profit: u64,
     unrealized_profit: f64,
@@ -22,12 +22,18 @@ pub struct UnrealizedState {
 
 impl UnrealizedState {
     #[inline]
-    pub fn iterate(&mut self, price_paid: f32, ref_price: f32, sat_amount: u64, btc_amount: f64) {
-        if price_paid < ref_price {
-            self.unrealized_profit += btc_amount * (ref_price - price_paid) as f64;
+    pub fn iterate(
+        &mut self,
+        mean_price_paid: f32,
+        ref_price: f32,
+        sat_amount: u64,
+        btc_amount: f64,
+    ) {
+        if mean_price_paid < ref_price {
+            self.unrealized_profit += btc_amount * ((ref_price - mean_price_paid) as f64 / 100.0);
             self.supply_in_profit += sat_amount;
-        } else if price_paid > ref_price {
-            self.unrealized_loss += btc_amount * (price_paid - ref_price) as f64
+        } else if mean_price_paid > ref_price {
+            self.unrealized_loss += btc_amount * ((mean_price_paid - ref_price) as f64 / 100.0)
         }
     }
 }
@@ -66,10 +72,14 @@ impl UnrealizedSubDataset {
 
     pub fn insert(
         &self,
-        &ProcessedBlockData { height, date, .. }: &ProcessedBlockData,
-        height_state: UnrealizedState,
-        date_state: UnrealizedState,
-        is_date_last_block: bool,
+        &ProcessedBlockData {
+            height,
+            date,
+            is_date_last_block,
+            ..
+        }: &ProcessedBlockData,
+        height_state: &UnrealizedState,
+        date_state: &UnrealizedState,
     ) {
         self.supply_in_profit
             .height

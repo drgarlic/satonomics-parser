@@ -12,6 +12,19 @@ pub struct RealizedSubDataset {
     loss: BiMap<f32>,
 }
 
+#[derive(Debug, Default)]
+pub struct RealizedState {
+    pub realized_profit: f32,
+    pub realized_loss: f32,
+}
+
+impl RealizedState {
+    pub fn iterate(&mut self, realized_profit: f32, realized_loss: f32) {
+        self.realized_profit += realized_profit;
+        self.realized_loss += realized_loss;
+    }
+}
+
 impl RealizedSubDataset {
     pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
         let folder_path = format!("{parent_path}/realized");
@@ -31,15 +44,14 @@ impl RealizedSubDataset {
             is_date_last_block,
             ..
         }: &ProcessedBlockData,
-        realized_loss: f32,
-        realized_profit: f32,
+        state: &RealizedState,
     ) {
-        self.profit.height.insert(height, realized_profit);
-        self.loss.height.insert(height, realized_loss);
+        self.profit.height.insert(height, state.realized_profit);
+        self.loss.height.insert(height, state.realized_loss);
 
         if is_date_last_block {
-            self.profit.date.insert(date, realized_profit);
-            self.loss.date.insert(date, realized_loss);
+            self.profit.date.insert(date, state.realized_profit);
+            self.loss.date.insert(date, state.realized_loss);
         }
     }
 

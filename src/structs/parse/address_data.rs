@@ -2,9 +2,9 @@ use bincode::{Decode, Encode};
 
 use crate::bitcoin::sats_to_btc;
 
-use super::{EmptyAddressData, RawAddressType};
+use super::{EmptyAddressData, LiquidityClassification, RawAddressType};
 
-#[derive(Encode, Decode, Debug)]
+#[derive(Encode, Decode, Debug, Clone, Copy)]
 pub struct AddressData {
     pub address_type: RawAddressType,
     pub amount: u64,
@@ -24,6 +24,10 @@ impl AddressData {
             mean_price_paid: 0.0,
             outputs_len: 0,
         }
+    }
+
+    pub fn compute_liquidity_classification(&self) -> LiquidityClassification {
+        LiquidityClassification::new(self.sent, self.received)
     }
 }
 

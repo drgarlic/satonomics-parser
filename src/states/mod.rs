@@ -4,30 +4,36 @@ mod _trait;
 mod address_index_to_address_data;
 mod counters;
 mod date_data_vec;
+mod processed_addresses_split_states;
 mod tx_index_to_tx_data;
 mod txout_index_to_address_index;
+
 mod txout_index_to_sats;
 
 use _trait::*;
-pub use address_index_to_address_data::*;
+use address_index_to_address_data::*;
 use counters::*;
 use date_data_vec::*;
+pub use processed_addresses_split_states::*;
 use tx_index_to_tx_data::*;
 use txout_index_to_address_index::*;
 use txout_index_to_sats::*;
 
 #[derive(Default)]
 pub struct States {
+    // TODO: Change to Option
     pub address_index_to_address_data: AddressIndexToAddressData,
     pub counters: Counters,
     pub date_data_vec: DateDataVec,
+    // TODO: Change to Option
+    pub split_address: SplitVariousAddressStates,
     pub tx_index_to_tx_data: TxIndexToTxData,
     pub txout_index_to_address_index: TxoutIndexToAddressIndex,
     pub txout_index_to_sats: TxoutIndexToSats,
 }
 
 impl States {
-    pub fn import() -> color_eyre::Result<Self> {
+    pub fn import(compute_address_states: bool) -> color_eyre::Result<Self> {
         let address_index_to_address_data_handle = thread::spawn(AddressIndexToAddressData::import);
 
         let tx_index_to_tx_data_handle = thread::spawn(TxIndexToTxData::import);
@@ -48,12 +54,17 @@ impl States {
 
         let tx_index_to_tx_data = tx_index_to_tx_data_handle.join().unwrap()?;
 
+        // TODO: Use compute_address_states
         let address_index_to_address_data = address_index_to_address_data_handle.join().unwrap()?;
+
+        // TODO: Use compute_address_states
+        let split_address = SplitVariousAddressStates::init(&address_index_to_address_data);
 
         Ok(Self {
             address_index_to_address_data,
             counters,
             date_data_vec,
+            split_address,
             tx_index_to_tx_data,
             txout_index_to_address_index,
             txout_index_to_sats,
@@ -69,6 +80,8 @@ impl States {
         let _ = self.tx_index_to_tx_data.reset();
         let _ = self.txout_index_to_address_index.reset();
         let _ = self.txout_index_to_sats.reset();
+
+        self.split_address = SplitVariousAddressStates::default();
     }
 
     pub fn export(&self) -> color_eyre::Result<()> {

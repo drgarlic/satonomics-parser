@@ -34,8 +34,9 @@ impl LiquidityClassification {
     }
 
     #[inline(always)]
-    pub fn split(&self, value: f64) -> LiquidityClassificationResult {
-        LiquidityClassificationResult {
+    pub fn split(&self, value: f64) -> LiquiditySplitResult {
+        LiquiditySplitResult {
+            all: value,
             illiquid: value * self.illiquid,
             liquid: value * self.liquid,
             highly_liquid: value * self.highly_liquid,
@@ -63,9 +64,21 @@ impl LiquidityClassification {
     }
 }
 
-#[derive(Debug)]
-pub struct LiquidityClassificationResult {
+#[derive(Debug, Default)]
+pub struct LiquiditySplitResult {
+    pub all: f64,
     pub illiquid: f64,
     pub liquid: f64,
     pub highly_liquid: f64,
+}
+
+#[derive(Debug, Default)]
+pub struct SplitByLiquidity<T>
+where
+    T: Default,
+{
+    pub all: T,
+    pub illiquid: T,
+    pub liquid: T,
+    pub highly_liquid: T,
 }

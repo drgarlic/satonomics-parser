@@ -1,13 +1,13 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
 
-use crate::structs::{AddressData, WMutex};
+use crate::structs::AddressData;
 
 use super::AnyState;
 use bincode::{Decode, Encode};
 use derive_deref::{Deref, DerefMut};
 
 #[derive(Encode, Decode, Default, Deref, DerefMut, Debug)]
-pub struct AddressIndexToAddressData(BTreeMap<u32, Arc<WMutex<AddressData>>>);
+pub struct AddressIndexToAddressData(BTreeMap<u32, AddressData>);
 
 impl AnyState for AddressIndexToAddressData {
     fn name<'a>() -> &'a str {

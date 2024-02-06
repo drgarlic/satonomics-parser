@@ -9,6 +9,21 @@ pub struct SupplySubDataset {
     total: BiMap<u64>,
 }
 
+#[derive(Debug, Default)]
+pub struct SupplyState {
+    pub total_supply: u64,
+}
+
+impl SupplyState {
+    pub fn increment(&mut self, amount: u64) {
+        self.total_supply += amount;
+    }
+
+    pub fn decrement(&mut self, amount: u64) {
+        self.total_supply -= amount;
+    }
+}
+
 impl SupplySubDataset {
     pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
         let folder_path = format!("{parent_path}/supply");
@@ -27,12 +42,12 @@ impl SupplySubDataset {
             is_date_last_block,
             ..
         }: &ProcessedBlockData,
-        total_supply: u64,
+        state: &SupplyState,
     ) {
-        self.total.height.insert(height, total_supply);
+        self.total.height.insert(height, state.total_supply);
 
         if is_date_last_block {
-            self.total.date.insert(date, total_supply);
+            self.total.date.insert(date, state.total_supply);
         }
     }
 

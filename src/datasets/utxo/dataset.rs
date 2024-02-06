@@ -3,11 +3,11 @@ use chrono::NaiveDate;
 use crate::{
     bitcoin::sats_to_btc,
     datasets::{
-        AnyDataset, PricePaidState, PricePaidSubDataset, ProcessedBlockData, RealizedSubDataset,
-        SupplySubDataset, UTXOsMetadataSubDataset, UnrealizedState, UnrealizedSubDataset,
+        AnyDataset, PricePaidState, PricePaidSubDataset, ProcessedBlockData, RealizedState,
+        RealizedSubDataset, SupplyState, SupplySubDataset, UTXOsMetadataState,
+        UTXOsMetadataSubDataset, UnrealizedState, UnrealizedSubDataset,
     },
-    structs::{reverse_date_index, AnyDateMap},
-    structs::{AnyHeightMap, BlockData},
+    structs::{reverse_date_index, AnyDateMap, AnyHeightMap, BlockData},
 };
 
 use super::UTXOFilter;
@@ -78,8 +78,8 @@ impl AnyDataset for UTXODataset {
 
         let date_data_vec = &states.date_data_vec;
 
-        let mut total_supply = 0;
-        let mut utxo_count = 0;
+        let mut supply_state = SupplyState::default();
+        let mut utxos_metadata_state = UTXOsMetadataState::default();
 
         let mut pp_state = PricePaidState::default();
 
@@ -104,8 +104,8 @@ impl AnyDataset for UTXODataset {
                 let sat_amount = block_data.amount;
                 let btc_amount = sats_to_btc(sat_amount);
 
-                utxo_count += block_data.spendable_outputs as usize;
-                total_supply += sat_amount;
+                supply_state.total_supply += sat_amount;
+                utxos_metadata_state.count += block_data.spendable_outputs as usize;
 
                 if needs_unrealized {
                     unrealized_height_state.iterate(price, block_price, sat_amount, btc_amount);
@@ -116,24 +116,24 @@ impl AnyDataset for UTXODataset {
                 }
             });
 
+        let total_supply = supply_state.total_supply;
         let total_supply_in_btc = sats_to_btc(total_supply);
 
-        self.supply.insert(processed_block_data, total_supply);
+        self.supply.insert(processed_block_data, &supply_state);
 
-        self.utxos_metadata.insert(processed_block_data, utxo_count);
+        self.utxos_metadata
+            .insert(processed_block_data, &utxos_metadata_state);
 
         if needs_unrealized {
             self.unrealized.insert(
                 processed_block_data,
-                unrealized_height_state,
-                unrealized_date_state,
-                is_date_last_block,
+                &unrealized_height_state,
+                &unrealized_date_state,
             );
         }
 
         if needs_price_paid {
             processed_block_data
-                // TODO: Create struct instead of tuple to avoid mistakingly think that reversed_date_index is date_index
                 .sorted_block_data_vec
                 .as_ref()
                 .unwrap()
@@ -155,12 +155,11 @@ impl AnyDataset for UTXODataset {
                 });
 
             self.price_paid
-                .insert(processed_block_data, pp_state, total_supply_in_btc);
+                .insert(processed_block_data, &pp_state, total_supply_in_btc);
         }
 
         if needs_realized {
-            let mut realized_profit = 0.0;
-            let mut realized_loss = 0.0;
+            let mut realized_state = RealizedState::default();
 
             block_path_to_spent_value
                 .iter()
@@ -187,14 +186,15 @@ impl AnyDataset for UTXODataset {
                     let current_dollar_amount = block_price as f64 * sats_to_btc(*value);
 
                     if previous_dollar_amount < current_dollar_amount {
-                        realized_profit += (current_dollar_amount - previous_dollar_amount) as f32
+                        realized_state.realized_profit +=
+                            (current_dollar_amount - previous_dollar_amount) as f32
                     } else if current_dollar_amount < previous_dollar_amount {
-                        realized_loss += (previous_dollar_amount - current_dollar_amount) as f32
+                        realized_state.realized_loss +=
+                            (previous_dollar_amount - current_dollar_amount) as f32
                     }
                 });
 
-            self.realized
-                .insert(processed_block_data, realized_loss, realized_profit);
+            self.realized.insert(processed_block_data, &realized_state);
         }
     }
 

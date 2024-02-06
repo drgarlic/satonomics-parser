@@ -1,17 +1,23 @@
-use std::sync::Weak;
+use super::AddressData;
 
-use super::{AddressData, WMutex};
-
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct AddressRealizedData {
     pub received: u64,
     pub sent: u64,
     pub profit: f32,
     pub loss: f32,
-    /// Filled only after the block is parsed since it can come from different places
-    pub address_data_opt: Option<Weak<WMutex<AddressData>>>,
-    /// Filled only after the block is parsed since it depends on address_data_opt
-    pub previous_amount_opt: Option<u64>,
-    /// Filled only after the block is parsed since it depends on address_data_opt
-    pub previous_mean_price_paid_opt: Option<f32>,
+    /// Option
+    pub initial_address_data: AddressData,
+}
+
+impl AddressRealizedData {
+    pub fn default(initial_address_data: &AddressData) -> Self {
+        Self {
+            received: 0,
+            sent: 0,
+            profit: 0.0,
+            loss: 0.0,
+            initial_address_data: *initial_address_data,
+        }
+    }
 }

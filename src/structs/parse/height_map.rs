@@ -1,25 +1,23 @@
-use std::{
-    cmp::Ordering,
-    fmt::Debug,
-    fs,
-    sync::{RwLock, RwLockReadGuard},
-};
+use std::{cmp::Ordering, fmt::Debug, fs};
 
 use bincode::{Decode, Encode};
+use parking_lot::{lock_api::MutexGuard, RawMutex};
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{bitcoin::NUMBER_OF_UNSAFE_BLOCKS, structs::Serialization};
+
+use super::WMutex;
 
 pub struct HeightMap<T>
 where
     T: Clone + Default + Debug + Decode + Encode,
 {
-    batch: RwLock<Vec<(usize, T)>>,
+    batch: WMutex<Vec<(usize, T)>>,
     path: String,
     initial_last_height: Option<usize>,
     initial_first_unsafe_height: Option<usize>,
-    inner: Option<RwLock<Vec<T>>>,
-    called_insert: RwLock<bool>,
+    inner: Option<WMutex<Vec<T>>>,
+    called_insert: WMutex<bool>,
     serialization: Serialization,
 }
 
@@ -51,17 +49,17 @@ where
         fs::create_dir_all(path).unwrap();
 
         let mut s = Self {
-            batch: RwLock::new(vec![]),
+            batch: WMutex::new(vec![]),
             initial_first_unsafe_height: None,
             initial_last_height: None,
             path: serialization.append_extension(&format!("{path}/height")),
             inner: None,
-            called_insert: RwLock::new(false),
+            called_insert: WMutex::new(false),
             serialization,
         };
 
         if in_memory {
-            s.inner.replace(RwLock::new(s.import()));
+            s.inner.replace(WMutex::new(s.import()));
         }
 
         s.initial_last_height = s.get_last_height();
@@ -76,12 +74,12 @@ where
         // dbg!(&self.path);
 
         if !self.is_height_safe(height) {
-            *self.called_insert.write().unwrap() = true;
+            *self.called_insert.lock() = true;
 
             if let Some(list) = self.inner.as_ref() {
-                insert_vec(&mut list.write().unwrap(), height, value, &self.path);
+                insert_vec(&mut list.lock(), height, value, &self.path);
             } else {
-                self.batch.write().unwrap().push((height, value));
+                self.batch.lock().push((height, value));
             }
         }
     }
@@ -96,8 +94,8 @@ where
     }
 
     #[inline(always)]
-    pub fn unsafe_inner(&self) -> RwLockReadGuard<'_, Vec<T>> {
-        self.inner.as_ref().unwrap().read().unwrap()
+    pub fn unsafe_inner(&self) -> MutexGuard<'_, RawMutex, Vec<T>> {
+        self.inner.as_ref().unwrap().lock()
     }
 
     #[inline(always)]
@@ -117,7 +115,7 @@ where
         let len = self
             .inner
             .as_ref()
-            .map(|inner| inner.read().unwrap().len())
+            .map(|inner| inner.lock().len())
             .unwrap_or_else(|| self.import().len());
 
         if len == 0 {
@@ -164,28 +162,24 @@ where
     }
 
     fn export(&self) -> color_eyre::Result<()> {
-        if !self.called_insert.read().unwrap().to_owned() {
+        if !self.called_insert.lock().to_owned() {
             return Ok(());
         }
 
-        *self.called_insert.write().unwrap() = false;
+        *self.called_insert.lock() = false;
 
         if let Some(inner) = self.inner.as_ref() {
             self.serialization.export(&self.path, inner)
         } else {
-            if self.batch.read().unwrap().is_empty() {
+            if self.batch.lock().is_empty() {
                 return Ok(());
             }
 
             let mut list = self.import();
 
-            self.batch
-                .write()
-                .unwrap()
-                .drain(..)
-                .for_each(|(height, value)| {
-                    insert_vec(&mut list, height, value, &self.path);
-                });
+            self.batch.lock().drain(..).for_each(|(height, value)| {
+                insert_vec(&mut list, height, value, &self.path);
+            });
 
             self.serialization.export(&self.path, &list)
         }

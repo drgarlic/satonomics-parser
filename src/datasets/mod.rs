@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, sync::Arc, thread};
+use std::{collections::BTreeMap, thread};
 
 use chrono::NaiveDate;
 use itertools::Itertools;
@@ -23,15 +23,12 @@ use date_metadata::*;
 use parking_lot::{lock_api::MutexGuard, RawMutex};
 use price::*;
 use rewards::*;
-use subs::*;
+pub use subs::*;
 use utxo::*;
 
 use crate::{
-    states::States,
-    structs::{
-        AddressData, AddressRealizedData, BlockData, BlockPath, SplitAddressIndexToAddressDataRef,
-        WMutex,
-    },
+    states::{SplitPricePaidStates, SplitRealizedStates, SplitUnrealizedStates, States},
+    structs::{AddressData, AddressRealizedData, BlockData, BlockPath},
 };
 
 pub struct ProcessedDateData {
@@ -49,7 +46,7 @@ pub struct SortedBlockData<'a> {
 
 pub struct ProcessedBlockData<'a> {
     pub address_index_to_address_realized_data: &'a BTreeMap<u32, AddressRealizedData>,
-    pub address_index_to_removed_address_data: &'a BTreeMap<u32, Arc<WMutex<AddressData>>>,
+    pub address_index_to_removed_address_data: &'a BTreeMap<u32, AddressData>,
     pub block_path_to_spent_value: &'a BTreeMap<BlockPath, u64>,
     pub block_price: f32,
     pub coinbase_vec: &'a Vec<u64>,
@@ -61,7 +58,10 @@ pub struct ProcessedBlockData<'a> {
     pub height: usize,
     pub is_date_last_block: bool,
     pub sorted_block_data_vec: Option<Vec<SortedBlockData<'a>>>,
-    pub split_address_index_to_address_data: &'a Option<SplitAddressIndexToAddressDataRef>,
+    pub split_price_paid_states: &'a Option<SplitPricePaidStates>,
+    pub split_realized_states: &'a Option<SplitRealizedStates>,
+    pub split_unrealized_states_date: &'a Option<SplitUnrealizedStates>,
+    pub split_unrealized_states_height: &'a Option<SplitUnrealizedStates>,
     pub states: &'a States,
     pub timestamp: u32,
 }

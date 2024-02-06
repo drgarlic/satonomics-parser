@@ -1,11 +1,10 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     ops::ControlFlow,
-    sync::Arc,
     thread,
 };
 
-use bitcoin::{Block, TxOut, Txid};
+use bitcoin::{Block, Txid};
 use chrono::NaiveDate;
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
@@ -17,10 +16,10 @@ use crate::{
         AddressIndexToEmptyAddressData, Databases, RawAddressToAddressIndex, TxidToTxIndex,
     },
     datasets::{AllDatasets, AnyDatasets, ProcessedBlockData, SortedBlockData},
-    states::States,
+    states::{SplitRealizedStates, States},
     structs::{
         AddressData, AddressRealizedData, BlockData, BlockPath, EmptyAddressData, PartialTxoutData,
-        RawAddress, RawAddressSize, SplitAddressIndexToAddressDataRef, TxData, TxoutIndex, WMutex,
+        RawAddress, TxData, TxoutIndex,
     },
 };
 
@@ -38,7 +37,6 @@ pub struct ParseData<'a> {
     pub fees_vec: &'a mut Vec<Vec<u64>>,
     pub height: usize,
     pub is_date_last_block: bool,
-    pub split_address_index_to_address_data: &'a Option<SplitAddressIndexToAddressDataRef>,
     pub states: &'a mut States,
     pub timestamp: u32,
 }
@@ -58,12 +56,15 @@ pub fn parse_block(
         fees_vec,
         height,
         is_date_last_block,
-        split_address_index_to_address_data,
         states,
         timestamp,
     }: ParseData,
 ) {
     // println!("block: {height}");
+
+    // If false, expect that the code is flawless
+    // TODO: Instead store zero outputs in a database to check
+    let enable_check_if_txout_value_is_zero_in_db: bool = true;
 
     let date_index = states.date_data_vec.len() - 1;
 
@@ -89,24 +90,12 @@ pub fn parse_block(
     let mut block_path_to_spent_value: BTreeMap<BlockPath, u64> = BTreeMap::new();
     let mut address_index_to_address_realized_data: BTreeMap<u32, AddressRealizedData> =
         BTreeMap::new();
-    let mut address_index_to_removed_address_data: BTreeMap<u32, Arc<WMutex<AddressData>>> =
-        BTreeMap::new();
+    let mut address_index_to_removed_address_data: BTreeMap<u32, AddressData> = BTreeMap::new();
 
     let mut address_index_at_least_once_removed: BTreeSet<u32> = BTreeSet::default();
 
     let mut coinblocks_destroyed = 0.0;
     let mut coindays_destroyed = 0.0;
-
-    // {
-    //     let address_index_to_address_data_len = states.address_index_to_address_data.len();
-
-    //     dbg!(address_index_to_address_data_len);
-
-    //     split_address_index_to_address_data
-    //         .as_ref()
-    //         .unwrap()
-    //         .debug_lens();
-    // }
 
     let (
         (
@@ -175,29 +164,29 @@ pub fn parse_block(
         let mut inputs_sum = 0;
         let mut outputs_sum = 0;
 
-        // Before `input` as some inputs can be used as later outputs
+        // Before `input` to cover outputs being used in the same block as inputs
         tx.output
             .into_iter()
             .enumerate()
-            .map(|(vout, _)| vout)
-            .try_for_each(|vout| -> ControlFlow<()> {
+            .filter_map(|(vout, _)| {
                 if vout > (u16::MAX as usize) {
                     panic!("vout can indeed be bigger than u16::MAX !");
                 }
 
+                partial_txout_data_vec
+                    .pop()
+                    .unwrap()
+                    // None if not worth parsing (expty/op_return/...)
+                    .map(|partial_txout_data| (vout, partial_txout_data))
+            })
+            .for_each(|(vout, partial_txout_data)| {
                 let txout_index = TxoutIndex::new(tx_index, vout as u16);
-
-                let partial_txout_data = partial_txout_data_vec.pop().unwrap();
-
-                if partial_txout_data.is_none() {
-                    return ControlFlow::Continue(());
-                }
 
                 let PartialTxoutData {
                     raw_address,
                     address_index_opt,
                     sats,
-                } = partial_txout_data.unwrap();
+                } = partial_txout_data;
 
                 spendable_outputs += 1;
                 non_zero_amount += sats;
@@ -215,18 +204,14 @@ pub fn parse_block(
                                 .cloned()
                         }) {
                             if let Some(address_data) =
-                                states.address_index_to_address_data.get(&address_index)
+                                states.address_index_to_address_data.get_mut(&address_index)
                             {
                                 // TODO: Remove after a while
-                                if address_data.lock().is_empty() {
+                                if address_data.is_empty() {
                                     panic!("address_data shouldn't be empty");
                                 }
 
-                                // if address_index == 73228051 {
-                                //     println!("73228051 from state")
-                                // }
-
-                                (Arc::clone(address_data), address_index)
+                                (address_data, address_index)
                             } else {
                                 let empty_address_data = empty_address_index_to_empty_address_data
                                     .remove(&address_index)
@@ -243,22 +228,19 @@ pub fn parse_block(
                                         panic!("Should've been there");
                                     });
 
-                                let address_data = Arc::new(WMutex::new(AddressData::from_empty(
-                                    &empty_address_data,
-                                )));
-
-                                let previous = states
+                                let contains_key = states
                                     .address_index_to_address_data
-                                    .insert(address_index, Arc::clone(&address_data));
+                                    .contains_key(&address_index);
 
-                                if previous.is_some() {
-                                    dbg!(address_index);
+                                if contains_key {
                                     panic!("Shouldn't be anything there");
                                 }
 
-                                // if address_index == 73228051 {
-                                //     println!("73228051 from empty")
-                                // }
+                                let address_data = states
+                                    .address_index_to_address_data
+                                    .entry(address_index)
+                                    // Will always insert, it's to avoid insert + get
+                                    .or_insert(AddressData::from_empty(&empty_address_data));
 
                                 (address_data, address_index)
                             }
@@ -271,47 +253,28 @@ pub fn parse_block(
 
                             let address_type = raw_address.to_type();
 
-                            let previous = databases
+                            if let Some(previous) = databases
                                 .raw_address_to_address_index
-                                .insert(raw_address, address_index);
-
-                            if previous.is_some() {
+                                .insert(raw_address, address_index)
+                            {
                                 dbg!(previous);
                                 panic!("address #{address_index} shouldn't be present during put");
                             }
 
-                            let address_data =
-                                Arc::new(WMutex::new(AddressData::new(address_type)));
-
-                            states
+                            let address_data = states
                                 .address_index_to_address_data
-                                .insert(address_index, Arc::clone(&address_data));
-
-                            // if address_index == 73228051 {
-                            //     println!("73228051 created")
-                            // }
+                                .entry(address_index)
+                                // Will always insert, it's to avoid insert + get
+                                .or_insert(AddressData::new(address_type));
 
                             (address_data, address_index)
                         }
                     };
 
-                    let mut address_data = address_data.lock();
-
+                    // MUST be before received !
                     let address_realized_data = address_index_to_address_realized_data
                         .entry(address_index)
-                        .or_default();
-
-                    // MUST be before receive
-                    address_realized_data
-                        .previous_mean_price_paid_opt
-                        .get_or_insert(address_data.mean_price_paid);
-                    address_realized_data
-                        .previous_amount_opt
-                        .get_or_insert(address_data.amount);
-
-                    // if address_index == 73228051 {
-                    //     println!("73228051 receive")
-                    // }
+                        .or_insert_with(|| AddressRealizedData::default(address_data));
 
                     address_data.receive(sats, block_price);
 
@@ -321,8 +284,6 @@ pub fn parse_block(
                         .txout_index_to_address_index
                         .insert(txout_index, address_index);
                 }
-
-                ControlFlow::Continue(())
             });
 
         if spendable_outputs != 0 {
@@ -367,12 +328,16 @@ pub fn parse_block(
                     });
 
                     if input_tx_index.is_none() {
-                        let txout_from_db = get_txout_from_db(bitcoin_db, &input_txid, input_vout);
-
-                        if txout_from_db.value.to_sat() == 0 {
+                        if !enable_check_if_txout_value_is_zero_in_db
+                            || check_if_txout_value_is_zero_in_db(
+                                bitcoin_db,
+                                &input_txid,
+                                input_vout,
+                            )
+                        {
                             return ControlFlow::Continue::<()>(());
                         } else {
-                            dbg!((input_txid, txid, tx_index, input_vout, txout_from_db));
+                            dbg!((input_txid, txid, tx_index, input_vout));
                             panic!("Txid to be in txid_to_tx_data");
                         }
                     }
@@ -384,19 +349,16 @@ pub fn parse_block(
                     let input_sats = states.txout_index_to_sats.remove(&input_txout_index);
 
                     if input_sats.is_none() {
-                        let txout_from_db = get_txout_from_db(bitcoin_db, &input_txid, input_vout);
-
-                        if txout_from_db.value.to_sat() == 0 {
+                        if !enable_check_if_txout_value_is_zero_in_db
+                            || check_if_txout_value_is_zero_in_db(
+                                bitcoin_db,
+                                &input_txid,
+                                input_vout,
+                            )
+                        {
                             return ControlFlow::Continue::<()>(());
                         } else {
-                            dbg!((
-                                input_txid,
-                                tx_index,
-                                input_tx_index,
-                                input_vout,
-                                input_sats,
-                                txout_from_db
-                            ));
+                            dbg!((input_txid, tx_index, input_tx_index, input_vout, input_sats,));
                             panic!("Txout index to be in txout_index_to_txout_value");
                         }
                     }
@@ -461,50 +423,38 @@ pub fn parse_block(
                             .unwrap();
 
                         let input_address_is_empty = {
-                            let mut input_address_data = states
+                            let input_address_data = states
                                 .address_index_to_address_data
                                 .get_mut(&input_address_index)
                                 .unwrap_or_else(|| {
                                     dbg!(input_address_index);
                                     panic!();
-                                })
-                                .lock();
+                                });
 
-                            let address_realized_data = &mut address_index_to_address_realized_data
-                                .entry(input_address_index)
-                                .or_default();
+                            let input_address_realized_data =
+                                address_index_to_address_realized_data
+                                    .entry(input_address_index)
+                                    .or_insert_with(|| {
+                                        AddressRealizedData::default(input_address_data)
+                                    });
 
-                            // MUST be before spend
-                            address_realized_data
-                                .previous_mean_price_paid_opt
-                                .get_or_insert(input_address_data.mean_price_paid);
-                            address_realized_data
-                                .previous_amount_opt
-                                .get_or_insert(input_address_data.amount);
-
-                            address_realized_data.sent += input_sats;
-
-                            // if input_address_index == 73228051 {
-                            //     println!("73228051 spend")
-                            // }
+                            input_address_realized_data.sent += input_sats;
 
                             let address_realized_profit_or_loss =
                                 input_address_data.spend(input_sats, input_block_data.price);
 
                             if address_realized_profit_or_loss >= 0.0 {
-                                address_realized_data.profit += address_realized_profit_or_loss;
+                                input_address_realized_data.profit +=
+                                    address_realized_profit_or_loss;
                             } else {
-                                address_realized_data.loss += address_realized_profit_or_loss.abs();
+                                input_address_realized_data.loss +=
+                                    address_realized_profit_or_loss.abs();
                             }
 
                             input_address_data.is_empty()
                         };
 
                         if input_address_is_empty {
-                            // if input_address_index == 73228051 {
-                            //     println!("73228051 remove")
-                            // }
-
                             let input_address_data = states
                                 .address_index_to_address_data
                                 .remove(&input_address_index)
@@ -514,7 +464,7 @@ pub fn parse_block(
 
                             databases.address_index_to_empty_address_data.insert(
                                 input_address_index,
-                                EmptyAddressData::from_non_empty(&input_address_data.lock()),
+                                EmptyAddressData::from_non_empty(&input_address_data),
                             );
 
                             address_index_to_removed_address_data
@@ -548,13 +498,19 @@ pub fn parse_block(
     coinblocks_destroyed_vec.push(coinblocks_destroyed);
     coindays_destroyed_vec.push(coindays_destroyed);
 
-    let sorted_block_data_vec = thread::scope(|scope| {
-        let sorted_block_data_vec_handle = scope.spawn(|| {
-            if datasets.utxo.needs_sorted_block_data_vec(date, height) {
+    let mut split_realized_states = None;
+    let mut split_price_paid_states = None;
+    let mut split_unrealized_states_height = None;
+    let mut split_unrealized_states_date = None;
+    let mut sorted_block_data_vec = None;
+
+    thread::scope(|scope| {
+        if datasets.utxo.needs_sorted_block_data_vec(date, height) {
+            scope.spawn(|| {
                 let date_data_vec = &states.date_data_vec;
                 let len = date_data_vec.len() as u16;
 
-                let mut sorted_block_data_vec = date_data_vec
+                let mut vec = date_data_vec
                     .par_iter()
                     .flat_map(|date_data| {
                         date_data
@@ -568,147 +524,58 @@ pub fn parse_block(
                     })
                     .collect::<Vec<_>>();
 
-                sorted_block_data_vec.par_sort_unstable_by(|a, b| {
+                vec.par_sort_unstable_by(|a, b| {
                     Ord::cmp(
                         &OrderedFloat(a.block_data.price),
                         &OrderedFloat(b.block_data.price),
                     )
                 });
 
-                Some(sorted_block_data_vec)
-            } else {
-                None
-            }
-        });
+                sorted_block_data_vec.replace(vec);
+            });
+        }
 
         if compute_addresses {
-            let split_address_index_to_address_data =
-                split_address_index_to_address_data.as_ref().unwrap();
-
             scope.spawn(|| {
-                address_index_to_address_realized_data
-                    .par_iter_mut()
-                    .for_each(|(address_index, address_realized_data)| {
-                        let address_data = states
+                split_realized_states.replace(SplitRealizedStates::default());
+                let processed_addresses_split_states = &mut states.split_address;
+
+                address_index_to_address_realized_data.iter().for_each(
+                    |(address_index, address_realized_data)| {
+                        let current_address_data = states
                             .address_index_to_address_data
                             .get(address_index)
-                            // .map(|a| {
-                            //     // if *address_index == 73228051 {
-                            //     //     println!("73228051 from address_index_to_address_data")
-                            //     // }
-                            //     a
-                            // })
                             .unwrap_or_else(|| {
-                                // if *address_index == 73228051 {
-                                //     println!("73228051 from address_index_to_removed_address_data")
-                                // }
-
                                 address_index_to_removed_address_data
                                     .get(address_index)
                                     .unwrap()
                             });
 
-                        let (current_amount, address_type, current_mean_price_paid) = {
-                            let address_data = address_data.lock();
+                        processed_addresses_split_states
+                            .iterate(address_realized_data, current_address_data);
 
-                            (
-                                address_data.amount,
-                                address_data.address_type,
-                                address_data.mean_price_paid,
-                            )
-                        };
+                        split_realized_states
+                            .as_mut()
+                            .unwrap()
+                            .iterate_realized(address_realized_data);
+                    },
+                );
 
-                        let previous_amount = address_realized_data.previous_amount_opt.unwrap();
-                        let previous_mean_price_paid =
-                            address_realized_data.previous_mean_price_paid_opt.unwrap();
+                split_price_paid_states
+                    .replace(processed_addresses_split_states.compute_price_paid_states());
 
-                        // TODO: Remove after a while, just to be sure
-                        if previous_amount
-                            != (current_amount + address_realized_data.sent
-                                - address_realized_data.received)
-                        {
-                            println!("previous_amount = {}, current + sent - received = {}, current = {}, sent = {}, received = {}",
-                                previous_amount,
-                                current_amount + address_realized_data.sent
-                                    - address_realized_data.received,
-                                current_amount,
-                                address_realized_data.sent,
-                                address_realized_data.received
-                            );
-                            panic!()
-                        }
+                split_unrealized_states_height.replace(
+                    processed_addresses_split_states.compute_unrealized_states(block_price),
+                );
 
-                        let previous_size = RawAddressSize::from_amount(previous_amount);
-
-                        let current_size = RawAddressSize::from_amount(current_amount);
-
-                        if previous_size == RawAddressSize::Empty
-                            && current_size == RawAddressSize::Empty
-                        {
-                            // if *address_index == 73228051 {
-                            //     println!("73228051 nothing")
-                            // }
-                            // Do nothing
-                        } else if previous_size == RawAddressSize::Empty {
-                            // if *address_index == 73228051 {
-                            //     println!("73228051 insert")
-                            // }
-
-                            split_address_index_to_address_data.insert(
-                                *address_index,
-                                current_mean_price_paid,
-                                &address_type,
-                                &current_size,
-                                address_data,
-                            );
-                        } else if current_size == RawAddressSize::Empty {
-                            // if *address_index == 73228051 {
-                            //     println!("73228051 remove")
-                            // }
-                            split_address_index_to_address_data.remove(
-                                *address_index,
-                                previous_mean_price_paid,
-                                &previous_size,
-                                &address_type,
-                            );
-                        } else {
-                            // if *address_index == 73228051 {
-                            //     println!("73228051 replace")
-                            // }
-                            // Must update Weak could've been freed if address data was removed and then added back
-                            split_address_index_to_address_data.replace(
-                                *address_index,
-                                previous_mean_price_paid,
-                                current_mean_price_paid,
-                                &previous_size,
-                                &current_size,
-                                &address_type,
-                                address_data,
-                                address_index_at_least_once_removed.contains(address_index),
-                            );
-                        }
-
-                        address_realized_data
-                            .address_data_opt
-                            .replace(Arc::downgrade(address_data));
-                    });
+                if is_date_last_block {
+                    split_unrealized_states_date.replace(
+                        processed_addresses_split_states.compute_unrealized_states(date_price),
+                    );
+                }
             });
         }
-
-        sorted_block_data_vec_handle.join().unwrap()
     });
-
-    // {
-    //     let address_index_to_address_data_len = states.address_index_to_address_data.len();
-
-    //     dbg!(address_index_to_address_data_len);
-
-    //     split_address_index_to_address_data
-    //         .as_ref()
-    //         .unwrap()
-    //         .debug_lens();
-    // }
-    //
 
     datasets.insert_block_data(ProcessedBlockData {
         address_index_to_address_realized_data: &address_index_to_address_realized_data,
@@ -724,13 +591,16 @@ pub fn parse_block(
         height,
         is_date_last_block,
         sorted_block_data_vec,
-        split_address_index_to_address_data,
+        split_price_paid_states: &split_price_paid_states,
+        split_realized_states: &split_realized_states,
+        split_unrealized_states_date: &split_unrealized_states_date,
+        split_unrealized_states_height: &split_unrealized_states_height,
         states,
         timestamp,
     });
 }
 
-fn get_txout_from_db(bitcoin_db: &BitcoinDB, txid: &Txid, vout: u32) -> TxOut {
+fn check_if_txout_value_is_zero_in_db(bitcoin_db: &BitcoinDB, txid: &Txid, vout: u32) -> bool {
     bitcoin_db
         .get_transaction(txid)
         .unwrap()
@@ -738,6 +608,9 @@ fn get_txout_from_db(bitcoin_db: &BitcoinDB, txid: &Txid, vout: u32) -> TxOut {
         .get(vout as usize)
         .unwrap()
         .to_owned()
+        .value
+        .to_sat()
+        == 0
 }
 
 pub struct TxoutsParsingResults {

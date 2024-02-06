@@ -10,13 +10,13 @@ use crate::{
     min_height::find_first_unsafe_height,
     parse_block::{parse_block, ParseData},
     states::States,
-    structs::{DateData, SplitAddressIndexToAddressDataRef},
+    structs::DateData,
     utils::timestamp_to_naive_date,
 };
 
 pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Result<()> {
     let insert = true;
-    let export = false;
+    let export = true;
 
     println!("{:?} - Starting aged", Local::now());
 
@@ -25,25 +25,13 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
     let min_initial_unsafe_address_date = datasets.address.get_min_initial_first_unsafe_date();
     let min_initial_unsafe_address_height = datasets.address.get_min_initial_first_unsafe_height();
 
-    // panic!();
-
     println!("{:?} - Imported datasets", Local::now());
 
     let mut databases = Databases::default();
 
     println!("{:?} - Imported databases", Local::now());
 
-    let mut states = States::import().unwrap_or_default();
-
-    let mut split_address_index_to_address_data = {
-        if !address_datasets_is_empty {
-            Some(SplitAddressIndexToAddressDataRef::init(
-                &states.address_index_to_address_data,
-            ))
-        } else {
-            None
-        }
-    };
+    let mut states = States::import(!address_datasets_is_empty).unwrap_or_default();
 
     println!("{:?} - Imported states", Local::now());
 
@@ -148,8 +136,6 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
                             fees_vec: &mut fees_vec,
                             height: current_block_height,
                             is_date_last_block,
-                            split_address_index_to_address_data:
-                                &mut split_address_index_to_address_data,
                             states: &mut states,
                             timestamp,
                         });
