@@ -60,7 +60,7 @@ impl HeightDataset {
                 self.get_from_1mn_binance(timestamp)
                     .unwrap_or_else(|_| self.get_from_har_binance(timestamp).unwrap_or_else(|_| {
                         panic!(
-                            "Can't find price for {height} - {date_time}, please update binance.har file"
+                            "Can't find price for {height} - {date_time} - {timestamp}, please update binance.har file"
                         )
                     }))
             });

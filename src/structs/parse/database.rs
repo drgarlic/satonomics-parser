@@ -116,6 +116,10 @@ where
     }
 
     pub fn export(mut self) -> color_eyre::Result<(), Error> {
+        if self.cached_dels.is_empty() && self.cached_puts.is_empty() {
+            return Ok(());
+        }
+
         self.cached_dels
             .into_iter()
             .try_for_each(|key| -> Result<(), Error> {

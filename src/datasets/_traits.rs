@@ -153,11 +153,11 @@ pub trait AnyDatasets {
     }
 
     fn insert_block_data(&self, processed_block_data: ProcessedBlockData) {
-        let ProcessedBlockData { height, .. } = processed_block_data;
+        let ProcessedBlockData { height, date, .. } = processed_block_data;
 
         self.to_any_dataset_vec()
             .par_iter()
-            .filter(|dataset| dataset.process_height(height))
+            .filter(|dataset| dataset.process_height(height) || dataset.process_date(date))
             .for_each(|dataset| dataset.insert_block_data(&processed_block_data));
     }
 
@@ -172,7 +172,7 @@ pub trait AnyDatasets {
 
     fn export(&self) -> color_eyre::Result<()> {
         self.to_any_dataset_vec()
-            .par_iter()
+            .iter()
             .try_for_each(|dataset| dataset.export())?;
 
         Ok(())

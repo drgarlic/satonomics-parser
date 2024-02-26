@@ -53,7 +53,13 @@ impl Binance {
 
                 let content = response.get("content").unwrap().as_object().unwrap();
 
-                let text = content.get("text").unwrap().as_str().unwrap();
+                let text = content.get("text");
+
+                if text.is_none() {
+                    return vec![];
+                }
+
+                let text = text.unwrap().as_str().unwrap();
 
                 let arrays: Value = serde_json::from_str(text).unwrap();
 

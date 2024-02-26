@@ -26,11 +26,10 @@ impl UTXOsMetadataState {
 
 impl UTXOsMetadataSubDataset {
     pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
-        let folder_path = format!("{parent_path}/utxos");
-        let f = |s: &str| format!("{folder_path}/{s}");
+        let f = |s: &str| format!("{parent_path}/{s}");
 
         Ok(Self {
-            count: BiMap::new_on_disk_bin(&f("count")),
+            count: BiMap::new_on_disk_bin(&f("utxo_count")),
         })
     }
 

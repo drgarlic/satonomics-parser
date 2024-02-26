@@ -3,12 +3,13 @@ use std::ops::Add;
 use chrono::NaiveDate;
 
 use crate::{
+    bitcoin::sats_to_btc,
     datasets::ProcessedBlockData,
     structs::{AnyBiMap, AnyDateMap, AnyHeightMap, BiMap},
 };
 
 pub struct UnrealizedSubDataset {
-    supply_in_profit: BiMap<u64>,
+    supply_in_profit: BiMap<f64>,
     unrealized_profit: BiMap<f32>,
     unrealized_loss: BiMap<f32>,
 }
@@ -22,18 +23,12 @@ pub struct UnrealizedState {
 
 impl UnrealizedState {
     #[inline]
-    pub fn iterate(
-        &mut self,
-        mean_price_paid: f32,
-        ref_price: f32,
-        sat_amount: u64,
-        btc_amount: f64,
-    ) {
-        if mean_price_paid < ref_price {
-            self.unrealized_profit += btc_amount * ((ref_price - mean_price_paid) as f64 / 100.0);
+    pub fn iterate(&mut self, price_then: f32, price_now: f32, sat_amount: u64, btc_amount: f64) {
+        if price_then < price_now {
+            self.unrealized_profit += btc_amount * ((price_now - price_then) as f64);
             self.supply_in_profit += sat_amount;
-        } else if mean_price_paid > ref_price {
-            self.unrealized_loss += btc_amount * ((mean_price_paid - ref_price) as f64 / 100.0)
+        } else if price_then > price_now {
+            self.unrealized_loss += btc_amount * ((price_then - price_now) as f64)
         }
     }
 }
@@ -83,7 +78,7 @@ impl UnrealizedSubDataset {
     ) {
         self.supply_in_profit
             .height
-            .insert(height, height_state.supply_in_profit);
+            .insert(height, sats_to_btc(height_state.supply_in_profit));
 
         self.unrealized_profit
             .height
@@ -96,7 +91,7 @@ impl UnrealizedSubDataset {
         if is_date_last_block {
             self.supply_in_profit
                 .date
-                .insert(date, date_state.supply_in_profit);
+                .insert(date, sats_to_btc(date_state.supply_in_profit));
 
             self.unrealized_profit
                 .date
