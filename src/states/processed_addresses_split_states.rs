@@ -43,7 +43,7 @@ impl MeanPricePaidInCentsToAmount {
 
         self.iter()
             .for_each(|(mean_price_paid_in_cent, sat_amount)| {
-                let mean_price_paid = (*mean_price_paid_in_cent as f32) * 100.0;
+                let mean_price_paid = (*mean_price_paid_in_cent as f32) / 100.0;
                 let btc_amount = sats_to_btc(*sat_amount);
                 price_paid_state.iterate(mean_price_paid, btc_amount, *sat_amount, total_supply);
             });
@@ -57,7 +57,7 @@ impl MeanPricePaidInCentsToAmount {
         // TODO: Try par_iter + reduce
         self.iter()
             .for_each(|(mean_price_paid_in_cent, sat_amount)| {
-                let mean_price_paid = (*mean_price_paid_in_cent as f32) * 100.0;
+                let mean_price_paid = (*mean_price_paid_in_cent as f32) / 100.0;
                 let btc_amount = sats_to_btc(*sat_amount);
                 unrealized_state.iterate(mean_price_paid, ref_price, *sat_amount, btc_amount);
             });

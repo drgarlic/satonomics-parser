@@ -28,7 +28,7 @@ use utxo::*;
 
 use crate::{
     states::{SplitPricePaidStates, SplitRealizedStates, SplitUnrealizedStates, States},
-    structs::{AddressData, AddressRealizedData, BlockData, BlockPath},
+    structs::{AddressData, AddressRealizedData, BlockData, BlockPath, Json},
 };
 
 pub struct ProcessedDateData {
@@ -55,11 +55,12 @@ pub struct ProcessedBlockData<'a> {
     pub date: NaiveDate,
     pub date_price: f32,
     pub fees_vec: &'a Vec<Vec<u64>>,
+    pub first_date_height: usize,
     pub height: usize,
     pub is_date_last_block: bool,
     pub sorted_block_data_vec: Option<Vec<SortedBlockData<'a>>>,
     pub split_price_paid_states: &'a Option<SplitPricePaidStates>,
-    pub split_realized_states: &'a Option<SplitRealizedStates>,
+    pub split_realized_states: &'a mut Option<SplitRealizedStates>,
     pub split_unrealized_states_date: &'a Option<SplitUnrealizedStates>,
     pub split_unrealized_states_height: &'a Option<SplitUnrealizedStates>,
     pub states: &'a States,
@@ -99,7 +100,7 @@ impl AllDatasets {
 
             let price_handle = PriceDatasets::import()?;
 
-            Ok(Self {
+            let this = Self {
                 address,
                 block_metadata: block_metadata_handle.join().unwrap()?,
                 coinblocks: coinblocks_handle.join().unwrap()?,
@@ -108,12 +109,40 @@ impl AllDatasets {
                 price: price_handle,
                 rewards: rewards_handle.join().unwrap()?,
                 utxo: utxo_handle.join().unwrap()?,
-            })
+            };
+
+            this.export_path_to_type()?;
+
+            Ok(this)
         })
     }
 
     pub fn get_date_to_last_height(&self) -> MutexGuard<'_, RawMutex, BTreeMap<String, usize>> {
         self.date_metadata.last_height.unsafe_inner()
+    }
+
+    pub fn export_path_to_type(&self) -> color_eyre::Result<()> {
+        let path_to_type: BTreeMap<&str, &str> = self
+            .to_any_dataset_vec()
+            .iter()
+            .flat_map(|dataset| {
+                vec![
+                    dataset
+                        .to_any_date_map_vec()
+                        .iter()
+                        .map(|map| (map.path(), map.t_name()))
+                        .collect_vec(),
+                    dataset
+                        .to_any_height_map_vec()
+                        .iter()
+                        .map(|map| (map.path(), map.t_name()))
+                        .collect_vec(),
+                ]
+            })
+            .flatten()
+            .collect();
+
+        Json::export("./datasets/paths.json", &path_to_type)
     }
 }
 

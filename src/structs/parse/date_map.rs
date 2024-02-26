@@ -136,6 +136,12 @@ pub trait AnyDateMap {
     fn get_first_unsafe_date(&self) -> Option<NaiveDate>;
 
     fn export(&self) -> color_eyre::Result<()>;
+
+    fn path(&self) -> &str;
+
+    fn t_name(&self) -> &str;
+
+    fn reset(&mut self) -> color_eyre::Result<()>;
 }
 
 impl<T> AnyDateMap for DateMap<T>
@@ -184,6 +190,30 @@ where
 
             self.serialization.export(&self.path, &map)
         }
+    }
+
+    fn path(&self) -> &str {
+        &self.path
+    }
+
+    fn t_name(&self) -> &str {
+        std::any::type_name::<T>()
+    }
+
+    fn reset(&mut self) -> color_eyre::Result<()> {
+        fs::remove_dir(&self.path)?;
+
+        self.batch.lock().clear();
+        self.initial_last_date = None;
+        self.initial_first_unsafe_date = None;
+
+        if let Some(vec) = self.inner.as_ref() {
+            vec.lock().clear()
+        }
+
+        *self.called_insert.lock() = false;
+
+        Ok(())
     }
 }
 

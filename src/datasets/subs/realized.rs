@@ -42,16 +42,24 @@ impl RealizedSubDataset {
             date,
             height,
             is_date_last_block,
+            first_date_height,
             ..
         }: &ProcessedBlockData,
-        state: &RealizedState,
+        height_state: &RealizedState,
     ) {
-        self.profit.height.insert(height, state.realized_profit);
-        self.loss.height.insert(height, state.realized_loss);
+        self.profit
+            .height
+            .insert(height, height_state.realized_profit);
+        self.loss.height.insert(height, height_state.realized_loss);
 
         if is_date_last_block {
-            self.profit.date.insert(date, state.realized_profit);
-            self.loss.date.insert(date, state.realized_loss);
+            let realized_profit = self.profit.height.sum_last_day_values(first_date_height);
+
+            self.profit.date.insert(date, realized_profit);
+
+            let realized_loss = self.loss.height.sum_last_day_values(first_date_height);
+
+            self.loss.date.insert(date, realized_loss);
         }
     }
 

@@ -133,6 +133,7 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
                             databases: &mut databases,
                             datasets: &mut datasets,
                             date: current_block_date,
+                            first_date_height: height,
                             fees_vec: &mut fees_vec,
                             height: current_block_height,
                             is_date_last_block,

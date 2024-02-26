@@ -1,12 +1,13 @@
 use chrono::NaiveDate;
 
 use crate::{
+    bitcoin::sats_to_btc,
     datasets::ProcessedBlockData,
     structs::{AnyBiMap, AnyDateMap, AnyHeightMap, BiMap},
 };
 
 pub struct SupplySubDataset {
-    total: BiMap<u64>,
+    total: BiMap<f64>,
 }
 
 #[derive(Debug, Default)]
@@ -44,10 +45,12 @@ impl SupplySubDataset {
         }: &ProcessedBlockData,
         state: &SupplyState,
     ) {
-        self.total.height.insert(height, state.total_supply);
+        let supply_in_btc = sats_to_btc(state.total_supply);
+
+        self.total.height.insert(height, supply_in_btc);
 
         if is_date_last_block {
-            self.total.date.insert(date, state.total_supply);
+            self.total.date.insert(date, supply_in_btc);
         }
     }
 

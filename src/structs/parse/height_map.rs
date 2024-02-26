@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, fmt::Debug, fs};
+use std::{cmp::Ordering, fmt::Debug, fs, iter::Sum, ops::Add};
 
 use bincode::{Decode, Encode};
 use parking_lot::{lock_api::MutexGuard, RawMutex};
@@ -73,15 +73,20 @@ where
     pub fn insert(&self, height: usize, value: T) {
         // dbg!(&self.path);
 
-        if !self.is_height_safe(height) {
-            *self.called_insert.lock() = true;
+        // We need data to compute datemaps, TODO: change the way date value is computed to avoid recomputing safe height values
+        // if !self.is_height_safe(height) {
+        *self.called_insert.lock() = true;
 
-            if let Some(list) = self.inner.as_ref() {
-                insert_vec(&mut list.lock(), height, value, &self.path);
-            } else {
-                self.batch.lock().push((height, value));
-            }
+        if let Some(list) = self.inner.as_ref() {
+            insert_vec(&mut list.lock(), height, value, &self.path);
+        } else {
+            self.batch.lock().push((height, value));
         }
+        // }
+    }
+
+    pub fn get_batch(&self) -> MutexGuard<'_, RawMutex, Vec<(usize, T)>> {
+        self.batch.lock()
     }
 
     pub fn insert_default(&self, height: usize) {
@@ -126,6 +131,34 @@ where
     }
 }
 
+impl<T> HeightMap<T>
+where
+    T: Clone + Default + Debug + Decode + Encode + Serialize + DeserializeOwned + Add + Sum + Copy,
+{
+    pub fn sum_last_day_values(&self, from_height: usize) -> T {
+        let mut found = false;
+
+        let sum = self
+            .get_batch()
+            .iter()
+            .filter(|(height, _)| {
+                if height == &from_height {
+                    found = true;
+                }
+
+                height >= &from_height
+            })
+            .map(|(_, value)| *value)
+            .sum();
+
+        if !found {
+            panic!("Didn't found starting height ({from_height})");
+        }
+
+        sum
+    }
+}
+
 pub trait AnyHeightMap {
     fn get_initial_first_unsafe_height(&self) -> Option<usize>;
 
@@ -136,6 +169,12 @@ pub trait AnyHeightMap {
     fn get_first_unsafe_height(&self) -> Option<usize>;
 
     fn export(&self) -> color_eyre::Result<()>;
+
+    fn path(&self) -> &str;
+
+    fn t_name(&self) -> &str;
+
+    fn reset(&mut self) -> color_eyre::Result<()>;
 }
 
 impl<T> AnyHeightMap for HeightMap<T>
@@ -183,6 +222,30 @@ where
 
             self.serialization.export(&self.path, &list)
         }
+    }
+
+    fn path(&self) -> &str {
+        &self.path
+    }
+
+    fn t_name(&self) -> &str {
+        std::any::type_name::<T>()
+    }
+
+    fn reset(&mut self) -> color_eyre::Result<()> {
+        fs::remove_dir(&self.path)?;
+
+        self.batch.lock().clear();
+        self.initial_last_height = None;
+        self.initial_first_unsafe_height = None;
+
+        if let Some(vec) = self.inner.as_ref() {
+            vec.lock().clear()
+        }
+
+        *self.called_insert.lock() = false;
+
+        Ok(())
     }
 }
 
