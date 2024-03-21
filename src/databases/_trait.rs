@@ -1,6 +1,6 @@
 use std::{fs, io};
 
-use crate::structs::databases_folder_path;
+use crate::parse::databases_folder_path;
 
 pub trait AnyDatabaseGroup
 where
@@ -15,7 +15,7 @@ where
     fn reset(&mut self) -> color_eyre::Result<(), io::Error> {
         println!("Reset {}", Self::folder());
 
-        self.sub_reset();
+        self.reset_metadata();
 
         fs::remove_dir_all(Self::full_path())?;
 
@@ -26,5 +26,5 @@ where
         databases_folder_path(Self::folder())
     }
 
-    fn sub_reset(&mut self);
+    fn reset_metadata(&mut self);
 }

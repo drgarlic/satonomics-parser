@@ -5,7 +5,7 @@ use chrono::{Days, NaiveDate};
 use parking_lot::{lock_api::MutexGuard, RawMutex};
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::{structs::Serialization, utils::string_to_naive_date};
+use crate::{io::Serialization, utils::string_to_naive_date};
 
 use super::WMutex;
 

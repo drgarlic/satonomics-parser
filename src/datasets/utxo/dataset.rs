@@ -7,7 +7,7 @@ use crate::{
         RealizedSubDataset, SupplyState, SupplySubDataset, UTXOsMetadataState,
         UTXOsMetadataSubDataset, UnrealizedState, UnrealizedSubDataset,
     },
-    structs::{reverse_date_index, AnyDateMap, AnyHeightMap, BlockData},
+    parse::{reverse_date_index, AnyDateMap, AnyHeightMap, BlockData},
 };
 
 use super::UTXOFilter;

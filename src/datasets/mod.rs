@@ -30,8 +30,9 @@ use utxo::*;
 
 use crate::{
     databases::Databases,
+    io::Json,
+    parse::{AddressData, AddressRealizedData, BlockData, BlockPath},
     states::{SplitPricePaidStates, SplitRealizedStates, SplitUnrealizedStates, States},
-    structs::{AddressData, AddressRealizedData, BlockData, BlockPath, Json},
 };
 
 pub struct ProcessedDateData {

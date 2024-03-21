@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::structs::AddressData;
+use crate::parse::AddressData;
 
 use super::AnyState;
 use bincode::{Decode, Encode};

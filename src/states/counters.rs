@@ -1,6 +1,6 @@
 use bincode::{Decode, Encode};
 
-use crate::structs::Counter;
+use crate::parse::Counter;
 
 use super::AnyState;
 

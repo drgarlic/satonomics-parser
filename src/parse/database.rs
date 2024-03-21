@@ -16,7 +16,7 @@ use sanakirja::{
     direct_repr, Commit, Env, Error, MutTxn, RootDb, Storable, UnsizedStorable,
 };
 
-use crate::structs::OUTPUTS_FOLDER_PATH;
+use crate::io::OUTPUTS_FOLDER_PATH;
 
 #[allow(unused)]
 pub type SizedDatabase<Key, Value> = Database<Key, Key, Value, page::Page<Key, Value>>;

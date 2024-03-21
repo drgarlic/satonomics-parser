@@ -2,7 +2,7 @@ use chrono::NaiveDate;
 
 use crate::{
     datasets::AnyDataset,
-    structs::{AnyDateMap, DateMap},
+    parse::{AnyDateMap, DateMap},
 };
 
 use super::ProcessedDateData;

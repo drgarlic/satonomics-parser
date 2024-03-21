@@ -3,7 +3,7 @@ use chrono::NaiveDate;
 use crate::{
     bitcoin::sats_to_btc,
     datasets::ProcessedBlockData,
-    structs::{AnyBiMap, AnyDateMap, AnyHeightMap, BiMap},
+    parse::{AnyBiMap, AnyDateMap, AnyHeightMap, BiMap},
 };
 
 pub struct SupplySubDataset {

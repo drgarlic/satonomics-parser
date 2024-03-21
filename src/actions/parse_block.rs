@@ -17,7 +17,7 @@ use crate::{
     },
     datasets::{AllDatasets, AnyDatasets, ProcessedBlockData, SortedBlockData},
     states::{SplitRealizedStates, States},
-    structs::{
+    parse::{
         AddressData, AddressRealizedData, BlockData, BlockPath, Counter, EmptyAddressData,
         PartialTxoutData, RawAddress, TxData, TxoutIndex,
     },

@@ -6,7 +6,7 @@ use std::{
 
 use rayon::prelude::*;
 
-use crate::structs::{EmptyAddressData, SizedDatabase};
+use crate::parse::{EmptyAddressData, SizedDatabase};
 
 use super::{AnyDatabaseGroup, Metadata};
 
@@ -97,7 +97,7 @@ impl AnyDatabaseGroup for AddressIndexToEmptyAddressData {
         Ok(())
     }
 
-    fn sub_reset(&mut self) {
+    fn reset_metadata(&mut self) {
         self.metadata.reset();
     }
 

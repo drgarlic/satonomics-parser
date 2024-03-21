@@ -1,7 +1,7 @@
 use chrono::NaiveDate;
 use rayon::prelude::*;
 
-use crate::structs::{AnyDateMap, AnyHeightMap};
+use crate::parse::{AnyDateMap, AnyHeightMap};
 
 use super::{ProcessedBlockData, ProcessedDateData};
 

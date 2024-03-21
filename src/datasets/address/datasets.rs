@@ -4,7 +4,7 @@ use chrono::NaiveDate;
 
 use crate::{
     datasets::{AnyDataset, AnyDatasets, ProcessedBlockData},
-    structs::{AnyDateMap, AnyHeightMap, BiMap, RawAddressSize, RawAddressSplit, RawAddressType},
+    parse::{AnyDateMap, AnyHeightMap, BiMap, RawAddressSize, RawAddressSplit, RawAddressType},
 };
 
 use super::CohortDataset;

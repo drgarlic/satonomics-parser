@@ -4,7 +4,7 @@ use bincode::{Decode, Encode};
 use parking_lot::{lock_api::MutexGuard, RawMutex};
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::{bitcoin::NUMBER_OF_UNSAFE_BLOCKS, structs::Serialization};
+use crate::{bitcoin::NUMBER_OF_UNSAFE_BLOCKS, io::Serialization};
 
 use super::WMutex;
 

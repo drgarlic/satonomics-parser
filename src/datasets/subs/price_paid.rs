@@ -3,7 +3,7 @@ use itertools::Itertools;
 
 use crate::{
     datasets::ProcessedBlockData,
-    structs::{AnyBiMap, AnyDateMap, AnyHeightMap, BiMap},
+    parse::{AnyBiMap, AnyDateMap, AnyHeightMap, BiMap},
 };
 
 pub struct PricePaidSubDataset {

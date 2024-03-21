@@ -7,7 +7,7 @@ use std::{
 use bitcoin::Txid;
 use rayon::prelude::*;
 
-use crate::structs::{SizedDatabase, U8x31};
+use crate::parse::{SizedDatabase, U8x31};
 
 use super::{AnyDatabaseGroup, Metadata};
 
@@ -103,7 +103,7 @@ impl AnyDatabaseGroup for TxidToTxIndex {
         Ok(())
     }
 
-    fn sub_reset(&mut self) {
+    fn reset_metadata(&mut self) {
         self.metadata.reset();
     }
 

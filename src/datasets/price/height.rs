@@ -5,7 +5,8 @@ use color_eyre::eyre::Error;
 
 use crate::{
     datasets::AnyDataset,
-    structs::{AnyHeightMap, Binance, HeightMap, Kraken},
+    parse::{AnyHeightMap, HeightMap},
+    price::{Binance, Kraken},
 };
 
 pub struct HeightDataset {

@@ -5,7 +5,10 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use crate::structs::{Binary, Counter, WNaiveDate};
+use crate::{
+    io::Binary,
+    parse::{Counter, WNaiveDate},
+};
 
 #[derive(Encode, Decode, Default, Debug)]
 pub struct Metadata {

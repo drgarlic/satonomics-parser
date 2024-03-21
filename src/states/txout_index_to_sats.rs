@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use bincode::{Decode, Encode};
 use derive_deref::{Deref, DerefMut};
 
-use crate::structs::TxoutIndex;
+use crate::parse::TxoutIndex;
 
 use super::AnyState;
 

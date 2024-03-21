@@ -2,7 +2,7 @@ use chrono::NaiveDate;
 
 use crate::{
     datasets::AnyDataset,
-    structs::{AnyHeightMap, HeightMap, WNaiveDate},
+    parse::{AnyHeightMap, HeightMap, WNaiveDate},
     utils::timestamp_to_naive_date,
 };
 

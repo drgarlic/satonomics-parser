@@ -1,20 +1,18 @@
 use std::path::Path;
 
+mod actions;
 mod bitcoin;
 mod databases;
 mod datasets;
-mod export_all;
-mod iter_blocks;
-mod min_height;
-mod parse_block;
+mod io;
+mod parse;
+mod price;
 mod states;
-mod structs;
 mod utils;
 
 use crate::{
-    bitcoin::BitcoinDB,
-    iter_blocks::iter_blocks,
-    structs::{Daemon, BITCOIN_DATADIR_RAW_PATH},
+    actions::iter_blocks,
+    bitcoin::{BitcoinDB, Daemon, BITCOIN_DATADIR_RAW_PATH},
 };
 
 fn main() -> color_eyre::Result<()> {

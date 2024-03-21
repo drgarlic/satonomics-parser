@@ -3,8 +3,8 @@ use itertools::Itertools;
 
 use crate::{
     datasets::{AnyDataset, ProcessedBlockData},
+    parse::{AnyDateMap, AnyHeightMap, BiMap, RawAddressSplit},
     states::LiquiditySplitProcessedAddressState,
-    structs::{AnyDateMap, AnyHeightMap, BiMap, RawAddressSplit},
 };
 
 use super::AddressSubDataset;

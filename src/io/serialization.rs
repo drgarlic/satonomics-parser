@@ -3,7 +3,7 @@ use std::{fmt::Debug, path::Path};
 use bincode::{Decode, Encode};
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::structs::{Binary, Json};
+use crate::io::{Binary, Json};
 
 #[derive(PartialEq, PartialOrd, Ord, Eq)]
 pub enum Serialization {

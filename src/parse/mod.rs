@@ -1,6 +1,6 @@
 mod address_data;
 mod address_realized_data;
-mod bimap;
+mod bi_map;
 mod block_data;
 mod block_path;
 mod counter;
@@ -22,7 +22,7 @@ mod wnaivedate;
 
 pub use address_data::*;
 pub use address_realized_data::*;
-pub use bimap::*;
+pub use bi_map::*;
 pub use block_data::*;
 pub use block_path::*;
 pub use counter::*;

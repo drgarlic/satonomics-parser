@@ -6,7 +6,7 @@ use color_eyre::eyre::ContextCompat;
 use itertools::Itertools;
 use serde_json::Value;
 
-use crate::structs::{Json, IMPORTS_FOLDER_PATH};
+use crate::io::{Json, IMPORTS_FOLDER_PATH};
 
 pub struct Binance;
 

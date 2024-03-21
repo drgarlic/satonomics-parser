@@ -4,7 +4,7 @@ use itertools::Itertools;
 use crate::{
     bitcoin::sats_to_btc,
     datasets::AnyDataset,
-    structs::{AnyHeightMap, BiMap, DateMap},
+    parse::{AnyHeightMap, BiMap, DateMap},
 };
 
 use super::ProcessedBlockData;
@@ -113,7 +113,7 @@ impl AnyDataset for RewardsDataset {
         ]
     }
 
-    fn to_any_date_map_vec(&self) -> Vec<&(dyn crate::structs::AnyDateMap + Send + Sync)> {
+    fn to_any_date_map_vec(&self) -> Vec<&(dyn crate::parse::AnyDateMap + Send + Sync)> {
         vec![
             &self.fees_sumed.date,
             &self.subsidy.date,

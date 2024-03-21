@@ -2,7 +2,7 @@ use chrono::NaiveDate;
 
 use crate::{
     datasets::AnyDataset,
-    structs::{AnyHeightMap, BiMap},
+    parse::{AnyHeightMap, BiMap},
 };
 
 use super::ProcessedBlockData;
@@ -61,7 +61,7 @@ impl AnyDataset for CoinblocksDataset {
         vec![&self.destroyed.height]
     }
 
-    fn to_any_date_map_vec(&self) -> Vec<&(dyn crate::structs::AnyDateMap + Send + Sync)> {
+    fn to_any_date_map_vec(&self) -> Vec<&(dyn crate::parse::AnyDateMap + Send + Sync)> {
         vec![&self.destroyed.date]
     }
 

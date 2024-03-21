@@ -1,7 +1,7 @@
 use bincode::{Decode, Encode};
 use derive_deref::{Deref, DerefMut};
 
-use crate::structs::{BlockData, DateData};
+use crate::parse::{BlockData, DateData};
 
 use super::AnyState;
 

@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, mem, thread};
 
 use rayon::prelude::*;
 
-use crate::structs::{
+use crate::parse::{
     Database, RawAddress, SizedDatabase, U8x19, U8x31, UnsizedDatabase as _UnsizedDatabase,
 };
 
@@ -273,7 +273,7 @@ impl AnyDatabaseGroup for RawAddressToAddressIndex {
         Ok(())
     }
 
-    fn sub_reset(&mut self) {
+    fn reset_metadata(&mut self) {
         self.metadata.reset()
     }
 

@@ -2,7 +2,7 @@ use std::{fmt::Debug, fs, io};
 
 use bincode::{Decode, Encode};
 
-use crate::structs::{Binary, OUTPUTS_FOLDER_PATH};
+use crate::io::{Binary, OUTPUTS_FOLDER_PATH};
 
 // https://github.com/djkoloski/rust_serialization_benchmark
 pub trait AnyState

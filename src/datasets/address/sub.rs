@@ -5,7 +5,7 @@ use crate::{
         PricePaidSubDataset, RealizedSubDataset, SupplySubDataset, UTXOsMetadataSubDataset,
         UnrealizedSubDataset,
     },
-    structs::{AnyDateMap, AnyHeightMap},
+    parse::{AnyDateMap, AnyHeightMap},
 };
 
 pub struct AddressSubDataset {

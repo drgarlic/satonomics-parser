@@ -5,7 +5,7 @@ use derive_deref::{Deref, DerefMut};
 use crate::{
     bitcoin::sats_to_btc,
     datasets::{PricePaidState, RealizedState, SupplyState, UTXOsMetadataState, UnrealizedState},
-    structs::{
+    parse::{
         AddressData, AddressRealizedData, LiquiditySplitResult, RawAddressSize, RawAddressSplit,
         RawAddressType, SplitByLiquidity,
     },

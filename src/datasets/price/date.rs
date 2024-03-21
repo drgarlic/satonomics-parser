@@ -5,7 +5,8 @@ use color_eyre::eyre::Error;
 
 use crate::{
     datasets::AnyDataset,
-    structs::{AnyDateMap, DateMap, Kraken},
+    parse::{AnyDateMap, DateMap},
+    price::Kraken,
 };
 
 pub struct DateDataset {
