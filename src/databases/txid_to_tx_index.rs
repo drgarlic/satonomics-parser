@@ -1,19 +1,38 @@
-use std::{collections::BTreeMap, mem};
+use std::{
+    collections::BTreeMap,
+    mem,
+    ops::{Deref, DerefMut},
+};
 
 use bitcoin::Txid;
-use derive_deref::{Deref, DerefMut};
 use rayon::prelude::*;
 
 use crate::structs::{SizedDatabase, U8x31};
 
-use super::AnyDatabaseGroup;
+use super::{AnyDatabaseGroup, Metadata};
 
 type Key = U8x31;
 type Value = u32;
 type Database = SizedDatabase<Key, Value>;
 
-#[derive(Deref, DerefMut, Default)]
-pub struct TxidToTxIndex(BTreeMap<u8, Database>);
+pub struct TxidToTxIndex {
+    map: BTreeMap<u8, Database>,
+    pub metadata: Metadata,
+}
+
+impl Deref for TxidToTxIndex {
+    type Target = BTreeMap<u8, Database>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.map
+    }
+}
+
+impl DerefMut for TxidToTxIndex {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.map
+    }
+}
 
 impl TxidToTxIndex {
     pub fn insert(&mut self, txid: &Txid, tx_index: Value) -> Option<Value> {
@@ -62,17 +81,30 @@ impl TxidToTxIndex {
     }
 
     fn inner_mut(&mut self) -> &mut BTreeMap<u8, Database> {
-        &mut self.0
+        &mut self.map
     }
 }
 
 impl AnyDatabaseGroup for TxidToTxIndex {
+    fn import() -> Self {
+        Self {
+            map: BTreeMap::default(),
+            metadata: Metadata::import(&Self::full_path()),
+        }
+    }
+
     fn export(&mut self) -> color_eyre::Result<()> {
         mem::take(self.inner_mut())
             .into_par_iter()
             .try_for_each(|(_, db)| db.export())?;
 
+        self.metadata.export()?;
+
         Ok(())
+    }
+
+    fn sub_reset(&mut self) {
+        self.metadata.reset();
     }
 
     fn folder<'a>() -> &'a str {

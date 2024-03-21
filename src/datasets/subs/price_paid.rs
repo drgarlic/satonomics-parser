@@ -7,7 +7,7 @@ use crate::{
 };
 
 pub struct PricePaidSubDataset {
-    pp_mean: BiMap<f32>,
+    realized_cap: BiMap<f32>,
     pp_median: BiMap<f32>,
     pp_95p: BiMap<f32>,
     pp_90p: BiMap<f32>,
@@ -31,7 +31,7 @@ pub struct PricePaidSubDataset {
 
 #[derive(Default, Debug)]
 pub struct PricePaidState {
-    pub price_mean_sum: f64,
+    pub realized_cap: f64,
 
     pub pp_05p: Option<f32>,
     pub pp_10p: Option<f32>,
@@ -57,16 +57,10 @@ pub struct PricePaidState {
 }
 
 impl PricePaidState {
-    pub fn iterate(
-        &mut self,
-        mean_price_paid: f32,
-        btc_amount: f64,
-        sat_amount: u64,
-        total_supply: u64,
-    ) {
+    pub fn iterate(&mut self, price: f32, btc_amount: f64, sat_amount: u64, total_supply: u64) {
         let PricePaidState {
             processed_amount,
-            price_mean_sum,
+            realized_cap,
             pp_05p,
             pp_10p,
             pp_15p,
@@ -88,123 +82,160 @@ impl PricePaidState {
             pp_95p,
         } = self;
 
-        *price_mean_sum += btc_amount * (mean_price_paid as f64);
+        *realized_cap += btc_amount * (price as f64);
 
         *processed_amount += sat_amount;
 
         if pp_95p.is_some() {
             return;
-        } else if *processed_amount as f64 >= total_supply as f64 * 0.95 {
-            pp_95p.replace(mean_price_paid);
+        }
+
+        if *processed_amount as f64 >= total_supply as f64 * 0.95 {
+            pp_95p.replace(price);
         }
 
         if pp_90p.is_some() {
             return;
-        } else if *processed_amount as f64 >= total_supply as f64 * 0.9 {
-            pp_90p.replace(mean_price_paid);
+        }
+
+        if *processed_amount as f64 >= total_supply as f64 * 0.9 {
+            pp_90p.replace(price);
         }
 
         if pp_85p.is_some() {
             return;
-        } else if *processed_amount as f64 >= total_supply as f64 * 0.85 {
-            pp_85p.replace(mean_price_paid);
+        }
+
+        if *processed_amount as f64 >= total_supply as f64 * 0.85 {
+            pp_85p.replace(price);
         }
 
         if pp_80p.is_some() {
             return;
-        } else if *processed_amount as f64 >= total_supply as f64 * 0.8 {
-            pp_80p.replace(mean_price_paid);
+        }
+
+        if *processed_amount as f64 >= total_supply as f64 * 0.8 {
+            pp_80p.replace(price);
         }
 
         if pp_75p.is_some() {
             return;
-        } else if *processed_amount as f64 >= total_supply as f64 * 0.75 {
-            pp_75p.replace(mean_price_paid);
+        }
+
+        if *processed_amount as f64 >= total_supply as f64 * 0.75 {
+            pp_75p.replace(price);
         }
 
         if pp_70p.is_some() {
             return;
-        } else if *processed_amount as f64 >= total_supply as f64 * 0.7 {
-            pp_70p.replace(mean_price_paid);
+        }
+
+        if *processed_amount as f64 >= total_supply as f64 * 0.7 {
+            pp_70p.replace(price);
         }
 
         if pp_65p.is_some() {
             return;
-        } else if *processed_amount as f64 >= total_supply as f64 * 0.65 {
-            pp_65p.replace(mean_price_paid);
+        }
+
+        if *processed_amount as f64 >= total_supply as f64 * 0.65 {
+            pp_65p.replace(price);
         }
 
         if pp_60p.is_some() {
             return;
-        } else if *processed_amount as f64 >= total_supply as f64 * 0.6 {
-            pp_60p.replace(mean_price_paid);
+        }
+
+        if *processed_amount as f64 >= total_supply as f64 * 0.6 {
+            pp_60p.replace(price);
         }
 
         if pp_55p.is_some() {
             return;
-        } else if *processed_amount as f64 >= total_supply as f64 * 0.55 {
-            pp_55p.replace(mean_price_paid);
+        }
+
+        if *processed_amount as f64 >= total_supply as f64 * 0.55 {
+            pp_55p.replace(price);
         }
 
         if pp_median.is_some() {
             return;
-        } else if *processed_amount as f64 >= total_supply as f64 * 0.5 {
-            pp_median.replace(mean_price_paid);
+        }
+
+        if *processed_amount as f64 >= total_supply as f64 * 0.5 {
+            pp_median.replace(price);
         }
 
         if pp_45p.is_some() {
             return;
-        } else if *processed_amount as f64 >= total_supply as f64 * 0.45 {
-            pp_45p.replace(mean_price_paid);
+        }
+
+        if *processed_amount as f64 >= total_supply as f64 * 0.45 {
+            pp_45p.replace(price);
         }
 
         if pp_40p.is_some() {
             return;
-        } else if *processed_amount as f64 >= total_supply as f64 * 0.4 {
-            pp_40p.replace(mean_price_paid);
+        }
+
+        if *processed_amount as f64 >= total_supply as f64 * 0.4 {
+            pp_40p.replace(price);
         }
 
         if pp_35p.is_some() {
             return;
-        } else if *processed_amount as f64 >= total_supply as f64 * 0.35 {
-            pp_35p.replace(mean_price_paid);
+        }
+
+        if *processed_amount as f64 >= total_supply as f64 * 0.35 {
+            pp_35p.replace(price);
         }
 
         if pp_30p.is_some() {
             return;
-        } else if *processed_amount as f64 >= total_supply as f64 * 0.3 {
-            pp_30p.replace(mean_price_paid);
+        }
+
+        if *processed_amount as f64 >= total_supply as f64 * 0.3 {
+            pp_30p.replace(price);
         }
 
         if pp_25p.is_some() {
             return;
-        } else if *processed_amount as f64 >= total_supply as f64 * 0.25 {
-            pp_25p.replace(mean_price_paid);
+        }
+
+        if *processed_amount as f64 >= total_supply as f64 * 0.25 {
+            pp_25p.replace(price);
         }
 
         if pp_20p.is_some() {
             return;
-        } else if *processed_amount as f64 >= total_supply as f64 * 0.2 {
-            pp_20p.replace(mean_price_paid);
+        }
+
+        if *processed_amount as f64 >= total_supply as f64 * 0.2 {
+            pp_20p.replace(price);
         }
 
         if pp_15p.is_some() {
             return;
-        } else if *processed_amount as f64 >= total_supply as f64 * 0.15 {
-            pp_15p.replace(mean_price_paid);
+        }
+
+        if *processed_amount as f64 >= total_supply as f64 * 0.15 {
+            pp_15p.replace(price);
         }
 
         if pp_10p.is_some() {
             return;
-        } else if *processed_amount as f64 >= total_supply as f64 * 0.1 {
-            pp_10p.replace(mean_price_paid);
+        }
+
+        if *processed_amount as f64 >= total_supply as f64 * 0.1 {
+            pp_10p.replace(price);
         }
 
         if pp_05p.is_some() {
-            #[allow(clippy::needless_return)]
             return;
-        } else if *processed_amount as f64 >= total_supply as f64 * 0.05 {
-            pp_05p.replace(mean_price_paid);
+        }
+
+        if *processed_amount as f64 >= total_supply as f64 * 0.05 {
+            pp_05p.replace(price);
         }
     }
 }
@@ -214,7 +245,8 @@ impl PricePaidSubDataset {
         let folder_path = format!("{parent_path}/price_paid");
         let f = |s: &str| format!("{folder_path}/{s}");
 
-        let pp_mean = BiMap::new_on_disk_bin(&f("mean"));
+        let realized_cap =
+            BiMap::new_on_disk_bin(&format!("{parent_path}/realized/capitalization"));
         let pp_median = BiMap::new_on_disk_bin(&f("median"));
         let pp_95p = BiMap::new_on_disk_bin(&f("95p"));
         let pp_90p = BiMap::new_on_disk_bin(&f("90p"));
@@ -236,7 +268,7 @@ impl PricePaidSubDataset {
         let pp_05p = BiMap::new_on_disk_bin(&f("05p"));
 
         Ok(Self {
-            pp_mean,
+            realized_cap,
             pp_median,
             pp_95p,
             pp_90p,
@@ -262,7 +294,7 @@ impl PricePaidSubDataset {
     pub fn are_date_and_height_safe(&self, date: NaiveDate, height: usize) -> bool {
         self.to_vec()
             .iter()
-            .any(|bi| bi.are_date_and_height_safe(date, height))
+            .all(|bi| bi.are_date_and_height_safe(date, height))
     }
 
     pub fn insert(
@@ -274,10 +306,9 @@ impl PricePaidSubDataset {
             ..
         }: &ProcessedBlockData,
         state: &PricePaidState,
-        total_supply_in_btc: f64,
     ) {
         let PricePaidState {
-            price_mean_sum,
+            realized_cap,
             pp_05p,
             pp_10p,
             pp_15p,
@@ -300,6 +331,10 @@ impl PricePaidSubDataset {
             ..
         } = state;
 
+        self.realized_cap
+            .height
+            .insert(height, *realized_cap as f32);
+
         // Check if iter was empty
         if pp_05p.is_none() {
             self.insert_height_default(height);
@@ -311,15 +346,6 @@ impl PricePaidSubDataset {
             return;
         }
 
-        let mean_price = {
-            if total_supply_in_btc != 0.0 {
-                (price_mean_sum / total_supply_in_btc) as f32
-            } else {
-                0.0
-            }
-        };
-
-        self.pp_mean.height.insert(height, mean_price);
         self.pp_05p.height.insert(height, pp_05p.unwrap());
         self.pp_10p.height.insert(height, pp_10p.unwrap());
         self.pp_15p.height.insert(height, pp_15p.unwrap());
@@ -341,7 +367,8 @@ impl PricePaidSubDataset {
         self.pp_95p.height.insert(height, pp_95p.unwrap());
 
         if is_date_last_block {
-            self.pp_mean.date.insert(date, mean_price);
+            self.realized_cap.date.insert(date, *realized_cap as f32);
+
             self.pp_05p.date.insert(date, pp_05p.unwrap());
             self.pp_10p.date.insert(date, pp_10p.unwrap());
             self.pp_15p.date.insert(date, pp_15p.unwrap());
@@ -392,7 +419,7 @@ impl PricePaidSubDataset {
 
     pub fn to_vec(&self) -> Vec<&BiMap<f32>> {
         vec![
-            &self.pp_mean,
+            &self.realized_cap,
             &self.pp_95p,
             &self.pp_90p,
             &self.pp_85p,

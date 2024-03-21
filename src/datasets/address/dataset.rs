@@ -2,7 +2,6 @@ use chrono::NaiveDate;
 use itertools::Itertools;
 
 use crate::{
-    bitcoin::sats_to_btc,
     datasets::{AnyDataset, ProcessedBlockData},
     states::LiquiditySplitProcessedAddressState,
     structs::{AnyDateMap, AnyHeightMap, BiMap, RawAddressSplit},
@@ -40,26 +39,6 @@ impl MetadataDataset {
 }
 
 impl AnyDataset for MetadataDataset {
-    fn insert_block_data(&self, processed_block_data: &ProcessedBlockData) {
-        let &ProcessedBlockData {
-            height,
-            date,
-            states,
-            is_date_last_block,
-            ..
-        } = processed_block_data;
-
-        self.address_count
-            .height
-            .insert(height, *states.counters.addresses as usize);
-
-        if is_date_last_block {
-            self.address_count
-                .date
-                .insert(date, *states.counters.addresses as usize);
-        }
-    }
-
     fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
         vec![&self.address_count.height]
     }
@@ -319,32 +298,18 @@ impl CohortDataset {
             .get_state(&self.split)
             .unwrap();
 
-        let various = processed_block_data
-            .states
-            .split_address
-            .get_state(&self.split)
-            .unwrap();
-
-        self.all_dataset.price_paid.insert(
-            processed_block_data,
-            &state.all,
-            sats_to_btc(various.split.all.supply.total_supply),
-        );
-        self.illiquid_dataset.price_paid.insert(
-            processed_block_data,
-            &state.illiquid,
-            sats_to_btc(various.split.illiquid.supply.total_supply),
-        );
-        self.liquid_dataset.price_paid.insert(
-            processed_block_data,
-            &state.liquid,
-            sats_to_btc(various.split.liquid.supply.total_supply),
-        );
-        self.highly_liquid_dataset.price_paid.insert(
-            processed_block_data,
-            &state.highly_liquid,
-            sats_to_btc(various.split.highly_liquid.supply.total_supply),
-        );
+        self.all_dataset
+            .price_paid
+            .insert(processed_block_data, &state.all);
+        self.illiquid_dataset
+            .price_paid
+            .insert(processed_block_data, &state.illiquid);
+        self.liquid_dataset
+            .price_paid
+            .insert(processed_block_data, &state.liquid);
+        self.highly_liquid_dataset
+            .price_paid
+            .insert(processed_block_data, &state.highly_liquid);
     }
 }
 

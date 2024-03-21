@@ -2,8 +2,9 @@ use chrono::NaiveDate;
 use itertools::Itertools;
 
 use crate::{
+    bitcoin::sats_to_btc,
     datasets::AnyDataset,
-    structs::{AnyHeightMap, BiMap},
+    structs::{AnyHeightMap, BiMap, DateMap},
 };
 
 use super::ProcessedBlockData;
@@ -12,8 +13,12 @@ pub struct RewardsDataset {
     name: &'static str,
     min_initial_first_unsafe_date: Option<NaiveDate>,
     min_initial_first_unsafe_height: Option<usize>,
-    pub fees_sumed: BiMap<u64>,
-    pub subsidy: BiMap<u64>,
+
+    pub fees_sumed: BiMap<f64>,
+    pub subsidy: BiMap<f64>,
+    pub coinbase: BiMap<f64>,
+    pub subsidy_in_dollars: BiMap<f32>,
+    pub last_subsidy: DateMap<f64>,
 }
 
 impl RewardsDataset {
@@ -27,7 +32,10 @@ impl RewardsDataset {
             min_initial_first_unsafe_date: None,
             min_initial_first_unsafe_height: None,
             fees_sumed: BiMap::new_on_disk_bin(&f("fees/sumed")),
+            coinbase: BiMap::new_on_disk_bin(&f("coinbase")),
             subsidy: BiMap::new_on_disk_bin(&f("subsidy")),
+            subsidy_in_dollars: BiMap::new_on_disk_bin(&f("subsidy_in_dollars")),
+            last_subsidy: DateMap::new_on_disk_bin(&f("last_subsidy")),
         };
 
         s.min_initial_first_unsafe_date = s.compute_min_initial_first_unsafe_date();
@@ -43,45 +51,75 @@ impl AnyDataset for RewardsDataset {
         &ProcessedBlockData {
             height,
             date,
+            coinbase,
             coinbase_vec,
+            fees,
             fees_vec,
+            subsidy,
+            subsidy_vec,
+            subsidy_in_dollars,
+            subsidy_in_dollars_vec,
             is_date_last_block,
             ..
         }: &ProcessedBlockData,
     ) {
-        let coinbase = coinbase_vec.last().unwrap();
-        let fees_sumed = fees_vec.last().unwrap().iter().sum();
+        self.coinbase.height.insert(height, sats_to_btc(coinbase));
 
-        let subsidy = coinbase - fees_sumed;
+        let fees_sumed = fees.iter().sum();
 
-        self.fees_sumed.height.insert(height, fees_sumed);
-        self.subsidy.height.insert(height, subsidy);
+        self.fees_sumed
+            .height
+            .insert(height, sats_to_btc(fees_sumed));
+
+        let subsidy_in_btc = sats_to_btc(subsidy);
+
+        self.subsidy.height.insert(height, subsidy_in_btc);
+
+        self.subsidy_in_dollars
+            .height
+            .insert(height, subsidy_in_dollars);
 
         if is_date_last_block {
+            self.coinbase
+                .date
+                .insert(date, sats_to_btc(coinbase_vec.iter().sum()));
+
+            self.last_subsidy.insert(date, subsidy_in_btc);
+
             let fees_sumed = fees_vec
                 .iter()
                 .map(|vec| vec.iter().sum::<u64>())
                 .collect_vec();
 
-            self.fees_sumed.date.insert(date, fees_sumed.iter().sum());
+            self.fees_sumed
+                .date
+                .insert(date, sats_to_btc(fees_sumed.iter().sum()));
 
-            self.subsidy.date.insert(
-                date,
-                coinbase_vec
-                    .iter()
-                    .enumerate()
-                    .map(|(index, coinbase)| coinbase - fees_sumed.get(index).unwrap())
-                    .sum(),
-            )
+            self.subsidy
+                .date
+                .insert(date, sats_to_btc(subsidy_vec.iter().sum()));
+
+            self.subsidy_in_dollars
+                .date
+                .insert(date, subsidy_in_dollars_vec.iter().sum());
         }
     }
 
     fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
-        vec![&self.fees_sumed.height, &self.subsidy.height]
+        vec![
+            &self.fees_sumed.height,
+            &self.subsidy.height,
+            &self.subsidy_in_dollars.height,
+        ]
     }
 
     fn to_any_date_map_vec(&self) -> Vec<&(dyn crate::structs::AnyDateMap + Send + Sync)> {
-        vec![&self.fees_sumed.date, &self.subsidy.date]
+        vec![
+            &self.fees_sumed.date,
+            &self.subsidy.date,
+            &self.last_subsidy,
+            &self.subsidy_in_dollars.date,
+        ]
     }
 
     fn name(&self) -> &str {

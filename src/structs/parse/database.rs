@@ -59,7 +59,7 @@ where
 
         let db = txn
             .root_db(ROOT_DB)
-            .unwrap_or_else(|| btree::create_db_(&mut txn).unwrap());
+            .unwrap_or_else(|| unsafe { btree::create_db_(&mut txn).unwrap() });
 
         Ok(Self {
             cached_puts: BTreeMap::default(),
@@ -146,7 +146,7 @@ where
                 Ok(())
             })?;
 
-        self.txn.set_root(ROOT_DB, self.db.db);
+        self.txn.set_root(ROOT_DB, self.db.db.into());
 
         self.txn.commit()
     }

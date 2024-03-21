@@ -12,6 +12,7 @@ mod date_metadata;
 mod price;
 mod rewards;
 mod subs;
+mod transaction_metadata;
 mod utxo;
 
 pub use _traits::*;
@@ -24,9 +25,11 @@ use parking_lot::{lock_api::MutexGuard, RawMutex};
 use price::*;
 use rewards::*;
 pub use subs::*;
+use transaction_metadata::*;
 use utxo::*;
 
 use crate::{
+    databases::Databases,
     states::{SplitPricePaidStates, SplitRealizedStates, SplitUnrealizedStates, States},
     structs::{AddressData, AddressRealizedData, BlockData, BlockPath, Json},
 };
@@ -49,22 +52,33 @@ pub struct ProcessedBlockData<'a> {
     pub address_index_to_removed_address_data: &'a BTreeMap<u32, AddressData>,
     pub block_path_to_spent_value: &'a BTreeMap<BlockPath, u64>,
     pub block_price: f32,
+    pub coinbase: u64,
     pub coinbase_vec: &'a Vec<u64>,
     pub coinblocks_destroyed_vec: &'a Vec<f64>,
     pub coindays_destroyed_vec: &'a Vec<f64>,
+    pub databases: &'a Databases,
     pub date: NaiveDate,
     pub date_price: f32,
+    pub fees: &'a Vec<u64>,
     pub fees_vec: &'a Vec<Vec<u64>>,
     pub first_date_height: usize,
     pub height: usize,
     pub is_date_last_block: bool,
+    pub sats_sent: u64,
+    pub sats_sent_vec: &'a Vec<u64>,
     pub sorted_block_data_vec: Option<Vec<SortedBlockData<'a>>>,
     pub split_price_paid_states: &'a Option<SplitPricePaidStates>,
     pub split_realized_states: &'a mut Option<SplitRealizedStates>,
     pub split_unrealized_states_date: &'a Option<SplitUnrealizedStates>,
     pub split_unrealized_states_height: &'a Option<SplitUnrealizedStates>,
     pub states: &'a States,
+    pub subsidy: u64,
+    pub subsidy_vec: &'a Vec<u64>,
+    pub subsidy_in_dollars: f32,
+    pub subsidy_in_dollars_vec: &'a Vec<f32>,
     pub timestamp: u32,
+    pub transaction_count: usize,
+    pub transaction_count_vec: &'a Vec<usize>,
 }
 
 pub struct AllDatasets {
@@ -77,6 +91,7 @@ pub struct AllDatasets {
     coindays: CoindaysDataset,
     date_metadata: DateMetadataDataset,
     rewards: RewardsDataset,
+    transaction_metadata: TransactionMetadataDataset,
 }
 
 impl AllDatasets {
@@ -96,6 +111,8 @@ impl AllDatasets {
 
             let utxo_handle = scope.spawn(|| UTXODatasets::import(path));
 
+            let transaction_metadata = TransactionMetadataDataset::import(path)?;
+
             let address = AddressDatasets::import(path)?;
 
             let price_handle = PriceDatasets::import()?;
@@ -109,6 +126,7 @@ impl AllDatasets {
                 price: price_handle,
                 rewards: rewards_handle.join().unwrap()?,
                 utxo: utxo_handle.join().unwrap()?,
+                transaction_metadata,
             };
 
             this.export_path_to_type()?;
@@ -158,6 +176,7 @@ impl AnyDatasets for AllDatasets {
                 &self.coindays,
                 &self.date_metadata,
                 &self.rewards,
+                &self.transaction_metadata,
             ],
         ]
         .into_iter()

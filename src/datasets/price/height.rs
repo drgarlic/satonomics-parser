@@ -54,6 +54,7 @@ impl HeightDataset {
             date_time.date_naive(),
             NaiveTime::from_hms_opt(date_time.hour(), date_time.minute(), 0).unwrap(),
         )
+        .and_utc()
         .timestamp() as u32;
 
         let price = self.get_from_1mn_kraken(timestamp).unwrap_or_else(|_| {

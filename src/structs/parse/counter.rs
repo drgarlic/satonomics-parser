@@ -19,7 +19,7 @@ impl Counter {
     #[allow(unused)]
     #[inline(always)]
     pub fn reset(&mut self) {
-        self.0 -= 0;
+        self.0 = 0;
     }
 
     #[inline(always)]

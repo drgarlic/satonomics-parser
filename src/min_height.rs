@@ -6,8 +6,9 @@ use crate::{
 
 pub fn find_first_unsafe_height(
     states: &mut States,
-    databases: &Databases,
+    databases: &mut Databases,
     datasets: &AllDatasets,
+    addresses: bool,
 ) -> usize {
     let min_initial_last_address_date = datasets.address.get_min_initial_last_date();
     let min_initial_last_address_height = datasets.address.get_min_initial_last_height();
@@ -43,7 +44,7 @@ pub fn find_first_unsafe_height(
 
             states.reset();
 
-            let include_addresses = !datasets.address.is_empty() && (min_initial_last_address_date.is_none() || min_initial_last_address_height.is_none());
+            let include_addresses = addresses && (min_initial_last_address_date.is_none() || min_initial_last_address_height.is_none());
 
             databases.reset(include_addresses);
 

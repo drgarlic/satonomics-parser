@@ -1,18 +1,37 @@
-use std::{collections::BTreeMap, mem};
+use std::{
+    collections::BTreeMap,
+    mem,
+    ops::{Deref, DerefMut},
+};
 
-use derive_deref::{Deref, DerefMut};
 use rayon::prelude::*;
 
 use crate::structs::{EmptyAddressData, SizedDatabase};
 
-use super::AnyDatabaseGroup;
+use super::{AnyDatabaseGroup, Metadata};
 
 type Key = u32;
 type Value = EmptyAddressData;
 type Database = SizedDatabase<Key, Value>;
 
-#[derive(Deref, DerefMut, Default)]
-pub struct AddressIndexToEmptyAddressData(BTreeMap<usize, Database>);
+pub struct AddressIndexToEmptyAddressData {
+    map: BTreeMap<usize, Database>,
+    pub metadata: Metadata,
+}
+
+impl Deref for AddressIndexToEmptyAddressData {
+    type Target = BTreeMap<usize, Database>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.map
+    }
+}
+
+impl DerefMut for AddressIndexToEmptyAddressData {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.map
+    }
+}
 
 const DB_MAX_SIZE: usize = 1_000_000;
 
@@ -56,17 +75,30 @@ impl AddressIndexToEmptyAddressData {
     }
 
     fn inner_mut(&mut self) -> &mut BTreeMap<usize, Database> {
-        &mut self.0
+        &mut self.map
     }
 }
 
 impl AnyDatabaseGroup for AddressIndexToEmptyAddressData {
+    fn import() -> Self {
+        Self {
+            map: BTreeMap::default(),
+            metadata: Metadata::import(&Self::full_path()),
+        }
+    }
+
     fn export(&mut self) -> color_eyre::Result<()> {
         mem::take(self.inner_mut())
             .into_par_iter()
             .try_for_each(|(_, db)| db.export())?;
 
+        self.metadata.export()?;
+
         Ok(())
+    }
+
+    fn sub_reset(&mut self) {
+        self.metadata.reset();
     }
 
     fn folder<'a>() -> &'a str {

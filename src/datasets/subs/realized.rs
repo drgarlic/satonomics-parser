@@ -50,6 +50,7 @@ impl RealizedSubDataset {
         self.profit
             .height
             .insert(height, height_state.realized_profit);
+
         self.loss.height.insert(height, height_state.realized_loss);
 
         if is_date_last_block {
@@ -66,7 +67,7 @@ impl RealizedSubDataset {
     pub fn are_date_and_height_safe(&self, date: NaiveDate, height: usize) -> bool {
         self.to_vec()
             .iter()
-            .any(|bi| bi.are_date_and_height_safe(date, height))
+            .all(|bi| bi.are_date_and_height_safe(date, height))
     }
 
     pub fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {

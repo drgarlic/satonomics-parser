@@ -6,7 +6,7 @@ use crate::structs::{
     Database, RawAddress, SizedDatabase, U8x19, U8x31, UnsizedDatabase as _UnsizedDatabase,
 };
 
-use super::AnyDatabaseGroup;
+use super::{AnyDatabaseGroup, Metadata};
 
 type Value = u32;
 type U8x19Database = SizedDatabase<U8x19, Value>;
@@ -24,7 +24,6 @@ type UnknownDatabase = U32Database;
 type EmptyDatabase = U32Database;
 type MultisigDatabase = UnsizedDatabase;
 
-#[derive(Default)]
 pub struct RawAddressToAddressIndex {
     p2pk: BTreeMap<u16, P2PKDatabase>,
     p2pkh: BTreeMap<u16, P2PKHDatabase>,
@@ -35,6 +34,7 @@ pub struct RawAddressToAddressIndex {
     unknown: Option<UnknownDatabase>,
     empty: Option<EmptyDatabase>,
     multisig: Option<MultisigDatabase>,
+    pub metadata: Metadata,
 }
 
 impl RawAddressToAddressIndex {
@@ -215,6 +215,21 @@ impl RawAddressToAddressIndex {
 }
 
 impl AnyDatabaseGroup for RawAddressToAddressIndex {
+    fn import() -> Self {
+        Self {
+            p2pk: BTreeMap::default(),
+            p2pkh: BTreeMap::default(),
+            p2sh: BTreeMap::default(),
+            p2wpkh: BTreeMap::default(),
+            p2wsh: BTreeMap::default(),
+            p2tr: BTreeMap::default(),
+            unknown: None,
+            empty: None,
+            multisig: None,
+            metadata: Metadata::import(&Self::full_path()),
+        }
+    }
+
     fn export(&mut self) -> color_eyre::Result<()> {
         thread::scope(|s| {
             s.spawn(|| {
@@ -253,7 +268,13 @@ impl AnyDatabaseGroup for RawAddressToAddressIndex {
             s.spawn(|| self.multisig.take().map(|db| db.export()));
         });
 
+        self.metadata.export()?;
+
         Ok(())
+    }
+
+    fn sub_reset(&mut self) {
+        self.metadata.reset()
     }
 
     fn folder<'a>() -> &'a str {

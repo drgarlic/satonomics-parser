@@ -11,7 +11,9 @@ use super::ProcessedBlockData;
 pub struct BlockMetadataDataset {
     min_initial_first_unsafe_date: Option<NaiveDate>,
     min_initial_first_unsafe_height: Option<usize>,
+
     name: &'static str,
+
     pub date: HeightMap<WNaiveDate>,
     pub timestamp: HeightMap<u32>,
 }

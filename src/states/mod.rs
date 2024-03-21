@@ -10,7 +10,7 @@ mod txout_index_to_address_index;
 
 mod txout_index_to_sats;
 
-use _trait::*;
+pub use _trait::*;
 use address_index_to_address_data::*;
 use counters::*;
 use date_data_vec::*;

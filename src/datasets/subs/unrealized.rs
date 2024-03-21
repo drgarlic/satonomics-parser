@@ -62,7 +62,7 @@ impl UnrealizedSubDataset {
     pub fn are_date_and_height_safe(&self, date: NaiveDate, height: usize) -> bool {
         self.to_vec()
             .iter()
-            .any(|bi| bi.are_date_and_height_safe(date, height))
+            .all(|bi| bi.are_date_and_height_safe(date, height))
     }
 
     pub fn insert(

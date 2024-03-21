@@ -5,11 +5,10 @@ use itertools::Itertools;
 
 use crate::{
     bitcoin::multisig_addresses,
-    states::States,
     structs::{U8x19, U8x31, SANAKIRJA_MAX_KEY_SIZE},
 };
 
-use super::RawAddressType;
+use super::{Counter, RawAddressType};
 
 #[derive(Encode, Decode, Debug, Clone, PartialEq, PartialOrd, Ord, Eq)]
 pub enum RawAddress {
@@ -41,7 +40,11 @@ impl RawAddress {
         }
     }
 
-    pub fn from(txout: &TxOut, states: &mut States) -> Self {
+    pub fn from(
+        txout: &TxOut,
+        unknown_addresses: &mut Counter,
+        empty_addresses: &mut Counter,
+    ) -> Self {
         let script = &txout.script_pubkey;
 
         match Payload::from_script(script) {
@@ -60,7 +63,7 @@ impl RawAddress {
                     Self::P2TR((prefix, rest.into()))
                 } else {
                     // https://mempool.space/address/bc1zqyqs3juw9m
-                    Self::new_unknown(states)
+                    Self::new_unknown(unknown_addresses)
                 }
             }
             Err(_) => {
@@ -77,9 +80,10 @@ impl RawAddress {
 
                     Self::P2PK((prefix, rest.into()))
                 } else if script.is_empty() {
-                    let empty_addresses_counter = &mut states.counters.empty_addresses;
-                    let index = empty_addresses_counter.inner();
-                    empty_addresses_counter.increment();
+                    let index = empty_addresses.inner();
+
+                    empty_addresses.increment();
+
                     Self::Empty(index)
                 } else if script.is_op_return() || script.is_provably_unspendable() {
                     unreachable!()
@@ -101,16 +105,15 @@ impl RawAddress {
 
                     Self::MultiSig(vec.into())
                 } else {
-                    Self::new_unknown(states)
+                    Self::new_unknown(unknown_addresses)
                 }
             }
         }
     }
 
-    fn new_unknown(states: &mut States) -> RawAddress {
-        let unknown_addresses_counter = &mut states.counters.unknown_addresses;
-        let index = unknown_addresses_counter.inner();
-        unknown_addresses_counter.increment();
+    fn new_unknown(unknown_addresses: &mut Counter) -> RawAddress {
+        let index = unknown_addresses.inner();
+        unknown_addresses.increment();
         Self::Unknown(index)
     }
 

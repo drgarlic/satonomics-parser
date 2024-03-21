@@ -1,5 +1,3 @@
-use std::fs;
-
 use chrono::NaiveDate;
 
 use crate::{
@@ -129,7 +127,6 @@ impl AnyDataset for UTXODataset {
             });
 
         let total_supply = supply_state.total_supply;
-        let total_supply_in_btc = sats_to_btc(total_supply);
 
         self.supply.insert(processed_block_data, &supply_state);
 
@@ -166,8 +163,7 @@ impl AnyDataset for UTXODataset {
                     pp_state.iterate(price, btc_amount, sat_amount, total_supply);
                 });
 
-            self.price_paid
-                .insert(processed_block_data, &pp_state, total_supply_in_btc);
+            self.price_paid.insert(processed_block_data, &pp_state);
         }
 
         if needs_realized {

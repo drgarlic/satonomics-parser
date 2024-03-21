@@ -1,17 +1,107 @@
-// TODO: Remove once utxos datasets are fixed
-#![allow(dead_code)]
-
 use std::thread;
 
+use chrono::NaiveDate;
+
 use crate::{
-    datasets::{AnyDataset, AnyDatasets},
-    structs::{RawAddressSize, RawAddressSplit, RawAddressType},
+    datasets::{AnyDataset, AnyDatasets, ProcessedBlockData},
+    structs::{AnyDateMap, AnyHeightMap, BiMap, RawAddressSize, RawAddressSplit, RawAddressType},
 };
 
-use super::{CohortDataset, MetadataDataset};
+use super::CohortDataset;
+
+pub struct AllAddressesMetadataDataset {
+    name: String,
+
+    min_initial_first_unsafe_date: Option<NaiveDate>,
+    min_initial_first_unsafe_height: Option<usize>,
+
+    total_addresses_created: BiMap<usize>,
+    total_empty_addresses: BiMap<usize>,
+}
+
+impl AllAddressesMetadataDataset {
+    pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
+        let f = |s: &str| format!("{parent_path}/{s}");
+
+        let mut s = Self {
+            name: "all_addresses_metadata".to_owned(),
+
+            total_addresses_created: BiMap::new_on_disk_bin(&f("total_addresses_created")),
+            total_empty_addresses: BiMap::new_on_disk_bin(&f("total_empty_addresses")),
+
+            min_initial_first_unsafe_date: None,
+            min_initial_first_unsafe_height: None,
+        };
+
+        s.min_initial_first_unsafe_date = s.compute_min_initial_first_unsafe_date();
+        s.min_initial_first_unsafe_height = s.compute_min_initial_first_unsafe_height();
+
+        Ok(s)
+    }
+}
+
+impl AnyDataset for AllAddressesMetadataDataset {
+    fn insert_block_data(&self, processed_block_data: &ProcessedBlockData) {
+        let &ProcessedBlockData {
+            databases,
+            height,
+            date,
+            is_date_last_block,
+            ..
+        } = processed_block_data;
+
+        let total_addresses_created = *databases.raw_address_to_address_index.metadata.len as usize;
+        let total_empty_addresses =
+            *databases.address_index_to_empty_address_data.metadata.len as usize;
+
+        self.total_addresses_created
+            .height
+            .insert(height, total_addresses_created);
+
+        self.total_empty_addresses
+            .height
+            .insert(height, total_empty_addresses);
+
+        if is_date_last_block {
+            self.total_addresses_created
+                .date
+                .insert(date, total_addresses_created);
+
+            self.total_empty_addresses
+                .date
+                .insert(date, total_empty_addresses);
+        }
+    }
+
+    fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
+        vec![
+            &self.total_addresses_created.height,
+            &self.total_empty_addresses.height,
+        ]
+    }
+
+    fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
+        vec![
+            &self.total_addresses_created.date,
+            &self.total_empty_addresses.date,
+        ]
+    }
+
+    fn get_min_initial_first_unsafe_date(&self) -> &Option<NaiveDate> {
+        &self.min_initial_first_unsafe_date
+    }
+
+    fn get_min_initial_first_unsafe_height(&self) -> &Option<usize> {
+        &self.min_initial_first_unsafe_height
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+}
 
 pub struct AddressDatasets {
-    metadata: MetadataDataset,
+    metadata: AllAddressesMetadataDataset,
 
     plankton: CohortDataset,
     shrimp: CohortDataset,
@@ -133,7 +223,7 @@ impl AddressDatasets {
             )?;
 
             Ok(Self {
-                metadata: MetadataDataset::import(parent_path)?,
+                metadata: AllAddressesMetadataDataset::import(parent_path)?,
 
                 plankton: plankton_handle.join().unwrap()?,
                 shrimp: shrimp_handle.join().unwrap()?,

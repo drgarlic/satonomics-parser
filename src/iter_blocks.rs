@@ -17,25 +17,25 @@ use crate::{
 pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Result<()> {
     let insert = true;
     let export = true;
+    let addresses = true;
 
     println!("{:?} - Starting aged", Local::now());
 
     let mut datasets = AllDatasets::import()?;
-    let address_datasets_is_empty = datasets.address.is_empty();
     let min_initial_unsafe_address_date = datasets.address.get_min_initial_first_unsafe_date();
     let min_initial_unsafe_address_height = datasets.address.get_min_initial_first_unsafe_height();
 
     println!("{:?} - Imported datasets", Local::now());
 
-    let mut databases = Databases::default();
+    let mut databases = Databases::import();
 
     println!("{:?} - Imported databases", Local::now());
 
-    let mut states = States::import(!address_datasets_is_empty).unwrap_or_default();
+    let mut states = States::import(addresses).unwrap_or_default();
 
     println!("{:?} - Imported states", Local::now());
 
-    let mut height = find_first_unsafe_height(&mut states, &databases, &datasets);
+    let mut height = find_first_unsafe_height(&mut states, &mut databases, &datasets, addresses);
 
     println!("{:?} - Starting parsing at height: {height}", Local::now());
 
@@ -58,6 +58,10 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
             let mut coinblocks_destroyed_vec = vec![];
             let mut coindays_destroyed_vec = vec![];
             let mut fees_vec = vec![];
+            let mut sats_sent_vec = vec![];
+            let mut transaction_count_vec = vec![];
+            let mut subsidy_vec = vec![];
+            let mut subsidy_in_dollars_vec = vec![];
 
             'blocks: loop {
                 let current_block_opt = next_block_opt.take().or_else(|| block_iter.next());
@@ -109,7 +113,7 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
                         // Do NOT change `blocks_loop_date` to `current_block_date` !!!
                         .map_or(true, |next_block_date| blocks_loop_date < next_block_date);
 
-                    let compute_addresses = !address_datasets_is_empty
+                    let compute_addresses = addresses
                         && (min_initial_unsafe_address_date
                             .map_or(true, |min_initial_unsafe_date| {
                                 current_block_date >= min_initial_unsafe_date
@@ -137,8 +141,12 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
                             fees_vec: &mut fees_vec,
                             height: current_block_height,
                             is_date_last_block,
+                            sats_sent_vec: &mut sats_sent_vec,
                             states: &mut states,
                             timestamp,
+                            transaction_count_vec: &mut transaction_count_vec,
+                            subsidy_vec: &mut subsidy_vec,
+                            subsidy_in_dollars_vec: &mut subsidy_in_dollars_vec,
                         });
                     }
 
@@ -161,9 +169,9 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
                             || height > (block_count - (NUMBER_OF_UNSAFE_BLOCKS * 10))
                         {
                             break 'days;
-                        } else {
-                            break 'blocks;
                         }
+
+                        break 'blocks;
                     }
                 } else {
                     break 'parsing;

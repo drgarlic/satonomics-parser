@@ -11,6 +11,7 @@ pub struct CoinblocksDataset {
     name: &'static str,
     min_initial_first_unsafe_date: Option<NaiveDate>,
     min_initial_first_unsafe_height: Option<usize>,
+
     pub destroyed: BiMap<f64>,
 }
 

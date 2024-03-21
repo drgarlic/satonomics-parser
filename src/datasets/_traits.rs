@@ -180,11 +180,5 @@ pub trait AnyDatasets {
 
     fn to_any_dataset_vec(&self) -> Vec<&(dyn AnyDataset + Send + Sync)>;
 
-    fn is_empty(&self) -> bool {
-        self.to_any_dataset_vec()
-            .iter()
-            .all(|dataset| dataset.is_empty())
-    }
-
     fn name<'a>() -> &'a str;
 }

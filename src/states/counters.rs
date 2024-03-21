@@ -6,8 +6,6 @@ use super::AnyState;
 
 #[derive(Encode, Decode, Default, Debug)]
 pub struct Counters {
-    pub addresses: Counter,
-    pub txs: Counter,
     pub unknown_addresses: Counter,
     pub empty_addresses: Counter,
 }
@@ -20,8 +18,6 @@ impl AnyState for Counters {
     }
 
     fn clear(&mut self) {
-        self.addresses.reset();
-        self.txs.reset();
         self.unknown_addresses.reset();
         self.empty_addresses.reset();
     }
