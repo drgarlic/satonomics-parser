@@ -4,13 +4,12 @@ use itertools::Itertools;
 use crate::{
     bitcoin::sats_to_btc,
     datasets::AnyDataset,
-    parse::{AnyHeightMap, BiMap, DateMap},
+    parse::{AnyDateMap, AnyHeightMap, BiMap, DateMap},
 };
 
 use super::ProcessedBlockData;
 
 pub struct RewardsDataset {
-    name: &'static str,
     min_initial_first_unsafe_date: Option<NaiveDate>,
     min_initial_first_unsafe_height: Option<usize>,
 
@@ -23,12 +22,9 @@ pub struct RewardsDataset {
 
 impl RewardsDataset {
     pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
-        let name = "rewards";
-
         let f = |s: &str| format!("{parent_path}/{s}");
 
         let mut s = Self {
-            name,
             min_initial_first_unsafe_date: None,
             min_initial_first_unsafe_height: None,
             fees_sumed: BiMap::new_on_disk_bin(&f("fees/sumed")),
@@ -113,17 +109,13 @@ impl AnyDataset for RewardsDataset {
         ]
     }
 
-    fn to_any_date_map_vec(&self) -> Vec<&(dyn crate::parse::AnyDateMap + Send + Sync)> {
+    fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
         vec![
             &self.fees_sumed.date,
             &self.subsidy.date,
             &self.last_subsidy,
             &self.subsidy_in_dollars.date,
         ]
-    }
-
-    fn name(&self) -> &str {
-        self.name
     }
 
     fn get_min_initial_first_unsafe_date(&self) -> &Option<NaiveDate> {

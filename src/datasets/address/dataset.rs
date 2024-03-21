@@ -10,8 +10,6 @@ use crate::{
 use super::AddressSubDataset;
 
 pub struct MetadataDataset {
-    name: String,
-
     min_initial_first_unsafe_date: Option<NaiveDate>,
     min_initial_first_unsafe_height: Option<usize>,
 
@@ -23,8 +21,6 @@ impl MetadataDataset {
         let f = |s: &str| format!("{parent_path}/{s}");
 
         let mut s = Self {
-            name: "addresses_metadata".to_owned(),
-
             address_count: BiMap::new_on_disk_bin(&f("address_count")),
 
             min_initial_first_unsafe_date: None,
@@ -54,15 +50,9 @@ impl AnyDataset for MetadataDataset {
     fn get_min_initial_first_unsafe_height(&self) -> &Option<usize> {
         &self.min_initial_first_unsafe_height
     }
-
-    fn name(&self) -> &str {
-        &self.name
-    }
 }
 
 pub struct CohortDataset {
-    name: String,
-
     min_initial_first_unsafe_date: Option<NaiveDate>,
     min_initial_first_unsafe_height: Option<usize>,
 
@@ -87,7 +77,6 @@ impl CohortDataset {
         let f = |s: &str| format!("{folder_path}/{s}");
 
         let mut s = Self {
-            name: name.to_owned(),
             min_initial_first_unsafe_date: None,
             min_initial_first_unsafe_height: None,
             split,
@@ -399,9 +388,5 @@ impl AnyDataset for CohortDataset {
 
     fn get_min_initial_first_unsafe_height(&self) -> &Option<usize> {
         &self.min_initial_first_unsafe_height
-    }
-
-    fn name(&self) -> &str {
-        &self.name
     }
 }

@@ -9,7 +9,6 @@ use crate::{
 use super::ProcessedBlockData;
 
 pub struct TransactionMetadataDataset {
-    name: &'static str,
     min_initial_first_unsafe_date: Option<NaiveDate>,
     min_initial_first_unsafe_height: Option<usize>,
 
@@ -19,12 +18,9 @@ pub struct TransactionMetadataDataset {
 
 impl TransactionMetadataDataset {
     pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
-        let name = "transaction_metadata";
-
         let f = |s: &str| format!("{parent_path}/transaction/{s}");
 
         let mut s = Self {
-            name,
             min_initial_first_unsafe_date: None,
             min_initial_first_unsafe_height: None,
 
@@ -74,10 +70,6 @@ impl AnyDataset for TransactionMetadataDataset {
 
     fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
         vec![&self.count.height, &self.volume.height]
-    }
-
-    fn name(&self) -> &str {
-        self.name
     }
 
     fn get_min_initial_first_unsafe_date(&self) -> &Option<NaiveDate> {

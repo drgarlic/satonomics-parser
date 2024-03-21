@@ -16,11 +16,11 @@ use crate::{
         AddressIndexToEmptyAddressData, Databases, RawAddressToAddressIndex, TxidToTxIndex,
     },
     datasets::{AllDatasets, AnyDatasets, ProcessedBlockData, SortedBlockData},
-    states::{SplitRealizedStates, States},
     parse::{
         AddressData, AddressRealizedData, BlockData, BlockPath, Counter, EmptyAddressData,
         PartialTxoutData, RawAddress, TxData, TxoutIndex,
     },
+    states::{SplitRealizedStates, States},
 };
 
 pub struct ParseData<'a> {

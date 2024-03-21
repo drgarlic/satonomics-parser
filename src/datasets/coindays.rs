@@ -2,13 +2,12 @@ use chrono::NaiveDate;
 
 use crate::{
     datasets::AnyDataset,
-    parse::{AnyHeightMap, BiMap},
+    parse::{AnyDateMap, AnyHeightMap, BiMap},
 };
 
 use super::ProcessedBlockData;
 
 pub struct CoindaysDataset {
-    name: &'static str,
     min_initial_first_unsafe_date: Option<NaiveDate>,
     min_initial_first_unsafe_height: Option<usize>,
     pub destroyed: BiMap<f64>,
@@ -21,7 +20,6 @@ impl CoindaysDataset {
         let f = |s: &str| format!("{parent_path}/{name}/{s}");
 
         let mut s = Self {
-            name,
             min_initial_first_unsafe_date: None,
             min_initial_first_unsafe_height: None,
             destroyed: BiMap::new_on_disk_bin(&f("destroyed")),
@@ -60,12 +58,8 @@ impl AnyDataset for CoindaysDataset {
         vec![&self.destroyed.height]
     }
 
-    fn to_any_date_map_vec(&self) -> Vec<&(dyn crate::parse::AnyDateMap + Send + Sync)> {
+    fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
         vec![&self.destroyed.date]
-    }
-
-    fn name(&self) -> &str {
-        self.name
     }
 
     fn get_min_initial_first_unsafe_date(&self) -> &Option<NaiveDate> {

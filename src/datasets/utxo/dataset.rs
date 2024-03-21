@@ -13,7 +13,6 @@ use crate::{
 use super::UTXOFilter;
 
 pub struct UTXODataset {
-    name: String,
     min_initial_first_unsafe_date: Option<NaiveDate>,
     min_initial_first_unsafe_height: Option<usize>,
     filter: UTXOFilter,
@@ -39,7 +38,6 @@ impl UTXODataset {
         };
 
         let mut s = Self {
-            name: name.unwrap_or("").to_owned(),
             min_initial_first_unsafe_date: None,
             min_initial_first_unsafe_height: None,
             filter: range,
@@ -232,10 +230,6 @@ impl AnyDataset for UTXODataset {
         .flatten()
         .copied()
         .collect()
-    }
-
-    fn name(&self) -> &str {
-        &self.name
     }
 
     fn get_min_initial_first_unsafe_date(&self) -> &Option<NaiveDate> {

@@ -103,7 +103,7 @@ pub trait AnyDataset {
         self.to_any_height_map_vec().is_empty() || self.to_any_date_map_vec().is_empty()
     }
 
-    fn name(&self) -> &str;
+    // fn name(&self) -> &str;
 }
 
 pub trait AnyDatasets {

@@ -10,7 +10,6 @@ use crate::{
 };
 
 pub struct DateDataset {
-    name: &'static str,
     min_initial_first_unsafe_date: Option<NaiveDate>,
     min_initial_first_unsafe_height: Option<usize>,
     closes: DateMap<f32>,
@@ -24,7 +23,6 @@ impl DateDataset {
         let closes = DateMap::new_in_memory_json(&format!("{parent_path}/{name}"));
 
         let mut s = Self {
-            name,
             min_initial_first_unsafe_date: None,
             min_initial_first_unsafe_height: None,
             closes,
@@ -71,10 +69,6 @@ impl DateDataset {
 impl AnyDataset for DateDataset {
     fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
         vec![&self.closes]
-    }
-
-    fn name(&self) -> &str {
-        self.name
     }
 
     fn get_min_initial_first_unsafe_date(&self) -> &Option<NaiveDate> {

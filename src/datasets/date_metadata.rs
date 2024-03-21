@@ -8,7 +8,6 @@ use crate::{
 use super::ProcessedDateData;
 
 pub struct DateMetadataDataset {
-    name: &'static str,
     min_initial_first_unsafe_date: Option<NaiveDate>,
     min_initial_first_unsafe_height: Option<usize>,
     pub first_height: DateMap<usize>,
@@ -18,12 +17,9 @@ pub struct DateMetadataDataset {
 
 impl DateMetadataDataset {
     pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
-        let name = "date_metadata";
-
         let f = |s: &str| format!("{parent_path}/{s}");
 
         let mut s = Self {
-            name,
             min_initial_first_unsafe_date: None,
             min_initial_first_unsafe_height: None,
             first_height: DateMap::new_on_disk_bin(&f("first_height")),
@@ -57,10 +53,6 @@ impl AnyDataset for DateMetadataDataset {
 
     fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
         vec![&self.block_count, &self.first_height, &self.last_height]
-    }
-
-    fn name(&self) -> &str {
-        self.name
     }
 
     fn get_min_initial_first_unsafe_date(&self) -> &Option<NaiveDate> {
