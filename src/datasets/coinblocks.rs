@@ -63,7 +63,7 @@ impl AnyDataset for CoinblocksDataset {
         vec![&self.destroyed.date]
     }
 
-    fn get_min_initial_first_unsafe_date(&self) -> &Option<chrono::prelude::NaiveDate> {
+    fn get_min_initial_first_unsafe_date(&self) -> &Option<NaiveDate> {
         &self.min_initial_first_unsafe_date
     }
 

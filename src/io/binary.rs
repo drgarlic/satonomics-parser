@@ -12,6 +12,8 @@ use bincode::{
 
 pub struct Binary;
 
+// TODO: Try https://docs.rs/bitcode/0.6.0-beta.1/bitcode/index.html
+
 impl Binary {
     pub fn import<T, P>(path: P) -> color_eyre::Result<T>
     where
