@@ -9,7 +9,7 @@ use crate::{
 };
 
 pub struct UnrealizedSubDataset {
-    supply_in_profit: BiMap<f64>,
+    supply_in_profit: BiMap<f32>,
     unrealized_profit: BiMap<f32>,
     unrealized_loss: BiMap<f32>,
 }
@@ -17,18 +17,18 @@ pub struct UnrealizedSubDataset {
 #[derive(Debug, Default)]
 pub struct UnrealizedState {
     supply_in_profit: u64,
-    unrealized_profit: f64,
-    unrealized_loss: f64,
+    unrealized_profit: f32,
+    unrealized_loss: f32,
 }
 
 impl UnrealizedState {
     #[inline]
-    pub fn iterate(&mut self, price_then: f32, price_now: f32, sat_amount: u64, btc_amount: f64) {
+    pub fn iterate(&mut self, price_then: f32, price_now: f32, sat_amount: u64, btc_amount: f32) {
         if price_then < price_now {
-            self.unrealized_profit += btc_amount * ((price_now - price_then) as f64);
+            self.unrealized_profit += btc_amount * (price_now - price_then);
             self.supply_in_profit += sat_amount;
         } else if price_then > price_now {
-            self.unrealized_loss += btc_amount * ((price_then - price_now) as f64)
+            self.unrealized_loss += btc_amount * (price_then - price_now);
         }
     }
 }
@@ -82,11 +82,11 @@ impl UnrealizedSubDataset {
 
         self.unrealized_profit
             .height
-            .insert(height, height_state.unrealized_profit as f32);
+            .insert(height, height_state.unrealized_profit);
 
         self.unrealized_loss
             .height
-            .insert(height, height_state.unrealized_loss as f32);
+            .insert(height, height_state.unrealized_loss);
 
         if is_date_last_block {
             self.supply_in_profit
@@ -95,11 +95,11 @@ impl UnrealizedSubDataset {
 
             self.unrealized_profit
                 .date
-                .insert(date, date_state.unrealized_profit as f32);
+                .insert(date, date_state.unrealized_profit);
 
             self.unrealized_loss
                 .date
-                .insert(date, date_state.unrealized_loss as f32);
+                .insert(date, date_state.unrealized_loss);
         }
     }
 

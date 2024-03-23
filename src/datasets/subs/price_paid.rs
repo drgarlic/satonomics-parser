@@ -31,7 +31,7 @@ pub struct PricePaidSubDataset {
 
 #[derive(Default, Debug)]
 pub struct PricePaidState {
-    pub realized_cap: f64,
+    pub realized_cap: f32,
 
     pub pp_05p: Option<f32>,
     pub pp_10p: Option<f32>,
@@ -57,7 +57,7 @@ pub struct PricePaidState {
 }
 
 impl PricePaidState {
-    pub fn iterate(&mut self, price: f32, btc_amount: f64, sat_amount: u64, total_supply: u64) {
+    pub fn iterate(&mut self, price: f32, btc_amount: f32, sat_amount: u64, total_supply: u64) {
         let PricePaidState {
             processed_amount,
             realized_cap,
@@ -82,7 +82,7 @@ impl PricePaidState {
             pp_95p,
         } = self;
 
-        *realized_cap += btc_amount * (price as f64);
+        *realized_cap += btc_amount * price;
 
         *processed_amount += sat_amount;
 
@@ -90,7 +90,7 @@ impl PricePaidState {
             return;
         }
 
-        if *processed_amount as f64 >= total_supply as f64 * 0.95 {
+        if *processed_amount as f32 >= total_supply as f32 * 0.95 {
             pp_95p.replace(price);
         }
 
@@ -98,7 +98,7 @@ impl PricePaidState {
             return;
         }
 
-        if *processed_amount as f64 >= total_supply as f64 * 0.9 {
+        if *processed_amount as f32 >= total_supply as f32 * 0.9 {
             pp_90p.replace(price);
         }
 
@@ -106,7 +106,7 @@ impl PricePaidState {
             return;
         }
 
-        if *processed_amount as f64 >= total_supply as f64 * 0.85 {
+        if *processed_amount as f32 >= total_supply as f32 * 0.85 {
             pp_85p.replace(price);
         }
 
@@ -114,7 +114,7 @@ impl PricePaidState {
             return;
         }
 
-        if *processed_amount as f64 >= total_supply as f64 * 0.8 {
+        if *processed_amount as f32 >= total_supply as f32 * 0.8 {
             pp_80p.replace(price);
         }
 
@@ -122,7 +122,7 @@ impl PricePaidState {
             return;
         }
 
-        if *processed_amount as f64 >= total_supply as f64 * 0.75 {
+        if *processed_amount as f32 >= total_supply as f32 * 0.75 {
             pp_75p.replace(price);
         }
 
@@ -130,7 +130,7 @@ impl PricePaidState {
             return;
         }
 
-        if *processed_amount as f64 >= total_supply as f64 * 0.7 {
+        if *processed_amount as f32 >= total_supply as f32 * 0.7 {
             pp_70p.replace(price);
         }
 
@@ -138,7 +138,7 @@ impl PricePaidState {
             return;
         }
 
-        if *processed_amount as f64 >= total_supply as f64 * 0.65 {
+        if *processed_amount as f32 >= total_supply as f32 * 0.65 {
             pp_65p.replace(price);
         }
 
@@ -146,7 +146,7 @@ impl PricePaidState {
             return;
         }
 
-        if *processed_amount as f64 >= total_supply as f64 * 0.6 {
+        if *processed_amount as f32 >= total_supply as f32 * 0.6 {
             pp_60p.replace(price);
         }
 
@@ -154,7 +154,7 @@ impl PricePaidState {
             return;
         }
 
-        if *processed_amount as f64 >= total_supply as f64 * 0.55 {
+        if *processed_amount as f32 >= total_supply as f32 * 0.55 {
             pp_55p.replace(price);
         }
 
@@ -162,7 +162,7 @@ impl PricePaidState {
             return;
         }
 
-        if *processed_amount as f64 >= total_supply as f64 * 0.5 {
+        if *processed_amount as f32 >= total_supply as f32 * 0.5 {
             pp_median.replace(price);
         }
 
@@ -170,7 +170,7 @@ impl PricePaidState {
             return;
         }
 
-        if *processed_amount as f64 >= total_supply as f64 * 0.45 {
+        if *processed_amount as f32 >= total_supply as f32 * 0.45 {
             pp_45p.replace(price);
         }
 
@@ -178,7 +178,7 @@ impl PricePaidState {
             return;
         }
 
-        if *processed_amount as f64 >= total_supply as f64 * 0.4 {
+        if *processed_amount as f32 >= total_supply as f32 * 0.4 {
             pp_40p.replace(price);
         }
 
@@ -186,7 +186,7 @@ impl PricePaidState {
             return;
         }
 
-        if *processed_amount as f64 >= total_supply as f64 * 0.35 {
+        if *processed_amount as f32 >= total_supply as f32 * 0.35 {
             pp_35p.replace(price);
         }
 
@@ -194,7 +194,7 @@ impl PricePaidState {
             return;
         }
 
-        if *processed_amount as f64 >= total_supply as f64 * 0.3 {
+        if *processed_amount as f32 >= total_supply as f32 * 0.3 {
             pp_30p.replace(price);
         }
 
@@ -202,7 +202,7 @@ impl PricePaidState {
             return;
         }
 
-        if *processed_amount as f64 >= total_supply as f64 * 0.25 {
+        if *processed_amount as f32 >= total_supply as f32 * 0.25 {
             pp_25p.replace(price);
         }
 
@@ -210,7 +210,7 @@ impl PricePaidState {
             return;
         }
 
-        if *processed_amount as f64 >= total_supply as f64 * 0.2 {
+        if *processed_amount as f32 >= total_supply as f32 * 0.2 {
             pp_20p.replace(price);
         }
 
@@ -218,7 +218,7 @@ impl PricePaidState {
             return;
         }
 
-        if *processed_amount as f64 >= total_supply as f64 * 0.15 {
+        if *processed_amount as f32 >= total_supply as f32 * 0.15 {
             pp_15p.replace(price);
         }
 
@@ -226,7 +226,7 @@ impl PricePaidState {
             return;
         }
 
-        if *processed_amount as f64 >= total_supply as f64 * 0.1 {
+        if *processed_amount as f32 >= total_supply as f32 * 0.1 {
             pp_10p.replace(price);
         }
 
@@ -234,7 +234,7 @@ impl PricePaidState {
             return;
         }
 
-        if *processed_amount as f64 >= total_supply as f64 * 0.05 {
+        if *processed_amount as f32 >= total_supply as f32 * 0.05 {
             pp_05p.replace(price);
         }
     }
@@ -331,9 +331,7 @@ impl PricePaidSubDataset {
             ..
         } = state;
 
-        self.realized_cap
-            .height
-            .insert(height, *realized_cap as f32);
+        self.realized_cap.height.insert(height, *realized_cap);
 
         // Check if iter was empty
         if pp_05p.is_none() {

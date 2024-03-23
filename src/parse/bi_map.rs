@@ -18,7 +18,6 @@ impl<T> BiMap<T>
 where
     T: Clone + Default + Debug + Decode + Encode + Serialize + DeserializeOwned,
 {
-    #[allow(unused)]
     pub fn new_on_disk_bin(path: &str) -> Self {
         Self {
             height: HeightMap::new_on_disk_bin(path),
@@ -48,6 +47,12 @@ where
             height: HeightMap::new_in_memory_json(path),
             date: DateMap::new_in_memory_json(path),
         }
+    }
+
+    pub fn set(&mut self, map: Vec<T>) {
+        self.height.set_inner(map);
+
+        // self.date
     }
 }
 

@@ -13,11 +13,11 @@ pub struct RewardsDataset {
     min_initial_first_unsafe_date: Option<NaiveDate>,
     min_initial_first_unsafe_height: Option<usize>,
 
-    pub fees_sumed: BiMap<f64>,
-    pub subsidy: BiMap<f64>,
-    pub coinbase: BiMap<f64>,
+    pub fees_sumed: BiMap<f32>,
+    pub subsidy: BiMap<f32>,
+    pub coinbase: BiMap<f32>,
     pub subsidy_in_dollars: BiMap<f32>,
-    pub last_subsidy: DateMap<f64>,
+    pub last_subsidy: DateMap<f32>,
 }
 
 impl RewardsDataset {

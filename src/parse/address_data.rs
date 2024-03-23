@@ -33,8 +33,7 @@ impl AddressData {
 
 impl AddressData {
     pub fn receive(&mut self, sat_amount: u64, price: f32) {
-        let price = price as f64;
-        let previous_mean_price_paid = self.mean_price_paid as f64;
+        let previous_mean_price_paid = self.mean_price_paid;
 
         let previous_sat_amount = self.amount;
         let new_sat_amount = previous_sat_amount + sat_amount;
@@ -45,8 +44,8 @@ impl AddressData {
         let previous_btc_amount = sats_to_btc(previous_sat_amount);
         let new_btc_amount = sats_to_btc(new_sat_amount);
 
-        self.mean_price_paid = ((previous_mean_price_paid * previous_btc_amount + priced_btc_value)
-            / new_btc_amount) as f32;
+        self.mean_price_paid =
+            (previous_mean_price_paid * previous_btc_amount + priced_btc_value) / new_btc_amount;
 
         self.amount = new_sat_amount;
 
@@ -56,8 +55,7 @@ impl AddressData {
     }
 
     pub fn spend(&mut self, sat_amount: u64, price: f32) -> f32 {
-        let price = price as f64;
-        let previous_mean_price_paid = self.mean_price_paid as f64;
+        let previous_mean_price_paid = self.mean_price_paid;
 
         let previous_sat_amount = self.amount;
         let new_sat_amount = previous_sat_amount - sat_amount;
@@ -68,9 +66,8 @@ impl AddressData {
         let previous_btc_amount = sats_to_btc(previous_sat_amount);
         let new_btc_amount = sats_to_btc(new_sat_amount);
 
-        self.mean_price_paid = (((previous_mean_price_paid * previous_btc_amount)
-            - priced_btc_value)
-            / new_btc_amount) as f32;
+        self.mean_price_paid =
+            ((previous_mean_price_paid * previous_btc_amount) - priced_btc_value) / new_btc_amount;
 
         self.amount = new_sat_amount;
 
@@ -78,7 +75,7 @@ impl AddressData {
 
         self.outputs_len -= 1;
 
-        (priced_btc_value - (btc_value * previous_mean_price_paid)) as f32
+        priced_btc_value - (btc_value * previous_mean_price_paid)
     }
 
     #[inline(always)]

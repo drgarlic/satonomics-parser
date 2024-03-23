@@ -7,7 +7,7 @@ use crate::{
 };
 
 pub struct SupplySubDataset {
-    total: BiMap<f64>,
+    total: BiMap<f32>,
 }
 
 #[derive(Debug, Default)]

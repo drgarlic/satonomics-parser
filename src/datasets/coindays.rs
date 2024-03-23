@@ -1,6 +1,7 @@
 use chrono::NaiveDate;
 
 use crate::{
+    bitcoin::sats_to_btc,
     datasets::AnyDataset,
     parse::{AnyDateMap, AnyHeightMap, BiMap},
 };
@@ -10,7 +11,7 @@ use super::ProcessedBlockData;
 pub struct CoindaysDataset {
     min_initial_first_unsafe_date: Option<NaiveDate>,
     min_initial_first_unsafe_height: Option<usize>,
-    pub destroyed: BiMap<f64>,
+    pub destroyed: BiMap<f32>,
 }
 
 impl CoindaysDataset {
@@ -37,7 +38,8 @@ impl AnyDataset for CoindaysDataset {
         &self,
         &ProcessedBlockData {
             height,
-            coindays_destroyed_vec,
+            satdays_destroyed,
+            satdays_destroyed_vec,
             is_date_last_block,
             date,
             ..
@@ -45,12 +47,12 @@ impl AnyDataset for CoindaysDataset {
     ) {
         self.destroyed
             .height
-            .insert(height, *coindays_destroyed_vec.last().unwrap());
+            .insert(height, sats_to_btc(satdays_destroyed));
 
         if is_date_last_block {
             self.destroyed
                 .date
-                .insert(date, coindays_destroyed_vec.iter().sum())
+                .insert(date, sats_to_btc(satdays_destroyed_vec.iter().sum()))
         }
     }
 

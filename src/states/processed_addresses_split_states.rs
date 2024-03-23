@@ -308,21 +308,18 @@ impl SplitRealizedStates {
             .initial_address_data
             .compute_liquidity_classification();
 
-        let split_profit = liquidity_classification.split(profit as f64);
-        let split_loss = liquidity_classification.split(loss as f64);
+        let split_profit = liquidity_classification.split(profit);
+        let split_loss = liquidity_classification.split(loss);
 
         let iterate = move |state: &mut SplitByLiquidity<RealizedState>| {
             state.all.iterate(profit, loss);
             state
                 .illiquid
-                .iterate(split_profit.illiquid as f32, split_loss.illiquid as f32);
+                .iterate(split_profit.illiquid, split_loss.illiquid);
+            state.liquid.iterate(split_profit.liquid, split_loss.liquid);
             state
-                .liquid
-                .iterate(split_profit.liquid as f32, split_loss.liquid as f32);
-            state.highly_liquid.iterate(
-                split_profit.highly_liquid as f32,
-                split_loss.highly_liquid as f32,
-            );
+                .highly_liquid
+                .iterate(split_profit.highly_liquid, split_loss.highly_liquid);
         };
 
         if let Some(state) = self.get_mut_state(&RawAddressSplit::Type(
@@ -471,8 +468,8 @@ impl SplitVariousAddressStates {
 
         let liquidity_classification = address_data.compute_liquidity_classification();
 
-        let split_sat_amount_amount = liquidity_classification.split(amount as f64);
-        let split_utxo_count = liquidity_classification.split(utxo_count as f64);
+        let split_sat_amount_amount = liquidity_classification.split(amount as f32);
+        let split_utxo_count = liquidity_classification.split(utxo_count as f32);
 
         if let Some(state) = self.get_mut_state(&RawAddressSplit::Type(address_data.address_type)) {
             if increment {

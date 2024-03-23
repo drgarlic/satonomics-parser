@@ -188,15 +188,15 @@ impl AnyDataset for UTXODataset {
                         .get(block_path.block_index as usize)
                         .unwrap();
 
-                    let previous_dollar_amount = *previous_price as f64 * sats_to_btc(*value);
-                    let current_dollar_amount = block_price as f64 * sats_to_btc(*value);
+                    let previous_dollar_amount = *previous_price * sats_to_btc(*value);
+                    let current_dollar_amount = block_price * sats_to_btc(*value);
 
                     if previous_dollar_amount < current_dollar_amount {
                         realized_state.realized_profit +=
-                            (current_dollar_amount - previous_dollar_amount) as f32
+                            current_dollar_amount - previous_dollar_amount
                     } else if current_dollar_amount < previous_dollar_amount {
                         realized_state.realized_loss +=
-                            (previous_dollar_amount - current_dollar_amount) as f32
+                            previous_dollar_amount - current_dollar_amount
                     }
                 });
 

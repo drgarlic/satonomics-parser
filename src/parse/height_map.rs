@@ -12,12 +12,17 @@ pub struct HeightMap<T>
 where
     T: Clone + Default + Debug + Decode + Encode,
 {
-    batch: WMutex<Vec<(usize, T)>>,
     path: String,
+
+    batch: WMutex<Vec<(usize, T)>>,
+
     initial_last_height: Option<usize>,
     initial_first_unsafe_height: Option<usize>,
+
     inner: Option<WMutex<Vec<T>>>,
+
     called_insert: WMutex<bool>,
+
     serialization: Serialization,
 }
 
@@ -109,8 +114,12 @@ where
         self.unsafe_inner().len()
     }
 
-    fn import(&self) -> Vec<T> {
+    pub fn import(&self) -> Vec<T> {
         self.serialization.import(&self.path).unwrap_or_default()
+    }
+
+    pub fn set_inner(&mut self, map: Vec<T>) {
+        let _ = self.inner.insert(WMutex::new(map));
     }
 
     fn get_last_height(&self) -> Option<usize>

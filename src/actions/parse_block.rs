@@ -28,8 +28,6 @@ pub struct ParseData<'a> {
     pub block: Block,
     pub block_index: usize,
     pub coinbase_vec: &'a mut Vec<u64>,
-    pub coinblocks_destroyed_vec: &'a mut Vec<f64>,
-    pub coindays_destroyed_vec: &'a mut Vec<f64>,
     pub compute_addresses: bool,
     pub databases: &'a mut Databases,
     pub datasets: &'a mut AllDatasets,
@@ -38,6 +36,8 @@ pub struct ParseData<'a> {
     pub first_date_height: usize,
     pub height: usize,
     pub is_date_last_block: bool,
+    pub satblocks_destroyed_vec: &'a mut Vec<u64>,
+    pub satdays_destroyed_vec: &'a mut Vec<u64>,
     pub sats_sent_vec: &'a mut Vec<u64>,
     pub states: &'a mut States,
     pub subsidy_in_dollars_vec: &'a mut Vec<f32>,
@@ -52,8 +52,6 @@ pub fn parse_block(
         block,
         block_index,
         coinbase_vec,
-        coinblocks_destroyed_vec,
-        coindays_destroyed_vec,
         compute_addresses,
         databases,
         datasets,
@@ -62,6 +60,8 @@ pub fn parse_block(
         first_date_height,
         height,
         is_date_last_block,
+        satblocks_destroyed_vec,
+        satdays_destroyed_vec,
         sats_sent_vec,
         states,
         subsidy_in_dollars_vec,
@@ -103,8 +103,8 @@ pub fn parse_block(
     let mut address_index_at_least_once_removed: BTreeSet<u32> = BTreeSet::default();
 
     let mut coinbase = 0;
-    let mut coinblocks_destroyed = 0.0;
-    let mut coindays_destroyed = 0.0;
+    let mut satblocks_destroyed = 0;
+    let mut satdays_destroyed = 0;
     let mut sats_sent = 0;
     let mut transaction_count = 0;
     let mut fees = vec![];
@@ -389,7 +389,6 @@ pub fn parse_block(
                     }
 
                     let input_sats = input_sats.unwrap();
-                    let input_btc = sats_to_btc(input_sats);
 
                     let input_tx_data =
                         states.tx_index_to_tx_data.get_mut(&input_tx_index).unwrap();
@@ -433,12 +432,12 @@ pub fn parse_block(
                         .entry(input_block_path)
                         .or_default() += input_sats;
 
-                    coinblocks_destroyed +=
-                        (height - input_block_data.height as usize) as f64 * input_btc;
+                    satblocks_destroyed +=
+                        (height as u64 - input_block_data.height as u64) * input_sats;
 
-                    coindays_destroyed +=
-                        date.signed_duration_since(*input_date_data.date).num_days() as f64
-                            * input_btc;
+                    satdays_destroyed +=
+                        date.signed_duration_since(*input_date_data.date).num_days() as u64
+                            * input_sats;
 
                     input_tx_data.spendable_outputs -= 1;
 
@@ -530,10 +529,10 @@ pub fn parse_block(
     });
 
     let subsidy = coinbase - fees_total;
-    let subsidy_in_dollars = (sats_to_btc(subsidy) * block_price as f64) as f32;
+    let subsidy_in_dollars = sats_to_btc(subsidy) * block_price;
 
-    coinblocks_destroyed_vec.push(coinblocks_destroyed);
-    coindays_destroyed_vec.push(coindays_destroyed);
+    satblocks_destroyed_vec.push(satblocks_destroyed);
+    satdays_destroyed_vec.push(satdays_destroyed);
     sats_sent_vec.push(sats_sent);
     transaction_count_vec.push(transaction_count);
     fees_vec.push(fees.clone());
@@ -626,8 +625,6 @@ pub fn parse_block(
         block_price,
         coinbase,
         coinbase_vec,
-        coinblocks_destroyed_vec,
-        coindays_destroyed_vec,
         databases,
         date,
         date_price,
@@ -636,6 +633,10 @@ pub fn parse_block(
         first_date_height,
         height,
         is_date_last_block,
+        satblocks_destroyed,
+        satblocks_destroyed_vec,
+        satdays_destroyed,
+        satdays_destroyed_vec,
         sats_sent,
         sats_sent_vec,
         sorted_block_data_vec,

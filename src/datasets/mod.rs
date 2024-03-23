@@ -2,12 +2,14 @@ use std::{collections::BTreeMap, thread};
 
 use chrono::NaiveDate;
 use itertools::Itertools;
+use parking_lot::{lock_api::MutexGuard, RawMutex};
 
 mod _traits;
 mod address;
 mod block_metadata;
 mod coinblocks;
 mod coindays;
+mod cointime;
 mod date_metadata;
 mod price;
 mod rewards;
@@ -20,8 +22,8 @@ use address::*;
 use block_metadata::*;
 use coinblocks::*;
 use coindays::*;
+use cointime::*;
 use date_metadata::*;
-use parking_lot::{lock_api::MutexGuard, RawMutex};
 use price::*;
 use rewards::*;
 pub use subs::*;
@@ -55,8 +57,6 @@ pub struct ProcessedBlockData<'a> {
     pub block_price: f32,
     pub coinbase: u64,
     pub coinbase_vec: &'a Vec<u64>,
-    pub coinblocks_destroyed_vec: &'a Vec<f64>,
-    pub coindays_destroyed_vec: &'a Vec<f64>,
     pub databases: &'a Databases,
     pub date: NaiveDate,
     pub date_price: f32,
@@ -65,6 +65,10 @@ pub struct ProcessedBlockData<'a> {
     pub first_date_height: usize,
     pub height: usize,
     pub is_date_last_block: bool,
+    pub satblocks_destroyed: u64,
+    pub satblocks_destroyed_vec: &'a Vec<u64>,
+    pub satdays_destroyed: u64,
+    pub satdays_destroyed_vec: &'a Vec<u64>,
     pub sats_sent: u64,
     pub sats_sent_vec: &'a Vec<u64>,
     pub sorted_block_data_vec: Option<Vec<SortedBlockData<'a>>>,

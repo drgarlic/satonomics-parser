@@ -13,7 +13,7 @@ pub struct TransactionMetadataDataset {
     min_initial_first_unsafe_height: Option<usize>,
 
     pub count: BiMap<usize>,
-    pub volume: BiMap<f64>,
+    pub volume: BiMap<f32>,
 }
 
 impl TransactionMetadataDataset {

@@ -5,6 +5,107 @@ use crate::parse::{AnyDateMap, AnyHeightMap};
 
 use super::{ProcessedBlockData, ProcessedDateData};
 
+pub trait AnyDataset2 {
+    fn get_min_last_date(&self) -> Option<NaiveDate> {
+        self.to_any_date_map_vec()
+            .iter()
+            .map(|map| map.get_last_date())
+            .min()
+            .and_then(|opt| opt)
+    }
+
+    fn get_min_initial_last_date(&self) -> Option<NaiveDate> {
+        self.to_any_date_map_vec()
+            .iter()
+            .map(|map| map.get_initial_last_date())
+            .min()
+            .and_then(|opt| opt)
+    }
+
+    fn get_min_initial_first_unsafe_date(&self) -> &Option<NaiveDate>;
+
+    fn get_min_initial_last_height(&self) -> Option<usize> {
+        self.to_any_height_map_vec()
+            .iter()
+            .map(|map| map.get_initial_last_height())
+            .min()
+            .and_then(|opt| opt)
+    }
+
+    fn get_min_last_height(&self) -> Option<usize> {
+        self.to_any_height_map_vec()
+            .iter()
+            .map(|map| map.get_last_height())
+            .min()
+            .and_then(|opt| opt)
+    }
+
+    fn get_min_initial_first_unsafe_height(&self) -> &Option<usize>;
+
+    fn compute_min_initial_first_unsafe_date(&self) -> Option<NaiveDate> {
+        self.to_any_date_map_vec()
+            .iter()
+            .map(|map| map.get_initial_first_unsafe_date())
+            .min()
+            .and_then(|opt| opt)
+    }
+
+    fn compute_min_initial_first_unsafe_height(&self) -> Option<usize> {
+        self.to_any_height_map_vec()
+            .iter()
+            .map(|map| map.get_initial_first_unsafe_height())
+            .min()
+            .and_then(|opt| opt)
+    }
+
+    #[inline(always)]
+    fn process_height(&self, height: usize) -> bool {
+        !self.to_any_height_map_vec().is_empty()
+            && self.get_min_initial_first_unsafe_height().unwrap_or(0) <= height
+    }
+
+    #[inline(always)]
+    fn process_date(&self, date: NaiveDate) -> bool {
+        !self.to_any_date_map_vec().is_empty()
+            && self
+                .get_min_initial_first_unsafe_date()
+                .map_or(true, |min_initial_first_unsafe_date| {
+                    min_initial_first_unsafe_date <= date
+                })
+    }
+
+    fn export(&self) -> color_eyre::Result<()> {
+        self.to_any_date_map_vec()
+            .iter()
+            .try_for_each(|map| map.export())?;
+
+        self.to_any_height_map_vec()
+            .iter()
+            .try_for_each(|map| map.export())?;
+
+        Ok(())
+    }
+
+    fn insert_block_data(&self, _: &ProcessedBlockData) {}
+
+    fn insert_date_data(&self, _: &ProcessedDateData) {}
+
+    fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
+        vec![]
+    }
+
+    fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
+        vec![]
+    }
+
+    #[inline(always)]
+    fn is_empty(&self) -> bool {
+        self.to_any_height_map_vec().is_empty() || self.to_any_date_map_vec().is_empty()
+    }
+
+    // fn name(&self) -> &str;
+}
+
 pub trait AnyDataset {
     fn get_min_last_date(&self) -> Option<NaiveDate> {
         self.to_any_date_map_vec()

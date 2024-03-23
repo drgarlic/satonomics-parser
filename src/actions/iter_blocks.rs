@@ -55,8 +55,8 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
             }
 
             let mut coinbase_vec = vec![];
-            let mut coinblocks_destroyed_vec = vec![];
-            let mut coindays_destroyed_vec = vec![];
+            let mut satblocks_destroyed_vec = vec![];
+            let mut satdays_destroyed_vec = vec![];
             let mut fees_vec = vec![];
             let mut sats_sent_vec = vec![];
             let mut transaction_count_vec = vec![];
@@ -131,8 +131,6 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
                             block: current_block,
                             block_index: blocks_loop_i,
                             coinbase_vec: &mut coinbase_vec,
-                            coinblocks_destroyed_vec: &mut coinblocks_destroyed_vec,
-                            coindays_destroyed_vec: &mut coindays_destroyed_vec,
                             compute_addresses,
                             databases: &mut databases,
                             datasets: &mut datasets,
@@ -141,6 +139,8 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
                             fees_vec: &mut fees_vec,
                             height: current_block_height,
                             is_date_last_block,
+                            satblocks_destroyed_vec: &mut satblocks_destroyed_vec,
+                            satdays_destroyed_vec: &mut satdays_destroyed_vec,
                             sats_sent_vec: &mut sats_sent_vec,
                             states: &mut states,
                             timestamp,
