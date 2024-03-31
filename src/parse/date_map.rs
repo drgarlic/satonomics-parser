@@ -12,9 +12,12 @@ use ordered_float::{FloatCore, OrderedFloat};
 use parking_lot::Mutex;
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::{io::Serialization, utils::ToF32};
+use crate::{
+    io::{format_path, Serialization},
+    utils::ToF32,
+};
 
-use super::{Storage, WNaiveDate};
+use super::{AnyExportableMap, AnyMap, Storage, WNaiveDate};
 
 const NUMBER_OF_UNSAFE_DATES: usize = 2;
 
@@ -63,7 +66,9 @@ where
     }
 
     fn new(path: &str, storage: Storage, serialization: Serialization) -> Self {
-        fs::create_dir_all(path).unwrap();
+        let path = format_path(path);
+
+        fs::create_dir_all(&path).unwrap();
 
         let mut s = Self {
             storage,
@@ -222,7 +227,7 @@ where
     }
 }
 
-pub trait AnyDateMap {
+pub trait AnyDateMap: AnyMap {
     fn get_initial_first_unsafe_date(&self) -> Option<NaiveDate>;
 
     fn get_initial_last_date(&self) -> Option<NaiveDate>;
@@ -231,20 +236,12 @@ pub trait AnyDateMap {
 
     fn get_first_unsafe_date(&self) -> Option<NaiveDate>;
 
-    fn prepare_tmp_data(&self);
-
-    fn export_then_clean(&self) -> color_eyre::Result<()>;
-
-    fn path(&self) -> &str;
-
-    fn t_name(&self) -> &str;
-
-    fn reset(&mut self) -> color_eyre::Result<()>;
+    fn as_any_map(&self) -> &(dyn AnyMap + Send + Sync);
 }
 
 impl<T> AnyDateMap for DateMap<T>
 where
-    T: Clone + Default + Encode + Decode + Debug + Serialize + DeserializeOwned + Sum,
+    T: Clone + Default + Encode + Decode + Debug + Serialize + DeserializeOwned + Sum + Sync + Send,
 {
     #[inline(always)]
     fn get_last_date(&self) -> Option<NaiveDate> {
@@ -266,6 +263,28 @@ where
         self.initial_last_date
     }
 
+    fn as_any_map(&self) -> &(dyn AnyMap + Send + Sync) {
+        self
+    }
+}
+
+impl<T> AnyExportableMap for DateMap<T>
+where
+    T: Clone + Default + Encode + Decode + Debug + Serialize + DeserializeOwned + Sum,
+{
+    fn export_then_clean(&self) -> color_eyre::Result<()> {
+        self.export()?;
+
+        self.clean_tmp_data();
+
+        Ok(())
+    }
+}
+
+impl<T> AnyMap for DateMap<T>
+where
+    T: Clone + Default + Encode + Decode + Debug + Serialize + DeserializeOwned + Sum,
+{
     fn prepare_tmp_data(&self) {
         if !self.modified.lock().to_owned() {
             return;
@@ -283,14 +302,6 @@ where
                 self.insert_to_inner(date, value);
             });
         }
-    }
-
-    fn export_then_clean(&self) -> color_eyre::Result<()> {
-        self.export()?;
-
-        self.clean_tmp_data();
-
-        Ok(())
     }
 
     fn path(&self) -> &str {

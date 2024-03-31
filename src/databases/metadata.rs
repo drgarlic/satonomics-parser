@@ -67,11 +67,11 @@ impl MetadataData {
     pub fn import(path: &str) -> color_eyre::Result<Self> {
         fs::create_dir_all(path)?;
 
-        Binary::import(Self::full_path(path))
+        Binary::import(&Self::full_path(path))
     }
 
     pub fn export(&self, path: &str) -> color_eyre::Result<()> {
-        Binary::export(Self::full_path(path), self)
+        Binary::export(&Self::full_path(path), self)
     }
 
     pub fn reset(&mut self, path: &str) -> color_eyre::Result<(), io::Error> {

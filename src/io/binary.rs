@@ -2,7 +2,6 @@ use std::{
     fmt::Debug,
     fs::File,
     io::{BufReader, BufWriter},
-    path::Path,
 };
 
 use bincode::{
@@ -15,10 +14,9 @@ pub struct Binary;
 // TODO: Try https://docs.rs/bitcode/0.6.0-beta.1/bitcode/index.html
 
 impl Binary {
-    pub fn import<T, P>(path: P) -> color_eyre::Result<T>
+    pub fn import<T>(path: &str) -> color_eyre::Result<T>
     where
         T: Decode + Debug,
-        P: AsRef<Path>,
     {
         let config = config::standard();
 
@@ -31,14 +29,16 @@ impl Binary {
         Ok(decoded)
     }
 
-    pub fn export<T, P>(path: P, value: &T) -> color_eyre::Result<()>
+    pub fn export<T>(path: &str, value: &T) -> color_eyre::Result<()>
     where
         T: Encode,
-        P: AsRef<Path>,
     {
         let config = config::standard();
 
-        let file = File::create(path)?;
+        let file = File::create(path).unwrap_or_else(|_| {
+            dbg!(&path);
+            panic!("No such file or directory")
+        });
 
         let mut writer = BufWriter::new(file);
 

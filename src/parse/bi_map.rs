@@ -4,7 +4,7 @@ use bincode::{Decode, Encode};
 use chrono::NaiveDate;
 use serde::{de::DeserializeOwned, Serialize};
 
-use super::{AnyDateMap, AnyHeightMap, DateMap, HeightMap, HeightToDateConverter, WNaiveDate};
+use super::{AnyExportableMap, DateMap, HeightMap, HeightToDateConverter, WNaiveDate};
 
 pub struct BiMap<T>
 where
@@ -74,8 +74,6 @@ where
 
 pub trait AnyBiMap {
     fn are_date_and_height_safe(&self, date: NaiveDate, height: usize) -> bool;
-
-    fn export_then_clean(&self) -> color_eyre::Result<()>;
 }
 
 impl<T> AnyBiMap for BiMap<T>
@@ -86,7 +84,12 @@ where
     fn are_date_and_height_safe(&self, date: NaiveDate, height: usize) -> bool {
         self.date.is_date_safe(date) && self.height.is_height_safe(height)
     }
+}
 
+impl<T> AnyExportableMap for BiMap<T>
+where
+    T: Clone + Default + Debug + Decode + Encode + Serialize + DeserializeOwned + Sum,
+{
     fn export_then_clean(&self) -> color_eyre::Result<()> {
         self.height.export_then_clean()?;
 

@@ -1,4 +1,4 @@
-use std::{fmt::Debug, path::Path};
+use std::fmt::Debug;
 
 use bincode::{Decode, Encode};
 use serde::{de::DeserializeOwned, Serialize};
@@ -23,25 +23,23 @@ impl Serialization {
         format!("{path}.{}", self.to_str())
     }
 
-    pub fn import<T, P>(&self, path: P) -> color_eyre::Result<T>
+    pub fn import<T>(&self, path: &str) -> color_eyre::Result<T>
     where
         T: Decode + DeserializeOwned + Debug,
-        P: AsRef<Path> + Debug,
     {
         match self {
             Serialization::Binary => Binary::import(path),
-            Serialization::Json => Json::import(&path),
+            Serialization::Json => Json::import(path),
         }
     }
 
-    pub fn export<T, P>(&self, path: P, value: &T) -> color_eyre::Result<()>
+    pub fn export<T>(&self, path: &str, value: &T) -> color_eyre::Result<()>
     where
         T: Encode + Serialize,
-        P: AsRef<Path> + Debug,
     {
         match self {
             Serialization::Binary => Binary::export(path, value),
-            Serialization::Json => Json::export(&path, value),
+            Serialization::Json => Json::export(path, value),
         }
     }
 }

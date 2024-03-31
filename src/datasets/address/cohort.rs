@@ -3,7 +3,7 @@ use itertools::Itertools;
 
 use crate::{
     datasets::{AnyDataset, GenericDataset, MinInitialState, ProcessedBlockData, SubDataset},
-    parse::{AnyBiMap, AnyDateMap, AnyHeightMap, RawAddressSplit},
+    parse::{AnyDateMap, AnyExportableMap, AnyHeightMap, RawAddressSplit},
     states::LiquiditySplitProcessedAddressState,
 };
 
@@ -393,7 +393,7 @@ impl AnyDataset for CohortDataset {
         .collect_vec()
     }
 
-    fn to_any_exported_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
+    fn to_any_exported_date_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
         [
             self.all.to_any_exported_date_map_vec(),
             self.illiquid.to_any_exported_date_map_vec(),
@@ -406,7 +406,7 @@ impl AnyDataset for CohortDataset {
         .collect_vec()
     }
 
-    fn to_any_exported_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
+    fn to_any_exported_height_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
         [
             self.all.to_any_exported_height_map_vec(),
             self.illiquid.to_any_exported_height_map_vec(),
@@ -419,7 +419,7 @@ impl AnyDataset for CohortDataset {
         .collect_vec()
     }
 
-    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
+    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
         [
             self.all.to_any_exported_bi_map_vec(),
             self.illiquid.to_any_exported_bi_map_vec(),

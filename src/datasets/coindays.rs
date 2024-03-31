@@ -1,7 +1,7 @@
 use crate::{
     bitcoin::sats_to_btc,
     datasets::AnyDataset,
-    parse::{AnyBiMap, AnyHeightMap, BiMap},
+    parse::{AnyExportableMap, AnyHeightMap, BiMap},
 };
 
 use super::{ExportData, GenericDataset, MinInitialState, ProcessedBlockData};
@@ -14,14 +14,12 @@ pub struct CoindaysDataset {
 
 impl CoindaysDataset {
     pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
-        let name = "coindays";
-
-        let f = |s: &str| format!("{parent_path}/{name}/{s}");
+        let f = |s: &str| format!("{parent_path}/{s}");
 
         let s = Self {
             min_initial_state: MinInitialState::default(),
 
-            destroyed: BiMap::new_on_disk_bin(&f("destroyed")),
+            destroyed: BiMap::new_on_disk_bin(&f("coindays_destroyed")),
         };
 
         s.min_initial_state.compute_from_dataset(&s);
@@ -60,7 +58,7 @@ impl AnyDataset for CoindaysDataset {
         self.destroyed.compute_date(sum_heights_to_date);
     }
 
-    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
+    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
         vec![&self.destroyed]
     }
 

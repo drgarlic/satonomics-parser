@@ -6,7 +6,7 @@ use crate::{
         AnyDataset, GenericDataset, InputState, MinInitialState, OutputState, PricePaidState,
         ProcessedBlockData, RealizedState, SubDataset, SupplyState, UTXOState, UnrealizedState,
     },
-    parse::{reverse_date_index, AnyBiMap, AnyDateMap, AnyHeightMap, BlockData},
+    parse::{reverse_date_index, AnyDateMap, AnyExportableMap, AnyHeightMap, BlockData},
 };
 
 use super::UTXOFilter;
@@ -16,7 +16,7 @@ pub struct UTXODataset {
 
     filter: UTXOFilter,
 
-    subs: SubDataset,
+    pub subs: SubDataset,
 }
 
 impl UTXODataset {
@@ -47,27 +47,7 @@ impl UTXODataset {
     }
 
     pub fn needs_sorted_block_data_vec(&self, date: NaiveDate, height: usize) -> bool {
-        self.needs_price_paid_data(date, height)
-    }
-
-    fn needs_price_paid_data(&self, date: NaiveDate, height: usize) -> bool {
-        !self.subs.price_paid.should_insert(height, date)
-    }
-
-    fn needs_unrealized_data(&self, date: NaiveDate, height: usize) -> bool {
-        !self.subs.unrealized.should_insert(height, date)
-    }
-
-    fn needs_realized_data(&self, date: NaiveDate, height: usize) -> bool {
-        !self.subs.realized.should_insert(height, date)
-    }
-
-    fn needs_input_data(&self, date: NaiveDate, height: usize) -> bool {
-        !self.subs.input.should_insert(height, date)
-    }
-
-    fn needs_output_data(&self, date: NaiveDate, height: usize) -> bool {
-        !self.subs.output.should_insert(height, date)
+        self.subs.price_paid.should_insert(height, date)
     }
 }
 
@@ -93,17 +73,16 @@ impl GenericDataset for UTXODataset {
         let mut output_state = OutputState::default();
         let mut pp_state = PricePaidState::default();
         let mut realized_state = RealizedState::default();
-
         let mut unrealized_height_state = UnrealizedState::default();
         let mut unrealized_date_state = UnrealizedState::default();
 
         let date_data_vec_len = states.date_data_vec.len() as u16;
 
-        let needs_price_paid_data = self.needs_price_paid_data(date, height);
-        let needs_unrealized_data = self.needs_unrealized_data(date, height);
-        let needs_realized_data = self.needs_realized_data(date, height);
-        let needs_input_data = self.needs_input_data(date, height);
-        let needs_output_data = self.needs_output_data(date, height);
+        let needs_price_paid_data = self.subs.price_paid.should_insert(height, date);
+        let needs_unrealized_data = self.subs.unrealized.should_insert(height, date);
+        let needs_realized_data = self.subs.realized.should_insert(height, date);
+        let needs_input_data = self.subs.input.should_insert(height, date);
+        let needs_output_data = self.subs.output.should_insert(height, date);
 
         date_data_vec
             .iter()
@@ -249,22 +228,22 @@ impl AnyDataset for UTXODataset {
     }
 
     fn to_any_inserted_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
-        self.subs.to_any_exported_height_map_vec()
+        self.subs.to_any_inserted_height_map_vec()
     }
 
     fn to_any_inserted_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
-        self.subs.to_any_exported_date_map_vec()
+        self.subs.to_any_inserted_date_map_vec()
     }
 
-    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
+    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
         self.subs.to_any_exported_bi_map_vec()
     }
 
-    fn to_any_exported_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
+    fn to_any_exported_date_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
         self.subs.to_any_exported_date_map_vec()
     }
 
-    fn to_any_exported_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
+    fn to_any_exported_height_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
         self.subs.to_any_exported_height_map_vec()
     }
 }

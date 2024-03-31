@@ -1,7 +1,7 @@
 use crate::{
     bitcoin::{sats_to_btc, ONE_YEAR_IN_BLOCK_TIME},
     datasets::{ExportData, ProcessedBlockData},
-    parse::{AnyHeightMap, BiMap},
+    parse::{AnyExportableMap, AnyHeightMap, BiMap},
     utils::ONE_YEAR_IN_DAYS,
 };
 
@@ -83,7 +83,7 @@ impl AnyDataset for TransactionDataset {
             .set_date(self.annualized_volume.date.divide(&circulating_supply.date));
     }
 
-    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn crate::parse::AnyBiMap + Send + Sync)> {
+    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
         vec![
             &self.count,
             &self.volume,

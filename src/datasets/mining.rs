@@ -1,7 +1,7 @@
 use crate::{
     bitcoin::{sats_to_btc, ONE_YEAR_IN_BLOCK_TIME},
     datasets::AnyDataset,
-    parse::{AnyBiMap, AnyDateMap, AnyHeightMap, BiMap, DateMap},
+    parse::{AnyDateMap, AnyExportableMap, AnyHeightMap, BiMap, DateMap},
     utils::{ONE_MONTH_IN_DAYS, ONE_WEEK_IN_DAYS, ONE_YEAR_IN_DAYS},
 };
 
@@ -147,7 +147,7 @@ impl AnyDataset for MiningDataset {
             .set_inner(self.blocks_mined.simple_moving_average(ONE_MONTH_IN_DAYS));
     }
 
-    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
+    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
         vec![
             &self.coinbase,
             &self.fees,
@@ -158,7 +158,7 @@ impl AnyDataset for MiningDataset {
         ]
     }
 
-    fn to_any_exported_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
+    fn to_any_exported_date_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
         vec![
             &self.last_subsidy,
             &self.last_subsidy_in_dollars,

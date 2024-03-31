@@ -1,6 +1,6 @@
 use crate::{
     datasets::{AnyDataset, ExportData, MinInitialState},
-    parse::{AnyBiMap, AnyHeightMap, BiMap},
+    parse::{AnyExportableMap, AnyHeightMap, BiMap},
 };
 
 pub struct MetadataDataset {
@@ -44,7 +44,7 @@ impl AnyDataset for MetadataDataset {
         vec![&self.address_count.height]
     }
 
-    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
+    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
         vec![&self.address_count]
     }
 }

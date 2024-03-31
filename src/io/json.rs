@@ -1,8 +1,6 @@
 use std::{
-    fmt::Debug,
     fs::File,
     io::{BufReader, BufWriter},
-    path::Path,
 };
 
 use serde::{de::DeserializeOwned, Serialize};
@@ -10,10 +8,9 @@ use serde::{de::DeserializeOwned, Serialize};
 pub struct Json;
 
 impl Json {
-    pub fn import<T, P>(path: P) -> color_eyre::Result<T>
+    pub fn import<T>(path: &str) -> color_eyre::Result<T>
     where
         T: DeserializeOwned,
-        P: AsRef<Path>,
     {
         let file = File::open(path)?;
 
@@ -22,12 +19,11 @@ impl Json {
         Ok(serde_json::from_reader(reader)?)
     }
 
-    pub fn export<T, P>(path: P, value: &T) -> color_eyre::Result<()>
+    pub fn export<T>(path: &str, value: &T) -> color_eyre::Result<()>
     where
         T: Serialize,
-        P: AsRef<Path> + Debug,
     {
-        let file = File::create(&path).unwrap_or_else(|_| {
+        let file = File::create(path).unwrap_or_else(|_| {
             dbg!(&path);
             panic!("No such file or directory")
         });

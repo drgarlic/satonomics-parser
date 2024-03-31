@@ -36,11 +36,11 @@ where
     fn import() -> color_eyre::Result<Self> {
         Self::create_dir_all()?;
 
-        Binary::import(Self::full_path())
+        Binary::import(&Self::full_path())
     }
 
     fn export(&self) -> color_eyre::Result<()> {
-        Binary::export(Self::full_path(), self)
+        Binary::export(&Self::full_path(), self)
     }
 
     fn clear(&mut self);

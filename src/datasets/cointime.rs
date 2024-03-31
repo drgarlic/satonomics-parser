@@ -2,7 +2,7 @@ use crate::{
     bitcoin::{
         sats_to_btc, ONE_DAY_IN_BLOCK_TIME, THREE_MONTHS_IN_BLOCK_TIME, TWO_WEEKS_IN_BLOCK_TIME,
     },
-    parse::{AnyBiMap, AnyHeightMap, BiMap, HeightMap},
+    parse::{AnyExportableMap, AnyHeightMap, BiMap, HeightMap},
     utils::{ONE_DAY_IN_DAYS, THREE_MONTHS_IN_DAYS, TWO_WEEK_IN_DAYS},
 };
 
@@ -428,7 +428,7 @@ impl AnyDataset for CointimeDataset {
         );
     }
 
-    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
+    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
         vec![
             &self.coinblocks_destroyed,
             &self.cumulative_coinblocks_destroyed,

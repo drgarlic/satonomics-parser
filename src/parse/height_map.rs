@@ -12,9 +12,13 @@ use ordered_float::{FloatCore, OrderedFloat};
 use parking_lot::Mutex;
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::{bitcoin::NUMBER_OF_UNSAFE_BLOCKS, io::Serialization, utils::ToF32};
+use crate::{
+    bitcoin::NUMBER_OF_UNSAFE_BLOCKS,
+    io::{format_path, Serialization},
+    utils::ToF32,
+};
 
-use super::Storage;
+use super::{AnyExportableMap, AnyMap, Storage};
 
 pub struct HeightMap<T>
 where
@@ -61,7 +65,9 @@ where
     }
 
     fn new(path: &str, storage: Storage, serialization: Serialization) -> Self {
-        fs::create_dir_all(path).unwrap();
+        let path = format_path(path);
+
+        fs::create_dir_all(&path).unwrap();
 
         let mut s = Self {
             storage: storage.to_owned(),
@@ -180,30 +186,28 @@ where
     }
 }
 
-pub trait AnyHeightMap {
+pub trait AnyHeightMap: AnyMap {
     fn get_initial_first_unsafe_height(&self) -> Option<usize>;
 
     fn get_initial_last_height(&self) -> Option<usize>;
 
     fn get_first_unsafe_height(&self) -> Option<usize>;
 
-    fn prepare_tmp_data(&self);
-
-    fn export_then_clean(&self) -> color_eyre::Result<()>;
-
-    fn path(&self) -> &str;
-
-    fn t_name(&self) -> &str;
-
-    fn reset(&mut self) -> color_eyre::Result<()>;
+    fn as_any_map(&self) -> &(dyn AnyMap + Send + Sync);
 }
 
 impl<T> AnyHeightMap for HeightMap<T>
 where
-    T: Clone + Default + Debug + Decode + Encode + Serialize + DeserializeOwned,
+    T: Clone + Default + Debug + Decode + Encode + Serialize + DeserializeOwned + Send,
 {
     #[inline(always)]
     fn get_initial_first_unsafe_height(&self) -> Option<usize> {
+        // if self.initial_first_unsafe_height.is_none() {
+        //     println!("{} NONE", &self.path);
+        // } else {
+        //     println!("{} some", &self.path);
+        // }
+
         self.initial_first_unsafe_height
     }
 
@@ -216,6 +220,28 @@ where
         last_height_to_first_unsafe_height(self.get_last_height())
     }
 
+    fn as_any_map(&self) -> &(dyn AnyMap + Send + Sync) {
+        self
+    }
+}
+
+impl<T> AnyExportableMap for HeightMap<T>
+where
+    T: Clone + Default + Debug + Decode + Encode + Serialize + DeserializeOwned,
+{
+    fn export_then_clean(&self) -> color_eyre::Result<()> {
+        self.export()?;
+
+        self.clean_tmp_data();
+
+        Ok(())
+    }
+}
+
+impl<T> AnyMap for HeightMap<T>
+where
+    T: Clone + Default + Debug + Decode + Encode + Serialize + DeserializeOwned,
+{
     fn prepare_tmp_data(&self) {
         if !self.modified.lock().to_owned() {
             return;
@@ -233,14 +259,6 @@ where
                 self.insert_to_inner(height, value);
             });
         }
-    }
-
-    fn export_then_clean(&self) -> color_eyre::Result<()> {
-        self.export()?;
-
-        self.clean_tmp_data();
-
-        Ok(())
     }
 
     fn path(&self) -> &str {

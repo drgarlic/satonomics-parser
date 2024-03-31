@@ -18,7 +18,7 @@ use itertools::Itertools;
 
 use crate::{
     datasets::AnyDataset,
-    parse::{AnyBiMap, AnyHeightMap},
+    parse::{AnyExportableMap, AnyHeightMap},
 };
 
 use super::MinInitialState;
@@ -80,7 +80,7 @@ impl AnyDataset for SubDataset {
     //     vec![]
     // }
 
-    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
+    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
         [
             self.price_paid.to_any_exported_bi_map_vec(),
             self.realized.to_any_exported_bi_map_vec(),
