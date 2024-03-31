@@ -1,16 +1,14 @@
-use chrono::NaiveDate;
-
 use crate::{
     bitcoin::sats_to_btc,
     datasets::AnyDataset,
-    parse::{AnyDateMap, AnyHeightMap, BiMap},
+    parse::{AnyBiMap, AnyHeightMap, BiMap},
 };
 
-use super::ProcessedBlockData;
+use super::{ExportData, GenericDataset, MinInitialState, ProcessedBlockData};
 
 pub struct CoindaysDataset {
-    min_initial_first_unsafe_date: Option<NaiveDate>,
-    min_initial_first_unsafe_height: Option<usize>,
+    min_initial_state: MinInitialState,
+
     pub destroyed: BiMap<f32>,
 }
 
@@ -20,55 +18,53 @@ impl CoindaysDataset {
 
         let f = |s: &str| format!("{parent_path}/{name}/{s}");
 
-        let mut s = Self {
-            min_initial_first_unsafe_date: None,
-            min_initial_first_unsafe_height: None,
+        let s = Self {
+            min_initial_state: MinInitialState::default(),
+
             destroyed: BiMap::new_on_disk_bin(&f("destroyed")),
         };
 
-        s.min_initial_first_unsafe_date = s.compute_min_initial_first_unsafe_date();
-        s.min_initial_first_unsafe_height = s.compute_min_initial_first_unsafe_height();
+        s.min_initial_state.compute_from_dataset(&s);
 
         Ok(s)
     }
 }
 
-impl AnyDataset for CoindaysDataset {
+impl GenericDataset for CoindaysDataset {
     fn insert_block_data(
         &self,
         &ProcessedBlockData {
             height,
             satdays_destroyed,
-            satdays_destroyed_vec,
-            is_date_last_block,
-            date,
             ..
         }: &ProcessedBlockData,
     ) {
         self.destroyed
             .height
             .insert(height, sats_to_btc(satdays_destroyed));
-
-        if is_date_last_block {
-            self.destroyed
-                .date
-                .insert(date, sats_to_btc(satdays_destroyed_vec.iter().sum()))
-        }
     }
+}
 
-    fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
+impl AnyDataset for CoindaysDataset {
+    fn to_any_inserted_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
         vec![&self.destroyed.height]
     }
 
-    fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
-        vec![&self.destroyed.date]
+    fn compute(
+        &mut self,
+        &ExportData {
+            sum_heights_to_date,
+            ..
+        }: &ExportData,
+    ) {
+        self.destroyed.compute_date(sum_heights_to_date);
     }
 
-    fn get_min_initial_first_unsafe_date(&self) -> &Option<NaiveDate> {
-        &self.min_initial_first_unsafe_date
+    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
+        vec![&self.destroyed]
     }
 
-    fn get_min_initial_first_unsafe_height(&self) -> &Option<usize> {
-        &self.min_initial_first_unsafe_height
+    fn get_min_initial_state(&self) -> &MinInitialState {
+        &self.min_initial_state
     }
 }

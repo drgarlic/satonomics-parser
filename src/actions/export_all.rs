@@ -1,16 +1,13 @@
-use std::thread;
-
-use chrono::{Local, NaiveDate};
+use chrono::{Datelike, Local, NaiveDate};
 
 use crate::{
-    bitcoin::check_if_height_safe,
     databases::Databases,
     datasets::{AllDatasets, AnyDatasets},
     states::States,
+    utils::time,
 };
 
 pub struct ExportedData<'a> {
-    pub block_count: usize,
     pub databases: &'a mut Databases,
     pub datasets: &'a AllDatasets,
     pub date: NaiveDate,
@@ -20,7 +17,6 @@ pub struct ExportedData<'a> {
 
 pub fn export_all(
     ExportedData {
-        block_count,
         databases,
         datasets,
         date,
@@ -30,14 +26,18 @@ pub fn export_all(
 ) -> color_eyre::Result<()> {
     println!("{:?} - Saving... (Don't close !!)", Local::now());
 
-    if check_if_height_safe(height, block_count) {
-        thread::scope(|s| {
-            s.spawn(|| databases.export());
-            s.spawn(|| states.export());
-        });
-    }
+    // thread::scope(|s| {
+    //     s.spawn(|| databases.export());
+    //     s.spawn(|| states.export());
+    // });
 
-    datasets.export_if_needed(date, height)?;
+    let _ = time("databases", || databases.export());
+
+    let _ = time("states", || states.export());
+
+    time("datasets", || {
+        datasets.export_if_needed(date, height, date.day0() == 0 && date.month0() == 0)
+    })?;
 
     Ok(())
 }

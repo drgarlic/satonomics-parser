@@ -4,16 +4,17 @@ use chrono::NaiveDate;
 use color_eyre::eyre::Error;
 
 use crate::{
-    datasets::AnyDataset,
-    parse::{AnyDateMap, DateMap},
+    datasets::{AnyDataset, GenericDataset, MinInitialState},
+    parse::{AnyDateMap, DateMap, WNaiveDate},
     price::Kraken,
 };
 
 pub struct DateDataset {
-    min_initial_first_unsafe_date: Option<NaiveDate>,
-    min_initial_first_unsafe_height: Option<usize>,
-    closes: DateMap<f32>,
+    min_initial_state: MinInitialState,
+
     kraken_daily: Option<HashMap<String, f32>>,
+
+    closes: DateMap<f32>,
 }
 
 impl DateDataset {
@@ -22,15 +23,15 @@ impl DateDataset {
 
         let closes = DateMap::new_in_memory_json(&format!("{parent_path}/{name}"));
 
-        let mut s = Self {
-            min_initial_first_unsafe_date: None,
-            min_initial_first_unsafe_height: None,
-            closes,
+        let s = Self {
+            min_initial_state: MinInitialState::default(),
+
             kraken_daily: None,
+
+            closes,
         };
 
-        s.min_initial_first_unsafe_date = s.compute_min_initial_first_unsafe_date();
-        s.min_initial_first_unsafe_height = s.compute_min_initial_first_unsafe_height();
+        s.min_initial_state.compute_from_dataset(&s);
 
         Ok(s)
     }
@@ -39,8 +40,11 @@ impl DateDataset {
         if self.closes.is_date_safe(date) {
             Ok(self
                 .closes
-                .unsafe_inner()
-                .get(&date.to_string())
+                .inner
+                .lock()
+                .as_ref()
+                .unwrap()
+                .get(&WNaiveDate::wrap(date))
                 .unwrap()
                 .to_owned())
         } else {
@@ -66,16 +70,18 @@ impl DateDataset {
     }
 }
 
+impl GenericDataset for DateDataset {}
+
 impl AnyDataset for DateDataset {
-    fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
+    fn get_min_initial_state(&self) -> &MinInitialState {
+        &self.min_initial_state
+    }
+
+    fn to_any_inserted_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
         vec![&self.closes]
     }
 
-    fn get_min_initial_first_unsafe_date(&self) -> &Option<NaiveDate> {
-        &self.min_initial_first_unsafe_date
-    }
-
-    fn get_min_initial_first_unsafe_height(&self) -> &Option<usize> {
-        &self.min_initial_first_unsafe_height
+    fn to_any_exported_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
+        vec![&self.closes]
     }
 }

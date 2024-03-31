@@ -1,23 +1,24 @@
 use crate::{
-    bitcoin::sats_to_btc,
     datasets::{AnyDataset, ExportData, MinInitialState, ProcessedBlockData},
     parse::{AnyBiMap, AnyHeightMap, BiMap},
 };
 
-pub struct SupplySubDataset {
+pub struct InputSubDataset {
     min_initial_state: MinInitialState,
 
-    total_supply: BiMap<f32>,
+    pub count: BiMap<f32>,
+    pub volume: BiMap<f32>,
 }
 
-impl SupplySubDataset {
+impl InputSubDataset {
     pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
         let f = |s: &str| format!("{parent_path}/{s}");
 
         let s = Self {
             min_initial_state: MinInitialState::default(),
 
-            total_supply: BiMap::new_on_disk_bin(&f("total_supply")),
+            count: BiMap::new_on_disk_bin(&f("input_count")),
+            volume: BiMap::new_on_disk_bin(&f("input_volume")),
         };
 
         s.min_initial_state.compute_from_dataset(&s);
@@ -28,23 +29,25 @@ impl SupplySubDataset {
     pub fn insert(
         &self,
         &ProcessedBlockData { height, .. }: &ProcessedBlockData,
-        state: &SupplyState,
+        state: &InputState,
     ) {
-        self.total_supply
-            .height
-            .insert(height, sats_to_btc(state.total_supply));
+        self.count.height.insert(height, state.count);
+
+        self.volume.height.insert(height, state.volume);
     }
 }
 
-impl AnyDataset for SupplySubDataset {
+impl AnyDataset for InputSubDataset {
     fn compute(
         &mut self,
         &ExportData {
             last_height_to_date,
+            sum_heights_to_date,
             ..
         }: &ExportData,
     ) {
-        self.total_supply.compute_date(last_height_to_date);
+        self.count.compute_date(last_height_to_date);
+        self.volume.compute_date(sum_heights_to_date);
     }
 
     fn get_min_initial_state(&self) -> &MinInitialState {
@@ -52,11 +55,11 @@ impl AnyDataset for SupplySubDataset {
     }
 
     fn to_any_inserted_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
-        vec![&self.total_supply.height]
+        vec![&self.count.height, &self.volume.height]
     }
 
     fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
-        vec![&self.total_supply]
+        vec![&self.count, &self.volume]
     }
 }
 
@@ -65,16 +68,14 @@ impl AnyDataset for SupplySubDataset {
 // ---
 
 #[derive(Debug, Default)]
-pub struct SupplyState {
-    pub total_supply: u64,
+pub struct InputState {
+    pub count: f32,
+    pub volume: f32,
 }
 
-impl SupplyState {
-    pub fn increment(&mut self, amount: u64) {
-        self.total_supply += amount;
-    }
-
-    pub fn decrement(&mut self, amount: u64) {
-        self.total_supply -= amount;
+impl InputState {
+    pub fn iterate(&mut self, count: f32, volume: f32) {
+        self.count += count;
+        self.volume += volume;
     }
 }

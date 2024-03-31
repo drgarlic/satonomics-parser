@@ -1,14 +1,14 @@
-use std::fmt::Debug;
+use std::{collections::BTreeMap, fmt::Debug, iter::Sum};
 
 use bincode::{Decode, Encode};
 use chrono::NaiveDate;
 use serde::{de::DeserializeOwned, Serialize};
 
-use super::{DateMap, HeightMap};
+use super::{AnyDateMap, AnyHeightMap, DateMap, HeightMap, HeightToDateConverter, WNaiveDate};
 
 pub struct BiMap<T>
 where
-    T: Clone + Default + Debug + Decode + Encode + Serialize + DeserializeOwned,
+    T: Clone + Default + Debug + Decode + Encode + Serialize + DeserializeOwned + Sum,
 {
     pub height: HeightMap<T>,
     pub date: DateMap<T>,
@@ -16,7 +16,7 @@ where
 
 impl<T> BiMap<T>
 where
-    T: Clone + Default + Debug + Decode + Encode + Serialize + DeserializeOwned,
+    T: Clone + Default + Debug + Decode + Encode + Serialize + DeserializeOwned + Sum,
 {
     pub fn new_on_disk_bin(path: &str) -> Self {
         Self {
@@ -49,23 +49,49 @@ where
         }
     }
 
-    pub fn set(&mut self, map: Vec<T>) {
-        self.height.set_inner(map);
+    pub fn set_height(&self, vec: Vec<T>) {
+        self.height.set_inner(vec)
+    }
 
-        // self.date
+    pub fn set_date(&self, map: BTreeMap<WNaiveDate, T>) {
+        self.date.set_inner(map)
+    }
+
+    pub fn set_height_then_compute_date(&self, vec: Vec<T>, converter: &HeightToDateConverter) {
+        self.set_height(vec);
+        self.compute_date(converter)
+    }
+
+    pub fn compute_date(&self, converter: &HeightToDateConverter) {
+        self.date
+            .compute_from_height_map(self.height.inner.lock().as_ref().unwrap(), converter);
+    }
+
+    pub fn insert(&self, height: usize, value: T) {
+        self.height.insert(height, value)
     }
 }
 
 pub trait AnyBiMap {
     fn are_date_and_height_safe(&self, date: NaiveDate, height: usize) -> bool;
+
+    fn export_then_clean(&self) -> color_eyre::Result<()>;
 }
 
 impl<T> AnyBiMap for BiMap<T>
 where
-    T: Clone + Default + Debug + Decode + Encode + Serialize + DeserializeOwned,
+    T: Clone + Default + Debug + Decode + Encode + Serialize + DeserializeOwned + Sum,
 {
     #[inline(always)]
     fn are_date_and_height_safe(&self, date: NaiveDate, height: usize) -> bool {
         self.date.is_date_safe(date) && self.height.is_height_safe(height)
+    }
+
+    fn export_then_clean(&self) -> color_eyre::Result<()> {
+        self.height.export_then_clean()?;
+
+        self.date.export_then_clean()?;
+
+        Ok(())
     }
 }

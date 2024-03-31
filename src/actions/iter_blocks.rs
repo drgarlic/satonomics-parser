@@ -6,7 +6,7 @@ use parse_block::ParseData;
 
 use crate::{
     actions::{export_all, find_first_unsafe_height, parse_block},
-    bitcoin::{BitcoinDB, NUMBER_OF_UNSAFE_BLOCKS},
+    bitcoin::{check_if_height_safe, BitcoinDB, NUMBER_OF_UNSAFE_BLOCKS},
     databases::Databases,
     datasets::{AllDatasets, AnyDatasets, ProcessedDateData},
     parse::DateData,
@@ -22,8 +22,22 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
     println!("{:?} - Starting aged", Local::now());
 
     let mut datasets = AllDatasets::import()?;
-    let min_initial_unsafe_address_date = datasets.address.get_min_initial_first_unsafe_date();
-    let min_initial_unsafe_address_height = datasets.address.get_min_initial_first_unsafe_height();
+
+    let min_initial_first_unsafe_address_date = datasets
+        .address
+        .get_min_initial_state()
+        .first_unsafe_date
+        .lock()
+        .as_ref()
+        .cloned();
+
+    let min_initial_first_unsafe_address_height = datasets
+        .address
+        .get_min_initial_state()
+        .first_unsafe_height
+        .lock()
+        .as_ref()
+        .cloned();
 
     println!("{:?} - Imported datasets", Local::now());
 
@@ -114,11 +128,11 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
                         .map_or(true, |next_block_date| blocks_loop_date < next_block_date);
 
                     let compute_addresses = addresses
-                        && (min_initial_unsafe_address_date
+                        && (min_initial_first_unsafe_address_date
                             .map_or(true, |min_initial_unsafe_date| {
                                 current_block_date >= min_initial_unsafe_date
                             })
-                            || min_initial_unsafe_address_height.map_or(
+                            || min_initial_first_unsafe_address_height.map_or(
                                 true,
                                 |min_initial_unsafe_height| {
                                     current_block_height >= min_initial_unsafe_height
@@ -164,10 +178,13 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
 
                         height += blocks_loop_i;
 
-                        if next_block_date
-                            .map_or(true, |next_block_date| next_block_date.day() == 1)
-                            || height > (block_count - (NUMBER_OF_UNSAFE_BLOCKS * 10))
-                        {
+                        let is_new_month = next_block_date
+                            .map_or(true, |next_block_date| next_block_date.day() == 1);
+
+                        let is_close_to_the_end =
+                            height > (block_count - (NUMBER_OF_UNSAFE_BLOCKS * 10));
+
+                        if is_new_month || is_close_to_the_end {
                             break 'days;
                         }
 
@@ -186,9 +203,8 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
             time.elapsed().as_secs_f32(),
         );
 
-        if export {
+        if export && check_if_height_safe(height, block_count) {
             export_all(ExportedData {
-                block_count,
                 databases: &mut databases,
                 datasets: &datasets,
                 date: blocks_loop_date.unwrap(),

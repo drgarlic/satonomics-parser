@@ -2,39 +2,43 @@ use std::{collections::BTreeMap, thread};
 
 use chrono::NaiveDate;
 use itertools::Itertools;
-use parking_lot::{lock_api::MutexGuard, RawMutex};
 
 mod _traits;
 mod address;
 mod block_metadata;
-mod coinblocks;
 mod coindays;
 mod cointime;
 mod date_metadata;
+mod mining;
 mod price;
-mod rewards;
 mod subs;
-mod transaction_metadata;
+mod transaction;
 mod utxo;
 
 pub use _traits::*;
 use address::*;
 use block_metadata::*;
-use coinblocks::*;
 use coindays::*;
 use cointime::*;
 use date_metadata::*;
+use mining::*;
 use price::*;
-use rewards::*;
 pub use subs::*;
-use transaction_metadata::*;
+use transaction::*;
 use utxo::*;
 
 use crate::{
+    actions::{ReceivedData, SpentData},
     databases::Databases,
     io::Json,
-    parse::{AddressData, AddressRealizedData, BlockData, BlockPath},
-    states::{SplitPricePaidStates, SplitRealizedStates, SplitUnrealizedStates, States},
+    parse::{
+        AddressData, AddressRealizedData, BiMap, BlockData, BlockPath, HeightToDateConverter,
+        WNaiveDate,
+    },
+    states::{
+        SplitInputStates, SplitOutputStates, SplitPricePaidStates, SplitRealizedStates,
+        SplitUnrealizedStates, States,
+    },
 };
 
 pub struct ProcessedDateData {
@@ -53,7 +57,8 @@ pub struct SortedBlockData<'a> {
 pub struct ProcessedBlockData<'a> {
     pub address_index_to_address_realized_data: &'a BTreeMap<u32, AddressRealizedData>,
     pub address_index_to_removed_address_data: &'a BTreeMap<u32, AddressData>,
-    pub block_path_to_spent_value: &'a BTreeMap<BlockPath, u64>,
+    pub block_path_to_received_data: &'a BTreeMap<BlockPath, ReceivedData>,
+    pub block_path_to_spent_data: &'a BTreeMap<BlockPath, SpentData>,
     pub block_price: f32,
     pub coinbase: u64,
     pub coinbase_vec: &'a Vec<u64>,
@@ -72,31 +77,50 @@ pub struct ProcessedBlockData<'a> {
     pub sats_sent: u64,
     pub sats_sent_vec: &'a Vec<u64>,
     pub sorted_block_data_vec: Option<Vec<SortedBlockData<'a>>>,
+    pub split_input_states: &'a mut Option<SplitInputStates>,
+    pub split_output_states: &'a mut Option<SplitOutputStates>,
     pub split_price_paid_states: &'a Option<SplitPricePaidStates>,
     pub split_realized_states: &'a mut Option<SplitRealizedStates>,
     pub split_unrealized_states_date: &'a Option<SplitUnrealizedStates>,
     pub split_unrealized_states_height: &'a Option<SplitUnrealizedStates>,
     pub states: &'a States,
     pub subsidy: u64,
-    pub subsidy_vec: &'a Vec<u64>,
     pub subsidy_in_dollars: f32,
     pub subsidy_in_dollars_vec: &'a Vec<f32>,
+    pub subsidy_vec: &'a Vec<u64>,
     pub timestamp: u32,
     pub transaction_count: usize,
     pub transaction_count_vec: &'a Vec<usize>,
 }
 
+pub struct ExportData<'a> {
+    // pub height: usize,
+    pub annualized_transaction_volume: &'a BiMap<f32>,
+    pub circulating_supply: &'a BiMap<f32>,
+    pub date_to_first_height: &'a BTreeMap<WNaiveDate, usize>,
+    pub date_to_last_height: &'a BTreeMap<WNaiveDate, usize>,
+    pub last_height_to_date: &'a HeightToDateConverter<'a>,
+    pub sum_heights_to_date: &'a HeightToDateConverter<'a>,
+    pub inflation_rate: &'a BiMap<f32>,
+    pub price: &'a BiMap<f32>,
+    pub realized_cap: &'a BiMap<f32>,
+    pub realized_price: &'a BiMap<f32>,
+    pub subsidy_in_dollars: &'a BiMap<f32>,
+}
+
 pub struct AllDatasets {
+    min_initial_state: MinInitialState,
+
     pub address: AddressDatasets,
     pub price: PriceDatasets,
     pub utxo: UTXODatasets,
 
     block_metadata: BlockMetadataDataset,
-    coinblocks: CoinblocksDataset,
+    cointime: CointimeDataset,
     coindays: CoindaysDataset,
-    date_metadata: DateMetadataDataset,
-    rewards: RewardsDataset,
-    transaction_metadata: TransactionMetadataDataset,
+    pub date_metadata: DateMetadataDataset,
+    mining: MiningDataset,
+    transaction: TransactionDataset,
 }
 
 impl AllDatasets {
@@ -106,57 +130,57 @@ impl AllDatasets {
         thread::scope(|scope| {
             let date_metadata_handle = scope.spawn(|| DateMetadataDataset::import(path));
 
-            let coinblocks_handle = scope.spawn(|| CoinblocksDataset::import(path));
+            let cointime_handle = scope.spawn(|| CointimeDataset::import(path));
 
             let coindays_handle = scope.spawn(|| CoindaysDataset::import(path));
 
-            let rewards_handle = scope.spawn(|| RewardsDataset::import(path));
+            let mining_handle = scope.spawn(|| MiningDataset::import(path));
 
             let block_metadata_handle = scope.spawn(|| BlockMetadataDataset::import(path));
 
             let utxo_handle = scope.spawn(|| UTXODatasets::import(path));
 
-            let transaction_metadata = TransactionMetadataDataset::import(path)?;
+            let transaction_handle = scope.spawn(|| TransactionDataset::import(path));
 
             let address = AddressDatasets::import(path)?;
 
             let price_handle = PriceDatasets::import()?;
 
-            let this = Self {
+            let s = Self {
+                min_initial_state: MinInitialState::default(),
+
                 address,
                 block_metadata: block_metadata_handle.join().unwrap()?,
-                coinblocks: coinblocks_handle.join().unwrap()?,
+                cointime: cointime_handle.join().unwrap()?,
                 coindays: coindays_handle.join().unwrap()?,
                 date_metadata: date_metadata_handle.join().unwrap()?,
                 price: price_handle,
-                rewards: rewards_handle.join().unwrap()?,
+                mining: mining_handle.join().unwrap()?,
                 utxo: utxo_handle.join().unwrap()?,
-                transaction_metadata,
+                transaction: transaction_handle.join().unwrap()?,
             };
 
-            this.export_path_to_type()?;
+            s.min_initial_state.compute_from_datasets(&s);
 
-            Ok(this)
+            s.export_path_to_type()?;
+
+            Ok(s)
         })
-    }
-
-    pub fn get_date_to_last_height(&self) -> MutexGuard<'_, RawMutex, BTreeMap<String, usize>> {
-        self.date_metadata.last_height.unsafe_inner()
     }
 
     pub fn export_path_to_type(&self) -> color_eyre::Result<()> {
         let path_to_type: BTreeMap<&str, &str> = self
-            .to_any_dataset_vec()
+            .to_generic_dataset_vec()
             .iter()
             .flat_map(|dataset| {
                 vec![
                     dataset
-                        .to_any_date_map_vec()
+                        .to_any_inserted_date_map_vec()
                         .iter()
                         .map(|map| (map.path(), map.t_name()))
                         .collect_vec(),
                     dataset
-                        .to_any_height_map_vec()
+                        .to_any_inserted_height_map_vec()
                         .iter()
                         .map(|map| (map.path(), map.t_name()))
                         .collect_vec(),
@@ -170,26 +194,26 @@ impl AllDatasets {
 }
 
 impl AnyDatasets for AllDatasets {
-    fn to_any_dataset_vec(&self) -> Vec<&(dyn AnyDataset + Send + Sync)> {
+    fn get_min_initial_state(&self) -> &MinInitialState {
+        &self.min_initial_state
+    }
+
+    fn to_generic_dataset_vec(&self) -> Vec<&(dyn GenericDataset + Send + Sync)> {
         vec![
-            self.address.to_any_dataset_vec(),
-            self.price.to_any_dataset_vec(),
-            self.utxo.to_any_dataset_vec(),
+            self.address.to_generic_dataset_vec(),
+            self.price.to_generic_dataset_vec(),
+            self.utxo.to_generic_dataset_vec(),
             vec![
                 &self.block_metadata,
-                &self.coinblocks,
+                &self.cointime,
                 &self.coindays,
                 &self.date_metadata,
-                &self.rewards,
-                &self.transaction_metadata,
+                &self.mining,
+                &self.transaction,
             ],
         ]
         .into_iter()
         .flatten()
         .collect_vec()
-    }
-
-    fn name<'a>() -> &'a str {
-        "datasets"
     }
 }

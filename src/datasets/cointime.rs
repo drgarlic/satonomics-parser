@@ -1,27 +1,18 @@
-use std::{
-    iter::Sum,
-    ops::{Add, AddAssign, Div, Mul, Sub},
-};
-
-use chrono::NaiveDate;
-use itertools::Itertools;
-use ordered_float::OrderedFloat;
-use rayon::prelude::*;
-
 use crate::{
     bitcoin::{
         sats_to_btc, ONE_DAY_IN_BLOCK_TIME, THREE_MONTHS_IN_BLOCK_TIME, TWO_WEEKS_IN_BLOCK_TIME,
     },
-    parse::{AnyDateMap, AnyHeightMap, BiMap},
+    parse::{AnyBiMap, AnyHeightMap, BiMap, HeightMap},
+    utils::{ONE_DAY_IN_DAYS, THREE_MONTHS_IN_DAYS, TWO_WEEK_IN_DAYS},
 };
 
-use super::{AnyDataset2, ProcessedBlockData};
+use super::{AnyDataset, ExportData, GenericDataset, MinInitialState, ProcessedBlockData};
 
 pub struct CointimeDataset {
-    min_initial_first_unsafe_date: Option<NaiveDate>,
-    min_initial_first_unsafe_height: Option<usize>,
+    min_initial_state: MinInitialState,
 
     pub coinblocks_destroyed: BiMap<f32>,
+
     pub cumulative_coinblocks_destroyed: BiMap<f32>,
     pub coinblocks_created: BiMap<f32>,
     pub cumulative_coinblocks_created: BiMap<f32>,
@@ -47,6 +38,7 @@ pub struct CointimeDataset {
     pub active_price: BiMap<f32>,
     pub active_cap: BiMap<f32>,
     pub vaulted_price: BiMap<f32>,
+    pub vaulted_cap: BiMap<f32>,
     pub true_market_mean: BiMap<f32>,
     pub true_market_deviation: BiMap<f32>,
     pub true_market_net_unrealized_profit_and_loss: BiMap<f32>,
@@ -62,25 +54,12 @@ pub struct CointimeDataset {
     pub cointime_cap: BiMap<f32>,
 }
 
-pub struct PostParseData<'a> {
-    // pub height: usize,
-    pub circulating_supply: &'a [f32],
-    pub price: &'a [f32],
-    // pub date_to_last_height: &'a ,
-    pub inflation_rate: &'a [f32],
-    pub annualized_transaction_volume: &'a [f32],
-    pub subsidy_in_dollars: &'a [f32],
-    pub realized_cap: &'a [f32],
-    pub realized_price: &'a [f32],
-}
-
 impl CointimeDataset {
     pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
         let f = |s: &str| format!("{parent_path}/{s}");
 
-        let mut s = Self {
-            min_initial_first_unsafe_date: None,
-            min_initial_first_unsafe_height: None,
+        let s = Self {
+            min_initial_state: MinInitialState::default(),
 
             coinblocks_destroyed: BiMap::new_on_disk_bin(&f("coinblocks_destroyed")),
             cumulative_coinblocks_destroyed: BiMap::new_on_disk_bin(&f(
@@ -124,6 +103,7 @@ impl CointimeDataset {
             active_price: BiMap::new_on_disk_bin(&f("active_price")),
             active_cap: BiMap::new_on_disk_bin(&f("active_cap")),
             vaulted_price: BiMap::new_on_disk_bin(&f("vaulted_price")),
+            vaulted_cap: BiMap::new_on_disk_bin(&f("vaulted_cap")),
             true_market_mean: BiMap::new_on_disk_bin(&f("true_market_mean")),
             true_market_deviation: BiMap::new_on_disk_bin(&f("true_market_deviation")),
             true_market_net_unrealized_profit_and_loss: BiMap::new_on_disk_bin(&f(
@@ -145,358 +125,13 @@ impl CointimeDataset {
             cointime_cap: BiMap::new_on_disk_bin(&f("cointime_cap")),
         };
 
-        s.min_initial_first_unsafe_date = s.compute_min_initial_first_unsafe_date();
-        s.min_initial_first_unsafe_height = s.compute_min_initial_first_unsafe_height();
+        s.min_initial_state.compute_from_dataset(&s);
 
         Ok(s)
     }
-
-    fn post_parse(
-        &mut self,
-        &PostParseData {
-            // height,
-            price,
-            circulating_supply,
-            inflation_rate,
-            annualized_transaction_volume,
-            // date_to_last_height,
-            subsidy_in_dollars,
-            realized_cap,
-            realized_price,
-        }: &PostParseData,
-    ) {
-        // ---
-        // Compute
-        // ---
-
-        let coinblocks_destroyed = self.coinblocks_destroyed.height.import();
-
-        let cumulative_coinblocks_destroyed = cumulate(&coinblocks_destroyed);
-
-        let coinblocks_created = circulating_supply.to_vec();
-
-        let cumulative_coinblocks_created = cumulate(&coinblocks_created);
-
-        let coinblocks_stored = subtract(&coinblocks_created, &coinblocks_destroyed);
-
-        let cumulative_coinblocks_stored = cumulate(&coinblocks_stored);
-
-        let liveliness = divide(
-            &cumulative_coinblocks_destroyed,
-            &cumulative_coinblocks_created,
-        );
-
-        let vaultedness = transform(&liveliness, |(_, v)| 1.0 - *v);
-
-        let activity_to_vaultedness_ratio = divide(&liveliness, &vaultedness);
-
-        let concurrent_liveliness = divide(&coinblocks_destroyed, &coinblocks_created);
-
-        let concurrent_liveliness_2w_median =
-            median(&concurrent_liveliness, TWO_WEEKS_IN_BLOCK_TIME);
-        // TODO: DateMap => median = 14
-
-        let liveliness_net_change = net_change(&liveliness, ONE_DAY_IN_BLOCK_TIME);
-        // TODO: DateMap => offset = 1
-
-        let liveliness_net_change_2w_median =
-            median(&liveliness_net_change, TWO_WEEKS_IN_BLOCK_TIME);
-
-        let vaulted_supply = multiply(&vaultedness, circulating_supply);
-
-        let vaulting_rate = divide(
-            &transform(&vaulted_supply, |(_, v)| *v * 365.0),
-            circulating_supply,
-        );
-
-        let active_supply = multiply(&liveliness, circulating_supply);
-
-        let active_supply_net_change = net_change(&active_supply, ONE_DAY_IN_BLOCK_TIME);
-
-        let active_supply_3m_net_change = net_change(&active_supply, THREE_MONTHS_IN_BLOCK_TIME);
-
-        // TODO: Do these
-        // let min_vaulted_supply = 0;
-        // let max_active_supply = 0;
-
-        let cointime_adjusted_yearly_inflation_rate =
-            multiply(inflation_rate, &activity_to_vaultedness_ratio);
-
-        let cointime_adjusted_velocity = divide(annualized_transaction_volume, &active_supply);
-
-        // TODO:
-        // const activeSupplyChangeFromTransactions90dChange =
-        //     createNetChangeLazyDataset(activeSupplyChangeFromTransactions, 90);
-        //   const activeSupplyChangeFromIssuance = createMultipliedLazyDataset(
-        //     lastSubsidy,
-        //     liveliness,
-        //   );
-
-        let thermo_cap = cumulate(subsidy_in_dollars);
-
-        let investor_cap = subtract(realized_cap, &thermo_cap);
-
-        let thermo_cap_to_investor_cap_ratio = divide(&thermo_cap, &investor_cap);
-
-        // TODO:
-        // const activeSupplyChangeFromIssuance90dChange = createNetChangeLazyDataset(
-        //   activeSupplyChangeFromIssuance,
-        //   90,
-        // );
-
-        let active_price = divide(realized_price, &liveliness);
-
-        let active_cap = multiply(&active_supply, price);
-
-        let vaulted_price = divide(realized_price, &vaultedness);
-
-        let true_market_mean = divide(&investor_cap, &active_supply);
-
-        let true_market_deviation = divide(&active_cap, &investor_cap);
-
-        let true_market_net_unrealized_profit_and_loss =
-            divide(&subtract(&active_cap, &investor_cap), &active_cap);
-
-        let investorness = divide(&investor_cap, realized_cap);
-
-        let producerness = divide(&thermo_cap, realized_cap);
-
-        let cointime_value_created = multiply(price, &coinblocks_created);
-
-        let cointime_value_destroyed = multiply(price, &coinblocks_destroyed);
-
-        let cointime_value_stored = multiply(price, &coinblocks_stored);
-
-        let total_cointime_value_created = cumulate(&cointime_value_created);
-
-        let total_cointime_value_destroyed = cumulate(&cointime_value_destroyed);
-
-        let total_cointime_value_stored = cumulate(&cointime_value_stored);
-
-        let cointime_price = divide(
-            &total_cointime_value_destroyed,
-            &cumulative_coinblocks_stored,
-        );
-
-        let cointime_cap = multiply(&cointime_price, circulating_supply);
-
-        // ---
-        // Set
-        // ---
-
-        self.cumulative_coinblocks_destroyed
-            .set(cumulative_coinblocks_destroyed);
-
-        self.coinblocks_created.set(coinblocks_created);
-
-        self.cumulative_coinblocks_created
-            .set(cumulative_coinblocks_created);
-
-        self.coinblocks_stored.set(coinblocks_stored);
-
-        self.cumulative_coinblocks_stored
-            .set(cumulative_coinblocks_stored);
-
-        self.liveliness.set(liveliness);
-
-        self.vaultedness.set(vaultedness);
-
-        self.activity_to_vaultedness_ratio
-            .set(activity_to_vaultedness_ratio);
-
-        self.concurrent_liveliness.set(concurrent_liveliness);
-
-        self.concurrent_liveliness_2w_median
-            .set(concurrent_liveliness_2w_median);
-
-        self.liveliness_net_change.set(liveliness_net_change);
-
-        self.liveliness_net_change_2w_median
-            .set(liveliness_net_change_2w_median);
-
-        self.vaulted_supply.set(vaulted_supply);
-
-        self.vaulting_rate.set(vaulting_rate);
-
-        self.active_supply.set(active_supply);
-
-        self.active_supply_net_change.set(active_supply_net_change);
-
-        self.active_supply_3m_net_change
-            .set(active_supply_3m_net_change);
-
-        self.cointime_adjusted_yearly_inflation_rate
-            .set(cointime_adjusted_yearly_inflation_rate);
-
-        self.cointime_adjusted_velocity
-            .set(cointime_adjusted_velocity);
-
-        self.thermo_cap.set(thermo_cap);
-
-        self.investor_cap.set(investor_cap);
-
-        self.thermo_cap_to_investor_cap_ratio
-            .set(thermo_cap_to_investor_cap_ratio);
-
-        self.active_price.set(active_price);
-
-        self.active_cap.set(active_cap);
-
-        self.vaulted_price.set(vaulted_price);
-
-        self.true_market_mean.set(true_market_mean);
-
-        self.true_market_deviation.set(true_market_deviation);
-
-        self.true_market_net_unrealized_profit_and_loss
-            .set(true_market_net_unrealized_profit_and_loss);
-
-        self.investorness.set(investorness);
-
-        self.producerness.set(producerness);
-
-        self.cointime_value_created.set(cointime_value_created);
-
-        self.cointime_value_destroyed.set(cointime_value_destroyed);
-
-        self.cointime_value_stored.set(cointime_value_stored);
-
-        self.total_cointime_value_created
-            .set(total_cointime_value_created);
-
-        self.total_cointime_value_destroyed
-            .set(total_cointime_value_destroyed);
-
-        self.total_cointime_value_stored
-            .set(total_cointime_value_stored);
-
-        self.cointime_price.set(cointime_price);
-
-        self.cointime_cap.set(cointime_cap);
-    }
 }
 
-fn transform<T, F>(arr: &[T], transform: F) -> Vec<T>
-where
-    T: Copy + Default,
-    F: Fn((usize, &T)) -> T,
-{
-    arr.iter().enumerate().map(transform).collect_vec()
-}
-
-fn add<T>(arr1: &[T], arr2: &[T]) -> Vec<T>
-where
-    T: Add<Output = T> + Copy + Default,
-{
-    if arr1.len() != arr2.len() {
-        panic!("Can't add two arrays with a different length");
-    }
-
-    transform(arr1, |(index, value)| *value + *arr2.get(index).unwrap())
-}
-
-fn subtract<T>(arr1: &[T], arr2: &[T]) -> Vec<T>
-where
-    T: Sub<Output = T> + Copy + Default,
-{
-    if arr1.len() != arr2.len() {
-        panic!("Can't subtract two arrays with a different length");
-    }
-
-    transform(arr1, |(index, value)| *value - *arr2.get(index).unwrap())
-}
-
-fn multiply<T>(arr1: &[T], arr2: &[T]) -> Vec<T>
-where
-    T: Mul<Output = T> + Copy + Default,
-{
-    if arr1.len() != arr2.len() {
-        panic!("Can't multiply two arrays with a different length");
-    }
-
-    transform(arr1, |(index, value)| *value * *arr2.get(index).unwrap())
-}
-
-fn divide<T>(arr1: &[T], arr2: &[T]) -> Vec<T>
-where
-    T: Div<Output = T> + Copy + Default,
-{
-    if arr1.len() != arr2.len() {
-        panic!("Can't divide two arrays with a different length");
-    }
-
-    transform(arr1, |(index, value)| *value / *arr2.get(index).unwrap())
-}
-
-fn cumulate<T>(arr: &[T]) -> Vec<T>
-where
-    T: Sum + Copy + Default + AddAssign,
-{
-    let mut sum = T::default();
-
-    arr.iter()
-        .map(|value| {
-            sum += *value;
-            sum
-        })
-        .collect_vec()
-}
-
-fn net_change<T>(arr: &[T], offset: usize) -> Vec<T>
-where
-    T: Copy + Default + Sub<Output = T>,
-{
-    transform(arr, |(index, value)| {
-        let previous = {
-            if let Some(previous_index) = index.checked_sub(offset) {
-                *arr.get(previous_index).unwrap()
-            } else {
-                T::default()
-            }
-        };
-
-        *value - previous
-    })
-}
-
-fn median(arr: &[f32], size: usize) -> Vec<Option<f32>>
-// where
-//     T: Copy + Default + Add<Output = T> + Ord,
-{
-    let even = size % 2 == 0;
-    let median_index = size / 2;
-
-    if size < 3 {
-        panic!("Computing a median for a size lower than 3 is useless");
-    }
-
-    arr.par_iter()
-        .enumerate()
-        .map(|(index, _)| {
-            if index >= size - 1 {
-                let mut arr = arr[index - (size - 1)..index + 1]
-                    .iter()
-                    .map(|value| OrderedFloat(*value))
-                    .collect_vec();
-
-                arr.sort_unstable();
-
-                if even {
-                    Some(
-                        **arr.get(median_index).unwrap()
-                            + **arr.get(median_index - 1).unwrap() / 2.0,
-                    )
-                } else {
-                    Some(**arr.get(median_index).unwrap())
-                }
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>()
-}
-
-impl AnyDataset2 for CointimeDataset {
+impl GenericDataset for CointimeDataset {
     fn insert_block_data(
         &self,
         &ProcessedBlockData {
@@ -508,27 +143,337 @@ impl AnyDataset2 for CointimeDataset {
         self.coinblocks_destroyed
             .height
             .insert(height, sats_to_btc(satblocks_destroyed));
-
-        // if is_date_last_block {
-        //     self.coinblocks_destroyed
-        //         .date
-        //         .insert(date, coinblocks_destroyed_vec.iter().sum())
-        // }
     }
+}
 
-    fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
+impl AnyDataset for CointimeDataset {
+    fn to_any_inserted_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
         vec![&self.coinblocks_destroyed.height]
     }
 
-    fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
-        vec![&self.coinblocks_destroyed.date]
+    fn compute(
+        &mut self,
+        &ExportData {
+            // height,
+            annualized_transaction_volume,
+            circulating_supply,
+            inflation_rate,
+            price,
+            realized_cap,
+            realized_price,
+            subsidy_in_dollars,
+            sum_heights_to_date,
+            last_height_to_date,
+            ..
+        }: &ExportData,
+    ) {
+        self.coinblocks_destroyed.compute_date(sum_heights_to_date);
+
+        self.cumulative_coinblocks_destroyed
+            .set_height_then_compute_date(
+                self.coinblocks_destroyed.height.cumulate(),
+                last_height_to_date,
+            );
+
+        self.coinblocks_created.set_height_then_compute_date(
+            circulating_supply
+                .height
+                .inner
+                .lock()
+                .as_ref()
+                .unwrap()
+                .clone(),
+            sum_heights_to_date,
+        );
+
+        self.cumulative_coinblocks_created
+            .set_height_then_compute_date(
+                self.coinblocks_created.height.cumulate(),
+                last_height_to_date,
+            );
+
+        self.coinblocks_stored.set_height_then_compute_date(
+            self.coinblocks_created
+                .height
+                .subtract(&self.coinblocks_destroyed.height),
+            sum_heights_to_date,
+        );
+
+        self.cumulative_coinblocks_stored
+            .set_height_then_compute_date(
+                self.coinblocks_created.height.cumulate(),
+                last_height_to_date,
+            );
+
+        self.liveliness.set_height_then_compute_date(
+            self.cumulative_coinblocks_destroyed
+                .height
+                .divide(&self.cumulative_coinblocks_created.height),
+            last_height_to_date,
+        );
+
+        self.vaultedness.set_height_then_compute_date(
+            self.liveliness.height.transform(|(_, v, ..)| 1.0 - *v),
+            last_height_to_date,
+        );
+
+        self.activity_to_vaultedness_ratio
+            .set_height_then_compute_date(
+                self.liveliness.height.divide(&self.vaultedness.height),
+                last_height_to_date,
+            );
+
+        self.concurrent_liveliness.set_height_then_compute_date(
+            self.coinblocks_destroyed
+                .height
+                .divide(&self.coinblocks_created.height),
+            last_height_to_date,
+        );
+
+        self.concurrent_liveliness_2w_median.set_height(
+            self.concurrent_liveliness
+                .height
+                .median(TWO_WEEKS_IN_BLOCK_TIME),
+        );
+        self.concurrent_liveliness_2w_median
+            .set_date(self.concurrent_liveliness.date.median(TWO_WEEK_IN_DAYS));
+
+        self.liveliness_net_change
+            .set_height(self.liveliness.height.net_change(ONE_DAY_IN_BLOCK_TIME));
+        self.liveliness_net_change
+            .set_date(self.liveliness.date.net_change(ONE_DAY_IN_DAYS));
+
+        self.liveliness_net_change_2w_median.set_height(
+            self.liveliness_net_change
+                .height
+                .median(TWO_WEEKS_IN_BLOCK_TIME),
+        );
+        self.liveliness_net_change_2w_median
+            .set_date(self.liveliness_net_change.date.median(TWO_WEEK_IN_DAYS));
+
+        self.vaulted_supply.set_height_then_compute_date(
+            self.vaultedness.height.multiply(&circulating_supply.height),
+            last_height_to_date,
+        );
+
+        self.vaulting_rate.set_height_then_compute_date(
+            self.vaulted_supply
+                .height
+                .transform(|(_, v, ..)| *v * 365.0),
+            last_height_to_date,
+        );
+
+        self.active_supply.set_height_then_compute_date(
+            self.liveliness.height.multiply(&circulating_supply.height),
+            last_height_to_date,
+        );
+
+        self.active_supply_net_change
+            .set_height(self.active_supply.height.net_change(ONE_DAY_IN_BLOCK_TIME));
+        self.active_supply_net_change
+            .set_date(self.active_supply.date.net_change(ONE_DAY_IN_DAYS));
+
+        self.active_supply_3m_net_change.set_height(
+            self.active_supply
+                .height
+                .net_change(THREE_MONTHS_IN_BLOCK_TIME),
+        );
+        self.active_supply_3m_net_change
+            .set_date(self.active_supply.date.net_change(THREE_MONTHS_IN_DAYS));
+
+        // TODO: Do these
+        // let min_vaulted_supply = ;
+        // let max_active_supply = ;
+
+        self.cointime_adjusted_yearly_inflation_rate
+            .set_height_then_compute_date(
+                inflation_rate
+                    .height
+                    .multiply(&self.activity_to_vaultedness_ratio.height),
+                last_height_to_date,
+            );
+
+        self.cointime_adjusted_velocity
+            .set_height_then_compute_date(
+                annualized_transaction_volume
+                    .height
+                    .divide(&self.active_supply.height),
+                last_height_to_date,
+            );
+
+        // TODO:
+        // const activeSupplyChangeFromTransactions90dChange =
+        //     createNetChangeLazyDataset(activeSupplyChangeFromTransactions, 90);
+        //   const activeSupplyChangeFromIssuance = createMultipliedLazyDataset(
+        //     lastSubsidy,
+        //     liveliness,
+        //   );
+
+        self.thermo_cap.set_height_then_compute_date(
+            subsidy_in_dollars.height.cumulate(),
+            last_height_to_date,
+        );
+
+        self.investor_cap.set_height_then_compute_date(
+            realized_cap.height.subtract(&self.thermo_cap.height),
+            last_height_to_date,
+        );
+
+        self.thermo_cap_to_investor_cap_ratio
+            .set_height_then_compute_date(
+                self.thermo_cap.height.divide(&self.investor_cap.height),
+                last_height_to_date,
+            );
+
+        // TODO:
+        // const activeSupplyChangeFromIssuance90dChange = createNetChangeLazyDataset(
+        //   activeSupplyChangeFromIssuance,
+        //   90,
+        // );
+
+        self.active_price.set_height_then_compute_date(
+            realized_price.height.divide(&self.liveliness.height),
+            last_height_to_date,
+        );
+
+        self.active_cap.set_height_then_compute_date(
+            self.active_supply.height.multiply(&price.height),
+            last_height_to_date,
+        );
+
+        self.vaulted_price.set_height_then_compute_date(
+            realized_price.height.divide(&self.vaultedness.height),
+            last_height_to_date,
+        );
+
+        self.vaulted_cap.set_height_then_compute_date(
+            self.vaulted_supply.height.multiply(&price.height),
+            last_height_to_date,
+        );
+
+        self.true_market_mean.set_height_then_compute_date(
+            self.investor_cap.height.divide(&self.active_supply.height),
+            last_height_to_date,
+        );
+
+        self.true_market_deviation.set_height_then_compute_date(
+            self.active_cap.height.divide(&self.investor_cap.height),
+            last_height_to_date,
+        );
+
+        self.true_market_net_unrealized_profit_and_loss
+            .set_height_then_compute_date(
+                HeightMap::_divide(
+                    &self.active_cap.height.subtract(&self.investor_cap.height),
+                    self.active_cap.height.inner.lock().as_ref().unwrap(),
+                ),
+                last_height_to_date,
+            );
+
+        self.investorness.set_height_then_compute_date(
+            self.investor_cap.height.divide(&realized_cap.height),
+            last_height_to_date,
+        );
+
+        self.producerness.set_height_then_compute_date(
+            self.thermo_cap.height.divide(&realized_cap.height),
+            last_height_to_date,
+        );
+
+        self.cointime_value_created.set_height_then_compute_date(
+            price.height.multiply(&self.coinblocks_created.height),
+            last_height_to_date,
+        );
+
+        self.cointime_value_destroyed.set_height_then_compute_date(
+            price.height.multiply(&self.coinblocks_destroyed.height),
+            last_height_to_date,
+        );
+
+        self.cointime_value_stored.set_height_then_compute_date(
+            price.height.multiply(&self.coinblocks_stored.height),
+            last_height_to_date,
+        );
+
+        self.total_cointime_value_created
+            .set_height_then_compute_date(
+                self.cointime_value_created.height.cumulate(),
+                last_height_to_date,
+            );
+
+        self.total_cointime_value_destroyed
+            .set_height_then_compute_date(
+                self.cointime_value_destroyed.height.cumulate(),
+                last_height_to_date,
+            );
+
+        self.total_cointime_value_stored
+            .set_height_then_compute_date(
+                self.cointime_value_stored.height.cumulate(),
+                last_height_to_date,
+            );
+
+        self.cointime_price.set_height_then_compute_date(
+            self.total_cointime_value_destroyed
+                .height
+                .divide(&self.cumulative_coinblocks_stored.height),
+            last_height_to_date,
+        );
+
+        self.cointime_cap.set_height_then_compute_date(
+            self.cointime_price
+                .height
+                .multiply(&circulating_supply.height),
+            last_height_to_date,
+        );
     }
 
-    fn get_min_initial_first_unsafe_date(&self) -> &Option<NaiveDate> {
-        &self.min_initial_first_unsafe_date
+    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
+        vec![
+            &self.coinblocks_destroyed,
+            &self.cumulative_coinblocks_destroyed,
+            &self.coinblocks_created,
+            &self.cumulative_coinblocks_created,
+            &self.coinblocks_stored,
+            &self.cumulative_coinblocks_stored,
+            &self.liveliness,
+            &self.vaultedness,
+            &self.activity_to_vaultedness_ratio,
+            &self.concurrent_liveliness,
+            &self.concurrent_liveliness_2w_median,
+            &self.liveliness_net_change,
+            &self.liveliness_net_change_2w_median,
+            &self.vaulted_supply,
+            &self.vaulting_rate,
+            &self.active_supply,
+            &self.active_supply_net_change,
+            &self.active_supply_3m_net_change,
+            &self.cointime_adjusted_yearly_inflation_rate,
+            &self.cointime_adjusted_velocity,
+            &self.thermo_cap,
+            &self.investor_cap,
+            &self.thermo_cap_to_investor_cap_ratio,
+            &self.active_price,
+            &self.active_cap,
+            &self.vaulted_price,
+            &self.vaulted_cap,
+            &self.true_market_mean,
+            &self.true_market_deviation,
+            &self.true_market_net_unrealized_profit_and_loss,
+            &self.investorness,
+            &self.producerness,
+            &self.cointime_value_created,
+            &self.cointime_value_destroyed,
+            &self.cointime_value_stored,
+            &self.total_cointime_value_created,
+            &self.total_cointime_value_destroyed,
+            &self.total_cointime_value_stored,
+            &self.cointime_price,
+            &self.cointime_cap,
+        ]
     }
 
-    fn get_min_initial_first_unsafe_height(&self) -> &Option<usize> {
-        &self.min_initial_first_unsafe_height
+    fn get_min_initial_state(&self) -> &MinInitialState {
+        &self.min_initial_state
     }
 }

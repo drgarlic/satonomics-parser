@@ -3,24 +3,20 @@ use chrono::NaiveDate;
 use crate::{
     bitcoin::sats_to_btc,
     datasets::{
-        AnyDataset, PricePaidState, PricePaidSubDataset, ProcessedBlockData, RealizedState,
-        RealizedSubDataset, SupplyState, SupplySubDataset, UTXOsMetadataState,
-        UTXOsMetadataSubDataset, UnrealizedState, UnrealizedSubDataset,
+        AnyDataset, GenericDataset, InputState, MinInitialState, OutputState, PricePaidState,
+        ProcessedBlockData, RealizedState, SubDataset, SupplyState, UTXOState, UnrealizedState,
     },
-    parse::{reverse_date_index, AnyDateMap, AnyHeightMap, BlockData},
+    parse::{reverse_date_index, AnyBiMap, AnyDateMap, AnyHeightMap, BlockData},
 };
 
 use super::UTXOFilter;
 
 pub struct UTXODataset {
-    min_initial_first_unsafe_date: Option<NaiveDate>,
-    min_initial_first_unsafe_height: Option<usize>,
+    min_initial_state: MinInitialState,
+
     filter: UTXOFilter,
-    price_paid: PricePaidSubDataset,
-    realized: RealizedSubDataset,
-    supply: SupplySubDataset,
-    unrealized: UnrealizedSubDataset,
-    utxos_metadata: UTXOsMetadataSubDataset,
+
+    subs: SubDataset,
 }
 
 impl UTXODataset {
@@ -37,44 +33,49 @@ impl UTXODataset {
             }
         };
 
-        let mut s = Self {
-            min_initial_first_unsafe_date: None,
-            min_initial_first_unsafe_height: None,
+        let s = Self {
+            min_initial_state: MinInitialState::default(),
+
             filter: range,
-            price_paid: PricePaidSubDataset::import(&folder_path)?,
-            realized: RealizedSubDataset::import(&folder_path)?,
-            supply: SupplySubDataset::import(&folder_path)?,
-            unrealized: UnrealizedSubDataset::import(&folder_path)?,
-            utxos_metadata: UTXOsMetadataSubDataset::import(&folder_path)?,
+
+            subs: SubDataset::import(&folder_path)?,
         };
 
-        s.min_initial_first_unsafe_date = s.compute_min_initial_first_unsafe_date();
-        s.min_initial_first_unsafe_height = s.compute_min_initial_first_unsafe_height();
+        s.min_initial_state.compute_from_dataset(&s);
 
         Ok(s)
     }
 
     pub fn needs_sorted_block_data_vec(&self, date: NaiveDate, height: usize) -> bool {
-        self.needs_price_paid(date, height)
+        self.needs_price_paid_data(date, height)
     }
 
-    fn needs_price_paid(&self, date: NaiveDate, height: usize) -> bool {
-        !self.price_paid.are_date_and_height_safe(date, height)
+    fn needs_price_paid_data(&self, date: NaiveDate, height: usize) -> bool {
+        !self.subs.price_paid.should_insert(height, date)
     }
 
-    fn needs_unrealized(&self, date: NaiveDate, height: usize) -> bool {
-        !self.unrealized.are_date_and_height_safe(date, height)
+    fn needs_unrealized_data(&self, date: NaiveDate, height: usize) -> bool {
+        !self.subs.unrealized.should_insert(height, date)
     }
 
-    fn needs_realized(&self, date: NaiveDate, height: usize) -> bool {
-        !self.realized.are_date_and_height_safe(date, height)
+    fn needs_realized_data(&self, date: NaiveDate, height: usize) -> bool {
+        !self.subs.realized.should_insert(height, date)
+    }
+
+    fn needs_input_data(&self, date: NaiveDate, height: usize) -> bool {
+        !self.subs.input.should_insert(height, date)
+    }
+
+    fn needs_output_data(&self, date: NaiveDate, height: usize) -> bool {
+        !self.subs.output.should_insert(height, date)
     }
 }
 
-impl AnyDataset for UTXODataset {
+impl GenericDataset for UTXODataset {
     fn insert_block_data(&self, processed_block_data: &ProcessedBlockData) {
         let &ProcessedBlockData {
-            block_path_to_spent_value,
+            block_path_to_received_data,
+            block_path_to_spent_data,
             block_price,
             is_date_last_block,
             date,
@@ -87,18 +88,22 @@ impl AnyDataset for UTXODataset {
         let date_data_vec = &states.date_data_vec;
 
         let mut supply_state = SupplyState::default();
-        let mut utxos_metadata_state = UTXOsMetadataState::default();
-
+        let mut utxo_state = UTXOState::default();
+        let mut input_state = InputState::default();
+        let mut output_state = OutputState::default();
         let mut pp_state = PricePaidState::default();
+        let mut realized_state = RealizedState::default();
 
         let mut unrealized_height_state = UnrealizedState::default();
         let mut unrealized_date_state = UnrealizedState::default();
 
         let date_data_vec_len = states.date_data_vec.len() as u16;
 
-        let needs_price_paid = self.needs_price_paid(date, height);
-        let needs_unrealized = self.needs_unrealized(date, height);
-        let needs_realized = self.needs_realized(date, height);
+        let needs_price_paid_data = self.needs_price_paid_data(date, height);
+        let needs_unrealized_data = self.needs_unrealized_data(date, height);
+        let needs_realized_data = self.needs_realized_data(date, height);
+        let needs_input_data = self.needs_input_data(date, height);
+        let needs_output_data = self.needs_output_data(date, height);
 
         date_data_vec
             .iter()
@@ -113,9 +118,9 @@ impl AnyDataset for UTXODataset {
                 let btc_amount = sats_to_btc(sat_amount);
 
                 supply_state.total_supply += sat_amount;
-                utxos_metadata_state.count += block_data.spendable_outputs as usize;
+                utxo_state.count += block_data.spendable_outputs as usize;
 
-                if needs_unrealized {
+                if needs_unrealized_data {
                     unrealized_height_state.iterate(price, block_price, sat_amount, btc_amount);
 
                     if is_date_last_block {
@@ -126,20 +131,19 @@ impl AnyDataset for UTXODataset {
 
         let total_supply = supply_state.total_supply;
 
-        self.supply.insert(processed_block_data, &supply_state);
+        self.subs.supply.insert(processed_block_data, &supply_state);
 
-        self.utxos_metadata
-            .insert(processed_block_data, &utxos_metadata_state);
+        self.subs.utxo.insert(processed_block_data, &utxo_state);
 
-        if needs_unrealized {
-            self.unrealized.insert(
+        if needs_unrealized_data {
+            self.subs.unrealized.insert(
                 processed_block_data,
                 &unrealized_height_state,
                 &unrealized_date_state,
             );
         }
 
-        if needs_price_paid {
+        if needs_price_paid_data {
             processed_block_data
                 .sorted_block_data_vec
                 .as_ref()
@@ -161,17 +165,15 @@ impl AnyDataset for UTXODataset {
                     pp_state.iterate(price, btc_amount, sat_amount, total_supply);
                 });
 
-            self.price_paid.insert(processed_block_data, &pp_state);
+            self.subs.price_paid.insert(processed_block_data, &pp_state);
         }
 
-        if needs_realized {
-            let mut realized_state = RealizedState::default();
-
-            block_path_to_spent_value
+        if needs_output_data {
+            block_path_to_received_data
                 .iter()
-                .map(|(block_path, value)| {
+                .map(|(block_path, data)| {
                     let date_data = date_data_vec.get(block_path.date_index as usize).unwrap();
-                    (block_path, date_data, value)
+                    (block_path, date_data, data)
                 })
                 .filter(|(block_path, date_data, _)| {
                     self.filter.check(
@@ -179,64 +181,90 @@ impl AnyDataset for UTXODataset {
                         &date_data.year,
                     )
                 })
-                .for_each(|(block_path, date_data, value)| {
-                    let BlockData {
-                        price: previous_price,
-                        ..
-                    } = date_data
-                        .blocks
-                        .get(block_path.block_index as usize)
-                        .unwrap();
+                .for_each(|(_, _, data)| {
+                    output_state.iterate(data.count as f32, sats_to_btc(data.volume));
+                });
 
-                    let previous_dollar_amount = *previous_price * sats_to_btc(*value);
-                    let current_dollar_amount = block_price * sats_to_btc(*value);
+            self.subs.output.insert(processed_block_data, &output_state);
+        }
 
-                    if previous_dollar_amount < current_dollar_amount {
-                        realized_state.realized_profit +=
-                            current_dollar_amount - previous_dollar_amount
-                    } else if current_dollar_amount < previous_dollar_amount {
-                        realized_state.realized_loss +=
-                            previous_dollar_amount - current_dollar_amount
+        if needs_realized_data || needs_input_data {
+            block_path_to_spent_data
+                .iter()
+                .map(|(block_path, data)| {
+                    let date_data = date_data_vec.get(block_path.date_index as usize).unwrap();
+                    (block_path, date_data, data)
+                })
+                .filter(|(block_path, date_data, _)| {
+                    self.filter.check(
+                        &reverse_date_index(block_path.date_index, date_data_vec_len),
+                        &date_data.year,
+                    )
+                })
+                .for_each(|(block_path, date_data, spent_value)| {
+                    let btc_spent = sats_to_btc(spent_value.volume);
+
+                    if needs_input_data {
+                        input_state.iterate(spent_value.count as f32, btc_spent);
+                    }
+
+                    if needs_realized_data {
+                        let BlockData {
+                            price: previous_price,
+                            ..
+                        } = date_data
+                            .blocks
+                            .get(block_path.block_index as usize)
+                            .unwrap();
+
+                        let previous_dollar_amount = *previous_price * btc_spent;
+                        let current_dollar_amount = block_price * btc_spent;
+
+                        if previous_dollar_amount < current_dollar_amount {
+                            realized_state.realized_profit +=
+                                current_dollar_amount - previous_dollar_amount
+                        } else if current_dollar_amount < previous_dollar_amount {
+                            realized_state.realized_loss +=
+                                previous_dollar_amount - current_dollar_amount
+                        }
                     }
                 });
 
-            self.realized.insert(processed_block_data, &realized_state);
+            if needs_realized_data {
+                self.subs
+                    .realized
+                    .insert(processed_block_data, &realized_state);
+            }
+
+            if needs_input_data {
+                self.subs.input.insert(processed_block_data, &input_state);
+            }
         }
     }
+}
 
-    fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
-        [
-            self.price_paid.to_any_height_map_vec(),
-            self.realized.to_any_height_map_vec(),
-            self.supply.to_any_height_map_vec(),
-            self.unrealized.to_any_height_map_vec(),
-            self.utxos_metadata.to_any_height_map_vec(),
-        ]
-        .iter()
-        .flatten()
-        .copied()
-        .collect()
+impl AnyDataset for UTXODataset {
+    fn get_min_initial_state(&self) -> &MinInitialState {
+        &self.min_initial_state
     }
 
-    fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
-        [
-            self.price_paid.to_any_date_map_vec(),
-            self.realized.to_any_date_map_vec(),
-            self.supply.to_any_date_map_vec(),
-            self.unrealized.to_any_date_map_vec(),
-            self.utxos_metadata.to_any_date_map_vec(),
-        ]
-        .iter()
-        .flatten()
-        .copied()
-        .collect()
+    fn to_any_inserted_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
+        self.subs.to_any_exported_height_map_vec()
     }
 
-    fn get_min_initial_first_unsafe_date(&self) -> &Option<NaiveDate> {
-        &self.min_initial_first_unsafe_date
+    fn to_any_inserted_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
+        self.subs.to_any_exported_date_map_vec()
     }
 
-    fn get_min_initial_first_unsafe_height(&self) -> &Option<usize> {
-        &self.min_initial_first_unsafe_height
+    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
+        self.subs.to_any_exported_bi_map_vec()
+    }
+
+    fn to_any_exported_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
+        self.subs.to_any_exported_date_map_vec()
+    }
+
+    fn to_any_exported_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
+        self.subs.to_any_exported_height_map_vec()
     }
 }

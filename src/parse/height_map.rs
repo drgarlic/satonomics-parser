@@ -1,27 +1,37 @@
-use std::{cmp::Ordering, fmt::Debug, fs, iter::Sum, ops::Add};
+use std::{
+    cmp::Ordering,
+    fmt::Debug,
+    fs,
+    iter::Sum,
+    ops::{Add, AddAssign, Div, Mul, Sub, SubAssign},
+};
 
 use bincode::{Decode, Encode};
-use parking_lot::{lock_api::MutexGuard, RawMutex};
+use itertools::Itertools;
+use ordered_float::{FloatCore, OrderedFloat};
+use parking_lot::Mutex;
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::{bitcoin::NUMBER_OF_UNSAFE_BLOCKS, io::Serialization};
+use crate::{bitcoin::NUMBER_OF_UNSAFE_BLOCKS, io::Serialization, utils::ToF32};
 
-use super::WMutex;
+use super::Storage;
 
 pub struct HeightMap<T>
 where
     T: Clone + Default + Debug + Decode + Encode,
 {
+    storage: Storage,
+
     path: String,
 
-    batch: WMutex<Vec<(usize, T)>>,
+    batch: Mutex<Vec<(usize, T)>>,
 
     initial_last_height: Option<usize>,
     initial_first_unsafe_height: Option<usize>,
 
-    inner: Option<WMutex<Vec<T>>>,
+    pub inner: Mutex<Option<Vec<T>>>,
 
-    called_insert: WMutex<bool>,
+    modified: Mutex<bool>,
 
     serialization: Serialization,
 }
@@ -32,66 +42,66 @@ where
 {
     #[allow(unused)]
     pub fn new_on_disk_bin(path: &str) -> Self {
-        Self::new(path, false, Serialization::Binary)
+        Self::new(path, Storage::Disk, Serialization::Binary)
     }
 
     #[allow(unused)]
     pub fn new_in_memory_bin(path: &str) -> Self {
-        Self::new(path, true, Serialization::Binary)
+        Self::new(path, Storage::Memory, Serialization::Binary)
     }
 
     #[allow(unused)]
     pub fn new_on_disk_json(path: &str) -> Self {
-        Self::new(path, false, Serialization::Json)
+        Self::new(path, Storage::Disk, Serialization::Json)
     }
 
     #[allow(unused)]
     pub fn new_in_memory_json(path: &str) -> Self {
-        Self::new(path, true, Serialization::Json)
+        Self::new(path, Storage::Memory, Serialization::Json)
     }
 
-    fn new(path: &str, in_memory: bool, serialization: Serialization) -> Self {
+    fn new(path: &str, storage: Storage, serialization: Serialization) -> Self {
         fs::create_dir_all(path).unwrap();
 
         let mut s = Self {
-            batch: WMutex::new(vec![]),
+            storage: storage.to_owned(),
+            batch: Mutex::new(vec![]),
             initial_first_unsafe_height: None,
             initial_last_height: None,
             path: serialization.append_extension(&format!("{path}/height")),
-            inner: None,
-            called_insert: WMutex::new(false),
+            inner: Mutex::new(None),
+            modified: Mutex::new(false),
             serialization,
         };
 
-        if in_memory {
-            s.inner.replace(WMutex::new(s.import()));
+        if Storage::Memory == storage {
+            s.import_to_inner();
         }
 
         s.initial_last_height = s.get_last_height();
         s.initial_first_unsafe_height = last_height_to_first_unsafe_height(s.initial_last_height);
 
-        // dbg!(&s.path, &s.initial_first_unsafe_height);
-
         s
     }
 
+    pub fn set_inner(&self, vec: Vec<T>) {
+        *self.modified.lock() = true;
+
+        self.inner.lock().replace(vec);
+    }
+
+    fn import_to_inner(&self) {
+        self.set_inner(self.import());
+    }
+
     pub fn insert(&self, height: usize, value: T) {
-        // dbg!(&self.path);
+        *self.modified.lock() = true;
 
-        // We need data to compute datemaps, TODO: change the way date value is computed to avoid recomputing safe height values
-        // if !self.is_height_safe(height) {
-        *self.called_insert.lock() = true;
-
-        if let Some(list) = self.inner.as_ref() {
-            insert_vec(&mut list.lock(), height, value, &self.path);
+        if self.inner.lock().is_some() {
+            self.insert_to_inner(height, value);
         } else {
             self.batch.lock().push((height, value));
         }
-        // }
-    }
-
-    pub fn get_batch(&self) -> MutexGuard<'_, RawMutex, Vec<(usize, T)>> {
-        self.batch.lock()
     }
 
     pub fn insert_default(&self, height: usize) {
@@ -103,23 +113,8 @@ where
         self.initial_first_unsafe_height.unwrap_or(0) > height
     }
 
-    #[inline(always)]
-    pub fn unsafe_inner(&self) -> MutexGuard<'_, RawMutex, Vec<T>> {
-        self.inner.as_ref().unwrap().lock()
-    }
-
-    #[inline(always)]
-    #[allow(dead_code)]
-    pub fn unsafe_len(&self) -> usize {
-        self.unsafe_inner().len()
-    }
-
-    pub fn import(&self) -> Vec<T> {
+    fn import(&self) -> Vec<T> {
         self.serialization.import(&self.path).unwrap_or_default()
-    }
-
-    pub fn set_inner(&mut self, map: Vec<T>) {
-        let _ = self.inner.insert(WMutex::new(map));
     }
 
     fn get_last_height(&self) -> Option<usize>
@@ -128,8 +123,9 @@ where
     {
         let len = self
             .inner
+            .lock()
             .as_ref()
-            .map(|inner| inner.lock().len())
+            .map(|inner| inner.len())
             .unwrap_or_else(|| self.import().len());
 
         if len == 0 {
@@ -138,33 +134,49 @@ where
             Some(len - 1)
         }
     }
-}
 
-impl<T> HeightMap<T>
-where
-    T: Clone + Default + Debug + Decode + Encode + Serialize + DeserializeOwned + Add + Sum + Copy,
-{
-    pub fn sum_last_day_values(&self, from_height: usize) -> T {
-        let mut found = false;
+    fn export(&self) -> color_eyre::Result<()> {
+        let mut modified = self.modified.lock();
 
-        let sum = self
-            .get_batch()
-            .iter()
-            .filter(|(height, _)| {
-                if height == &from_height {
-                    found = true;
-                }
-
-                height >= &from_height
-            })
-            .map(|(_, value)| *value)
-            .sum();
-
-        if !found {
-            panic!("Didn't found starting height ({from_height})");
+        if !*modified {
+            return Ok(());
         }
 
-        sum
+        *modified = false;
+
+        self.serialization
+            .export(&self.path, self.inner.lock().as_ref().unwrap())
+    }
+
+    fn clean_tmp_data(&self) {
+        if self.storage == Storage::Disk {
+            self.inner.lock().take();
+        }
+    }
+
+    fn insert_to_inner(&self, height: usize, value: T) {
+        let mut inner = self.inner.lock();
+
+        let list = inner.as_mut().unwrap();
+
+        let len = list.len();
+
+        match height.cmp(&len) {
+            Ordering::Equal => {
+                list.push(value);
+            }
+            Ordering::Less => {
+                list[height] = value;
+            }
+            Ordering::Greater => {
+                panic!(
+                    "Out of bound push (current len = {}, pushing to = {}, path = {})",
+                    list.len(),
+                    height,
+                    self.path
+                );
+            }
+        }
     }
 }
 
@@ -173,11 +185,11 @@ pub trait AnyHeightMap {
 
     fn get_initial_last_height(&self) -> Option<usize>;
 
-    fn get_last_height(&self) -> Option<usize>;
-
     fn get_first_unsafe_height(&self) -> Option<usize>;
 
-    fn export(&self) -> color_eyre::Result<()>;
+    fn prepare_tmp_data(&self);
+
+    fn export_then_clean(&self) -> color_eyre::Result<()>;
 
     fn path(&self) -> &str;
 
@@ -200,37 +212,35 @@ where
         self.initial_last_height
     }
 
-    #[inline(always)]
-    fn get_last_height(&self) -> Option<usize> {
-        self.get_last_height()
-    }
-
     fn get_first_unsafe_height(&self) -> Option<usize> {
         last_height_to_first_unsafe_height(self.get_last_height())
     }
 
-    fn export(&self) -> color_eyre::Result<()> {
-        if !self.called_insert.lock().to_owned() {
-            return Ok(());
+    fn prepare_tmp_data(&self) {
+        if !self.modified.lock().to_owned() {
+            return;
         }
 
-        *self.called_insert.lock() = false;
-
-        if let Some(inner) = self.inner.as_ref() {
-            self.serialization.export(&self.path, inner)
-        } else {
-            if self.batch.lock().is_empty() {
-                return Ok(());
+        if self.storage == Storage::Disk {
+            if self.inner.lock().is_some() {
+                dbg!(&self.path);
+                panic!("Probably forgot to drop inner after an export");
             }
 
-            let mut list = self.import();
+            self.import_to_inner();
 
             self.batch.lock().drain(..).for_each(|(height, value)| {
-                insert_vec(&mut list, height, value, &self.path);
+                self.insert_to_inner(height, value);
             });
-
-            self.serialization.export(&self.path, &list)
         }
+    }
+
+    fn export_then_clean(&self) -> color_eyre::Result<()> {
+        self.export()?;
+
+        self.clean_tmp_data();
+
+        Ok(())
     }
 
     fn path(&self) -> &str {
@@ -248,39 +258,13 @@ where
         self.initial_last_height = None;
         self.initial_first_unsafe_height = None;
 
-        if let Some(vec) = self.inner.as_ref() {
-            vec.lock().clear()
+        if let Some(vec) = self.inner.lock().as_mut() {
+            vec.clear()
         }
 
-        *self.called_insert.lock() = false;
+        *self.modified.lock() = false;
 
         Ok(())
-    }
-}
-
-fn insert_vec<T>(list: &mut Vec<T>, height: usize, value: T, path: &str)
-where
-    T: Clone + Default + Debug + Decode + Encode + Serialize + DeserializeOwned,
-{
-    let height = height.to_owned();
-    let value = value.to_owned();
-    let len = list.len();
-
-    match height.cmp(&len) {
-        Ordering::Greater => {
-            panic!(
-                "Out of bound push (current len = {}, pushing to = {}, path = {})",
-                list.len(),
-                height,
-                path
-            );
-        }
-        Ordering::Equal => {
-            list.push(value);
-        }
-        Ordering::Less => {
-            list[height] = value;
-        }
     }
 }
 
@@ -294,4 +278,260 @@ fn last_height_to_first_unsafe_height(last_height: Option<usize>) -> Option<usiz
             None
         }
     })
+}
+
+impl<T> HeightMap<T>
+where
+    T: Clone + Default + Debug + Decode + Encode + Serialize + DeserializeOwned,
+{
+    pub fn transform<F>(&self, transform: F) -> Vec<T>
+    where
+        T: Copy + Default,
+        F: Fn((usize, &T, &[T])) -> T,
+    {
+        Self::_transform(self.inner.lock().as_ref().unwrap(), transform)
+    }
+
+    pub fn _transform<F>(vec: &[T], transform: F) -> Vec<T>
+    where
+        T: Copy + Default,
+        F: Fn((usize, &T, &[T])) -> T,
+    {
+        vec.iter()
+            .enumerate()
+            .map(|(index, value)| transform((index, value, &vec)))
+            .collect_vec()
+    }
+
+    #[allow(unused)]
+    pub fn add(&self, other: &Self) -> Vec<T>
+    where
+        T: Add<Output = T> + Copy + Default,
+    {
+        Self::_add(
+            self.inner.lock().as_ref().unwrap(),
+            other.inner.lock().as_ref().unwrap(),
+        )
+    }
+
+    pub fn _add(arr1: &[T], arr2: &[T]) -> Vec<T>
+    where
+        T: Add<Output = T> + Copy + Default,
+    {
+        if arr1.len() != arr2.len() {
+            panic!("Can't add two arrays with a different length");
+        }
+
+        Self::_transform(arr1, |(index, value, _)| *value + *arr2.get(index).unwrap())
+    }
+
+    pub fn subtract(&self, other: &Self) -> Vec<T>
+    where
+        T: Sub<Output = T> + Copy + Default,
+    {
+        Self::_subtract(
+            self.inner.lock().as_ref().unwrap(),
+            other.inner.lock().as_ref().unwrap(),
+        )
+    }
+
+    pub fn _subtract(arr1: &[T], arr2: &[T]) -> Vec<T>
+    where
+        T: Sub<Output = T> + Copy + Default,
+    {
+        if arr1.len() != arr2.len() {
+            panic!("Can't subtract two arrays with a different length");
+        }
+
+        Self::_transform(arr1, |(index, value, _)| *value - *arr2.get(index).unwrap())
+    }
+
+    pub fn multiply(&self, other: &Self) -> Vec<T>
+    where
+        T: Mul<Output = T> + Copy + Default,
+    {
+        Self::_multiply(
+            self.inner.lock().as_ref().unwrap(),
+            other.inner.lock().as_ref().unwrap(),
+        )
+    }
+
+    pub fn _multiply(arr1: &[T], arr2: &[T]) -> Vec<T>
+    where
+        T: Mul<Output = T> + Copy + Default,
+    {
+        if arr1.len() != arr2.len() {
+            panic!("Can't multiply two arrays with a different length");
+        }
+
+        Self::_transform(arr1, |(index, value, _)| *value * *arr2.get(index).unwrap())
+    }
+
+    pub fn divide(&self, other: &Self) -> Vec<T>
+    where
+        T: Div<Output = T> + Copy + Default,
+    {
+        Self::_divide(
+            self.inner.lock().as_ref().unwrap(),
+            other.inner.lock().as_ref().unwrap(),
+        )
+    }
+
+    pub fn _divide(arr1: &[T], arr2: &[T]) -> Vec<T>
+    where
+        T: Div<Output = T> + Copy + Default,
+    {
+        if arr1.len() != arr2.len() {
+            panic!("Can't divide two arrays with a different length");
+        }
+
+        Self::_transform(arr1, |(index, value, _)| *value / *arr2.get(index).unwrap())
+    }
+
+    pub fn cumulate(&self) -> Vec<T>
+    where
+        T: Sum + Copy + Default + AddAssign,
+    {
+        Self::_cumulate(self.inner.lock().as_ref().unwrap())
+    }
+
+    pub fn _cumulate(arr: &[T]) -> Vec<T>
+    where
+        T: Sum + Copy + Default + AddAssign,
+    {
+        let mut sum = T::default();
+
+        arr.iter()
+            .map(|value| {
+                sum += *value;
+                sum
+            })
+            .collect_vec()
+    }
+
+    pub fn last_x_sum(&self, x: usize) -> Vec<T>
+    where
+        T: Sum + Copy + Default + AddAssign + SubAssign,
+    {
+        Self::_last_x_sum(self.inner.lock().as_ref().unwrap(), x)
+    }
+
+    pub fn _last_x_sum(arr: &[T], x: usize) -> Vec<T>
+    where
+        T: Sum + Copy + Default + AddAssign + SubAssign,
+    {
+        let mut sum = T::default();
+
+        arr.iter()
+            .enumerate()
+            .map(|(index, value)| {
+                sum += *value;
+
+                if index >= x - 1 {
+                    let previous_index = index + 1 - x;
+
+                    sum -= *arr.get(previous_index).unwrap()
+                }
+
+                sum
+            })
+            .collect_vec()
+    }
+
+    #[allow(unused)]
+    pub fn moving_average(&self, x: usize) -> Vec<f32>
+    where
+        T: Sum + Copy + Default + AddAssign + SubAssign + ToF32,
+    {
+        Self::_moving_average(self.inner.lock().as_ref().unwrap(), x)
+    }
+
+    pub fn _moving_average(arr: &[T], x: usize) -> Vec<f32>
+    where
+        T: Sum + Copy + Default + AddAssign + SubAssign + ToF32,
+    {
+        let mut sum = T::default();
+
+        arr.iter()
+            .enumerate()
+            .map(|(index, value)| {
+                sum += *value;
+
+                if index >= x - 1 {
+                    sum -= *arr.get(index + 1 - x).unwrap()
+                }
+
+                sum.to_f32() / x as f32
+            })
+            .collect_vec()
+    }
+
+    pub fn net_change(&self, offset: usize) -> Vec<T>
+    where
+        T: Copy + Default + Sub<Output = T>,
+    {
+        Self::_net_change(self.inner.lock().as_ref().unwrap(), offset)
+    }
+
+    pub fn _net_change(arr: &[T], offset: usize) -> Vec<T>
+    where
+        T: Copy + Default + Sub<Output = T>,
+    {
+        Self::_transform(arr, |(index, value, arr)| {
+            let previous = {
+                if let Some(previous_index) = index.checked_sub(offset) {
+                    *arr.get(previous_index).unwrap()
+                } else {
+                    T::default()
+                }
+            };
+
+            *value - previous
+        })
+    }
+
+    pub fn median(&self, size: usize) -> Vec<Option<T>>
+    where
+        T: FloatCore,
+    {
+        Self::_median(self.inner.lock().as_ref().unwrap(), size)
+    }
+
+    pub fn _median(arr: &[T], size: usize) -> Vec<Option<T>>
+    where
+        T: FloatCore,
+    {
+        let even = size % 2 == 0;
+        let median_index = size / 2;
+
+        if size < 3 {
+            panic!("Computing a median for a size lower than 3 is useless");
+        }
+
+        arr.iter()
+            .enumerate()
+            .map(|(index, _)| {
+                if index >= size - 1 {
+                    let mut arr = arr[index - (size - 1)..index + 1]
+                        .iter()
+                        .map(|value| OrderedFloat(*value))
+                        .collect_vec();
+
+                    arr.sort_unstable();
+
+                    if even {
+                        Some(
+                            (**arr.get(median_index).unwrap()
+                                + **arr.get(median_index - 1).unwrap())
+                                / T::from(2.0).unwrap(),
+                        )
+                    } else {
+                        Some(**arr.get(median_index).unwrap())
+                    }
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
 }

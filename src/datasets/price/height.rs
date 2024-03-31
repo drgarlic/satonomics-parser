@@ -1,21 +1,22 @@
 use std::collections::BTreeMap;
 
-use chrono::{NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Timelike, Utc};
+use chrono::{NaiveDateTime, NaiveTime, TimeZone, Timelike, Utc};
 use color_eyre::eyre::Error;
 
 use crate::{
-    datasets::AnyDataset,
+    datasets::{AnyDataset, GenericDataset, MinInitialState},
     parse::{AnyHeightMap, HeightMap},
     price::{Binance, Kraken},
 };
 
 pub struct HeightDataset {
-    min_initial_first_unsafe_date: Option<NaiveDate>,
-    min_initial_first_unsafe_height: Option<usize>,
-    closes: HeightMap<f32>,
+    min_initial_state: MinInitialState,
+
     kraken_1mn: Option<BTreeMap<u32, f32>>,
     binance_1mn: Option<BTreeMap<u32, f32>>,
     binance_har: Option<BTreeMap<u32, f32>>,
+
+    closes: HeightMap<f32>,
 }
 
 impl HeightDataset {
@@ -24,24 +25,26 @@ impl HeightDataset {
 
         let closes = HeightMap::new_in_memory_json(&format!("{parent_path}/{name}"));
 
-        let mut s = Self {
-            min_initial_first_unsafe_date: None,
-            min_initial_first_unsafe_height: None,
-            closes,
+        let s = Self {
+            min_initial_state: MinInitialState::default(),
+
             binance_1mn: None,
             binance_har: None,
             kraken_1mn: None,
+
+            closes,
         };
 
-        s.min_initial_first_unsafe_date = s.compute_min_initial_first_unsafe_date();
-        s.min_initial_first_unsafe_height = s.compute_min_initial_first_unsafe_height();
+        s.min_initial_state.compute_from_dataset(&s);
 
         Ok(s)
     }
 
     pub fn get(&mut self, height: usize, timestamp: u32) -> color_eyre::Result<f32> {
         {
-            let closes = &self.closes.unsafe_inner();
+            let inner = self.closes.inner.lock();
+
+            let closes = inner.as_ref().unwrap();
 
             if height < closes.len() - 1 {
                 return Ok(closes.get(height).unwrap().to_owned());
@@ -110,16 +113,18 @@ impl HeightDataset {
     }
 }
 
+impl GenericDataset for HeightDataset {}
+
 impl AnyDataset for HeightDataset {
-    fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
+    fn get_min_initial_state(&self) -> &MinInitialState {
+        &self.min_initial_state
+    }
+
+    fn to_any_inserted_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
         vec![&self.closes]
     }
 
-    fn get_min_initial_first_unsafe_date(&self) -> &Option<NaiveDate> {
-        &self.min_initial_first_unsafe_date
-    }
-
-    fn get_min_initial_first_unsafe_height(&self) -> &Option<usize> {
-        &self.min_initial_first_unsafe_height
+    fn to_any_exported_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
+        vec![&self.closes]
     }
 }

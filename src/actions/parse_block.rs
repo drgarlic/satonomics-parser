@@ -4,7 +4,7 @@ use std::{
     thread,
 };
 
-use bitcoin::{Block, Txid};
+use bitcoin::Block;
 use chrono::NaiveDate;
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
@@ -20,7 +20,7 @@ use crate::{
         AddressData, AddressRealizedData, BlockData, BlockPath, Counter, EmptyAddressData,
         PartialTxoutData, RawAddress, TxData, TxoutIndex,
     },
-    states::{SplitRealizedStates, States},
+    states::{SplitInputStates, SplitOutputStates, SplitRealizedStates, States},
 };
 
 pub struct ParseData<'a> {
@@ -44,6 +44,32 @@ pub struct ParseData<'a> {
     pub subsidy_vec: &'a mut Vec<u64>,
     pub timestamp: u32,
     pub transaction_count_vec: &'a mut Vec<usize>,
+}
+
+#[derive(Default, Debug)]
+pub struct SpentData {
+    pub volume: u64,
+    pub count: u32,
+}
+
+impl SpentData {
+    pub fn spend(&mut self, sats: u64) {
+        self.volume += sats;
+        self.count += 1;
+    }
+}
+
+#[derive(Default, Debug)]
+pub struct ReceivedData {
+    pub volume: u64,
+    pub count: u32,
+}
+
+impl ReceivedData {
+    pub fn receive(&mut self, sats: u64) {
+        self.volume += sats;
+        self.count += 1;
+    }
 }
 
 pub fn parse_block(
@@ -95,7 +121,8 @@ pub fn parse_block(
         .blocks
         .push(BlockData::new(height as u32, block_price));
 
-    let mut block_path_to_spent_value: BTreeMap<BlockPath, u64> = BTreeMap::new();
+    let mut block_path_to_spent_data: BTreeMap<BlockPath, SpentData> = BTreeMap::new();
+    let mut block_path_to_received_data: BTreeMap<BlockPath, ReceivedData> = BTreeMap::new();
     let mut address_index_to_address_realized_data: BTreeMap<u32, AddressRealizedData> =
         BTreeMap::new();
     let mut address_index_to_removed_address_data: BTreeMap<u32, AddressData> = BTreeMap::new();
@@ -109,6 +136,11 @@ pub fn parse_block(
     let mut transaction_count = 0;
     let mut fees = vec![];
     let mut fees_total = 0;
+
+    let block_path = BlockPath {
+        date_index: date_index as u16,
+        block_index: block_index as u16,
+    };
 
     let (
         (
@@ -301,7 +333,12 @@ pub fn parse_block(
 
                     address_data.receive(sats, block_price);
 
-                    address_realized_data.received += sats;
+                    block_path_to_received_data
+                        .entry(block_path)
+                        .or_default()
+                        .receive(sats);
+
+                    address_realized_data.receive(sats);
 
                     states
                         .txout_index_to_address_index
@@ -354,11 +391,7 @@ pub fn parse_block(
 
                     if input_tx_index.is_none() {
                         if !enable_check_if_txout_value_is_zero_in_db
-                            || check_if_txout_value_is_zero_in_db(
-                                bitcoin_db,
-                                &input_txid,
-                                input_vout,
-                            )
+                            || bitcoin_db.check_if_txout_value_is_zero(&input_txid, input_vout)
                         {
                             return ControlFlow::Continue::<()>(());
                         }
@@ -375,11 +408,7 @@ pub fn parse_block(
 
                     if input_sats.is_none() {
                         if !enable_check_if_txout_value_is_zero_in_db
-                            || check_if_txout_value_is_zero_in_db(
-                                bitcoin_db,
-                                &input_txid,
-                                input_vout,
-                            )
+                            || bitcoin_db.check_if_txout_value_is_zero(&input_txid, input_vout)
                         {
                             return ControlFlow::Continue::<()>(());
                         }
@@ -428,9 +457,10 @@ pub fn parse_block(
 
                     inputs_sum += input_sats;
 
-                    *block_path_to_spent_value
+                    block_path_to_spent_data
                         .entry(input_block_path)
-                        .or_default() += input_sats;
+                        .or_default()
+                        .spend(input_sats);
 
                     satblocks_destroyed +=
                         (height as u64 - input_block_data.height as u64) * input_sats;
@@ -463,18 +493,12 @@ pub fn parse_block(
                                         AddressRealizedData::default(input_address_data)
                                     });
 
-                            input_address_realized_data.sent += input_sats;
-
+                            // MUST be after `or_insert_with`
                             let address_realized_profit_or_loss =
                                 input_address_data.spend(input_sats, input_block_data.price);
 
-                            if address_realized_profit_or_loss >= 0.0 {
-                                input_address_realized_data.profit +=
-                                    address_realized_profit_or_loss;
-                            } else {
-                                input_address_realized_data.loss +=
-                                    address_realized_profit_or_loss.abs();
-                            }
+                            input_address_realized_data
+                                .send(input_sats, address_realized_profit_or_loss);
 
                             input_address_data.is_empty()
                         };
@@ -541,6 +565,8 @@ pub fn parse_block(
 
     let mut split_realized_states = None;
     let mut split_price_paid_states = None;
+    let mut split_input_states = None;
+    let mut split_output_states = None;
     let mut split_unrealized_states_height = None;
     let mut split_unrealized_states_date = None;
     let mut sorted_block_data_vec = None;
@@ -579,6 +605,9 @@ pub fn parse_block(
         if compute_addresses {
             scope.spawn(|| {
                 split_realized_states.replace(SplitRealizedStates::default());
+                split_input_states.replace(SplitInputStates::default());
+                split_output_states.replace(SplitOutputStates::default());
+
                 let processed_addresses_split_states = &mut states.split_address;
 
                 address_index_to_address_realized_data.iter().for_each(
@@ -595,10 +624,26 @@ pub fn parse_block(
                         processed_addresses_split_states
                             .iterate(address_realized_data, current_address_data);
 
+                        // Realized == previous amount
+                        // If a whale sent all its sats to another address at a loss, it's the whale that realized the loss not the empty adress
+                        let liquidity_classification = address_realized_data
+                            .initial_address_data
+                            .compute_liquidity_classification();
+
                         split_realized_states
                             .as_mut()
                             .unwrap()
-                            .iterate_realized(address_realized_data);
+                            .iterate_realized(address_realized_data, &liquidity_classification);
+
+                        split_input_states
+                            .as_mut()
+                            .unwrap()
+                            .iterate_input(address_realized_data, &liquidity_classification);
+
+                        split_output_states
+                            .as_mut()
+                            .unwrap()
+                            .iterate_output(address_realized_data, &liquidity_classification);
                     },
                 );
 
@@ -621,7 +666,8 @@ pub fn parse_block(
     datasets.insert_block_data(ProcessedBlockData {
         address_index_to_address_realized_data: &address_index_to_address_realized_data,
         address_index_to_removed_address_data: &address_index_to_removed_address_data,
-        block_path_to_spent_value: &block_path_to_spent_value,
+        block_path_to_received_data: &block_path_to_received_data,
+        block_path_to_spent_data: &block_path_to_spent_data,
         block_price,
         coinbase,
         coinbase_vec,
@@ -640,6 +686,8 @@ pub fn parse_block(
         sats_sent,
         sats_sent_vec,
         sorted_block_data_vec,
+        split_input_states: &mut split_input_states,
+        split_output_states: &mut split_output_states,
         split_price_paid_states: &split_price_paid_states,
         split_realized_states: &mut split_realized_states,
         split_unrealized_states_date: &split_unrealized_states_date,
@@ -653,19 +701,6 @@ pub fn parse_block(
         transaction_count,
         transaction_count_vec,
     });
-}
-
-fn check_if_txout_value_is_zero_in_db(bitcoin_db: &BitcoinDB, txid: &Txid, vout: u32) -> bool {
-    bitcoin_db
-        .get_transaction(txid)
-        .unwrap()
-        .output
-        .get(vout as usize)
-        .unwrap()
-        .to_owned()
-        .value
-        .to_sat()
-        == 0
 }
 
 pub struct TxoutsParsingResults {
@@ -800,8 +835,7 @@ fn query_txin_ordered_tx_indexes(
     block
         .txdata
         .iter()
-        // Skip coinbase transaction
-        .skip(1)
+        .skip(1) // Skip coinbase transaction
         .flat_map(|tx| &tx.input)
         .for_each(|txin| {
             txid_to_tx_index.open_db(&txin.previous_output.txid);
@@ -810,7 +844,7 @@ fn query_txin_ordered_tx_indexes(
     block
         .txdata
         .par_iter()
-        .skip(1)
+        .skip(1) // Skip coinbase transaction
         .flat_map(|tx| &tx.input)
         .map(|txin| {
             txid_to_tx_index

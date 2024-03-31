@@ -1,14 +1,14 @@
 use std::time::Instant;
 
-pub fn time<F, T>(func: F) -> color_eyre::Result<T>
+pub fn time<F, T>(name: &str, func: F) -> T
 where
-    F: FnOnce() -> color_eyre::Result<T>,
+    F: FnOnce() -> T,
 {
     let time = Instant::now();
 
-    let res = func()?;
+    let out = func();
 
-    println!("Took {} seconds\n", time.elapsed().as_secs_f32());
+    println!("{name}: {} seconds\n", time.elapsed().as_secs_f32());
 
-    Ok(res)
+    out
 }

@@ -4,10 +4,13 @@ use derive_deref::{Deref, DerefMut};
 
 use crate::{
     bitcoin::sats_to_btc,
-    datasets::{PricePaidState, RealizedState, SupplyState, UTXOsMetadataState, UnrealizedState},
+    datasets::{
+        InputState, OutputState, PricePaidState, RealizedState, SupplyState, UTXOState,
+        UnrealizedState,
+    },
     parse::{
-        AddressData, AddressRealizedData, LiquiditySplitResult, RawAddressSize, RawAddressSplit,
-        RawAddressType, SplitByLiquidity,
+        AddressData, AddressRealizedData, LiquidityClassification, LiquiditySplitResult,
+        RawAddressSize, RawAddressSplit, RawAddressType, SplitByLiquidity,
     },
 };
 
@@ -70,7 +73,7 @@ impl MeanPricePaidInCentsToAmount {
 pub struct ProcessedAddressesState {
     mean_price_paid_in_cents_to_amount: MeanPricePaidInCentsToAmount,
     pub supply: SupplyState,
-    pub utxos_metadata: UTXOsMetadataState,
+    pub utxos_metadata: UTXOState,
 }
 
 impl ProcessedAddressesState {
@@ -292,44 +295,135 @@ impl<T> SplitByCohort<T> {
 pub struct SplitRealizedStates(SplitByCohort<SplitByLiquidity<RealizedState>>);
 
 #[derive(Deref, DerefMut, Default)]
+pub struct SplitInputStates(SplitByCohort<SplitByLiquidity<InputState>>);
+
+#[derive(Deref, DerefMut, Default)]
+pub struct SplitOutputStates(SplitByCohort<SplitByLiquidity<OutputState>>);
+
+#[derive(Deref, DerefMut, Default)]
 pub struct SplitUnrealizedStates(SplitByCohort<SplitByLiquidity<UnrealizedState>>);
 
 #[derive(Deref, DerefMut, Default)]
 pub struct SplitPricePaidStates(SplitByCohort<SplitByLiquidity<PricePaidState>>);
 
 impl SplitRealizedStates {
-    pub fn iterate_realized(&mut self, address_realized_data: &AddressRealizedData) {
-        let profit = address_realized_data.profit;
-        let loss = address_realized_data.loss;
-
-        // Realized == previous amount
-        // If a whale sent all its sats to another address at a loss, it's the whale that realized the loss not the empty adress
-        let liquidity_classification = address_realized_data
-            .initial_address_data
-            .compute_liquidity_classification();
+    pub fn iterate_realized(
+        &mut self,
+        realized_data: &AddressRealizedData,
+        liquidity_classification: &LiquidityClassification,
+    ) {
+        let profit = realized_data.profit;
+        let loss = realized_data.loss;
 
         let split_profit = liquidity_classification.split(profit);
         let split_loss = liquidity_classification.split(loss);
 
         let iterate = move |state: &mut SplitByLiquidity<RealizedState>| {
             state.all.iterate(profit, loss);
+
             state
                 .illiquid
                 .iterate(split_profit.illiquid, split_loss.illiquid);
+
             state.liquid.iterate(split_profit.liquid, split_loss.liquid);
+
             state
                 .highly_liquid
                 .iterate(split_profit.highly_liquid, split_loss.highly_liquid);
         };
 
         if let Some(state) = self.get_mut_state(&RawAddressSplit::Type(
-            address_realized_data.initial_address_data.address_type,
+            realized_data.initial_address_data.address_type,
         )) {
             iterate(state);
         }
 
         if let Some(state) = self.get_mut_state(&RawAddressSplit::Size(
-            RawAddressSize::from_amount(address_realized_data.initial_address_data.amount),
+            RawAddressSize::from_amount(realized_data.initial_address_data.amount),
+        )) {
+            iterate(state);
+        }
+    }
+}
+
+impl SplitInputStates {
+    pub fn iterate_input(
+        &mut self,
+        realized_data: &AddressRealizedData,
+        liquidity_classification: &LiquidityClassification,
+    ) {
+        let count = realized_data.utxos_destroyed as f32;
+        let volume = realized_data.sent as f32;
+
+        let split_count = liquidity_classification.split(count);
+        let split_volume = liquidity_classification.split(volume);
+
+        let iterate = move |state: &mut SplitByLiquidity<InputState>| {
+            state.all.iterate(count, volume);
+
+            state
+                .illiquid
+                .iterate(split_count.illiquid, split_volume.illiquid);
+
+            state
+                .liquid
+                .iterate(split_count.liquid, split_volume.liquid);
+
+            state
+                .highly_liquid
+                .iterate(split_count.highly_liquid, split_volume.highly_liquid);
+        };
+
+        if let Some(state) = self.get_mut_state(&RawAddressSplit::Type(
+            realized_data.initial_address_data.address_type,
+        )) {
+            iterate(state);
+        }
+
+        if let Some(state) = self.get_mut_state(&RawAddressSplit::Size(
+            RawAddressSize::from_amount(realized_data.initial_address_data.amount),
+        )) {
+            iterate(state);
+        }
+    }
+}
+
+impl SplitOutputStates {
+    pub fn iterate_output(
+        &mut self,
+        realized_data: &AddressRealizedData,
+        liquidity_classification: &LiquidityClassification,
+    ) {
+        let count = realized_data.utxos_created as f32;
+        let volume = realized_data.received as f32;
+
+        let split_count = liquidity_classification.split(count);
+        let split_volume = liquidity_classification.split(volume);
+
+        let iterate = move |state: &mut SplitByLiquidity<OutputState>| {
+            state.all.iterate(count, volume);
+
+            state
+                .illiquid
+                .iterate(split_count.illiquid, split_volume.illiquid);
+
+            state
+                .liquid
+                .iterate(split_count.liquid, split_volume.liquid);
+
+            state
+                .highly_liquid
+                .iterate(split_count.highly_liquid, split_volume.highly_liquid);
+        };
+
+        if let Some(state) = self.get_mut_state(&RawAddressSplit::Type(
+            realized_data.initial_address_data.address_type,
+        )) {
+            iterate(state);
+        }
+
+        if let Some(state) = self.get_mut_state(&RawAddressSplit::Size(
+            RawAddressSize::from_amount(realized_data.initial_address_data.amount),
         )) {
             iterate(state);
         }

@@ -1,68 +1,34 @@
 use std::ops::Add;
 
-use chrono::NaiveDate;
-
 use crate::{
     bitcoin::sats_to_btc,
-    datasets::ProcessedBlockData,
+    datasets::{AnyDataset, MinInitialState, ProcessedBlockData},
     parse::{AnyBiMap, AnyDateMap, AnyHeightMap, BiMap},
 };
 
 pub struct UnrealizedSubDataset {
+    min_initial_state: MinInitialState,
+
     supply_in_profit: BiMap<f32>,
     unrealized_profit: BiMap<f32>,
     unrealized_loss: BiMap<f32>,
 }
 
-#[derive(Debug, Default)]
-pub struct UnrealizedState {
-    supply_in_profit: u64,
-    unrealized_profit: f32,
-    unrealized_loss: f32,
-}
-
-impl UnrealizedState {
-    #[inline]
-    pub fn iterate(&mut self, price_then: f32, price_now: f32, sat_amount: u64, btc_amount: f32) {
-        if price_then < price_now {
-            self.unrealized_profit += btc_amount * (price_now - price_then);
-            self.supply_in_profit += sat_amount;
-        } else if price_then > price_now {
-            self.unrealized_loss += btc_amount * (price_then - price_now);
-        }
-    }
-}
-
-impl Add<UnrealizedState> for UnrealizedState {
-    type Output = UnrealizedState;
-
-    fn add(self, other: UnrealizedState) -> UnrealizedState {
-        UnrealizedState {
-            supply_in_profit: self.supply_in_profit + other.supply_in_profit,
-            unrealized_profit: self.unrealized_profit + other.unrealized_profit,
-            unrealized_loss: self.unrealized_loss + other.unrealized_loss,
-        }
-    }
-}
-
 impl UnrealizedSubDataset {
     pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
-        let supply_path = format!("{parent_path}/supply");
-        let unrealized_path = format!("{parent_path}/unrealized");
-        let f1 = |s: &str| format!("{supply_path}/{s}");
-        let f2 = |s: &str| format!("{unrealized_path}/{s}");
+        let f = |s: &str| format!("{parent_path}/{s}");
 
-        Ok(Self {
-            supply_in_profit: BiMap::new_on_disk_bin(&f1("in_profit")),
-            unrealized_profit: BiMap::new_on_disk_bin(&f2("profit")),
-            unrealized_loss: BiMap::new_on_disk_bin(&f2("loss")),
-        })
-    }
+        let s = Self {
+            min_initial_state: MinInitialState::default(),
 
-    pub fn are_date_and_height_safe(&self, date: NaiveDate, height: usize) -> bool {
-        self.to_vec()
-            .iter()
-            .all(|bi| bi.are_date_and_height_safe(date, height))
+            supply_in_profit: BiMap::new_on_disk_bin(&f("supply_in_profit")),
+            unrealized_profit: BiMap::new_on_disk_bin(&f("unrealized_profit")),
+            unrealized_loss: BiMap::new_on_disk_bin(&f("unrealized_loss")),
+        };
+
+        s.min_initial_state.compute_from_dataset(&s);
+
+        Ok(s)
     }
 
     pub fn insert(
@@ -102,18 +68,14 @@ impl UnrealizedSubDataset {
                 .insert(date, date_state.unrealized_loss);
         }
     }
+}
 
-    #[inline]
-    pub fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
-        vec![
-            &self.supply_in_profit.height,
-            &self.unrealized_profit.height,
-            &self.unrealized_loss.height,
-        ]
+impl AnyDataset for UnrealizedSubDataset {
+    fn get_min_initial_state(&self) -> &MinInitialState {
+        &self.min_initial_state
     }
 
-    #[inline]
-    pub fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
+    fn to_any_inserted_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
         vec![
             &self.supply_in_profit.date,
             &self.unrealized_profit.date,
@@ -121,12 +83,54 @@ impl UnrealizedSubDataset {
         ]
     }
 
-    #[inline]
-    pub fn to_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
+    fn to_any_inserted_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
+        vec![
+            &self.supply_in_profit.height,
+            &self.unrealized_profit.height,
+            &self.unrealized_loss.height,
+        ]
+    }
+
+    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         vec![
             &self.supply_in_profit,
             &self.unrealized_profit,
             &self.unrealized_loss,
         ]
+    }
+}
+
+// ---
+// STATE
+// ---
+
+#[derive(Debug, Default)]
+pub struct UnrealizedState {
+    supply_in_profit: u64,
+    unrealized_profit: f32,
+    unrealized_loss: f32,
+}
+
+impl UnrealizedState {
+    #[inline]
+    pub fn iterate(&mut self, price_then: f32, price_now: f32, sat_amount: u64, btc_amount: f32) {
+        if price_then < price_now {
+            self.unrealized_profit += btc_amount * (price_now - price_then);
+            self.supply_in_profit += sat_amount;
+        } else if price_then > price_now {
+            self.unrealized_loss += btc_amount * (price_then - price_now);
+        }
+    }
+}
+
+impl Add<UnrealizedState> for UnrealizedState {
+    type Output = UnrealizedState;
+
+    fn add(self, other: UnrealizedState) -> UnrealizedState {
+        UnrealizedState {
+            supply_in_profit: self.supply_in_profit + other.supply_in_profit,
+            unrealized_profit: self.unrealized_profit + other.unrealized_profit,
+            unrealized_loss: self.unrealized_loss + other.unrealized_loss,
+        }
     }
 }

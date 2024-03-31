@@ -10,8 +10,10 @@ pub fn find_first_unsafe_height(
     datasets: &AllDatasets,
     addresses: bool,
 ) -> usize {
-    let min_initial_last_address_date = datasets.address.get_min_initial_last_date();
-    let min_initial_last_address_height = datasets.address.get_min_initial_last_height();
+    let min_initial_last_address_date = datasets.address.get_min_initial_state().last_date.lock();
+
+    let min_initial_last_address_height =
+        datasets.address.get_min_initial_state().last_height.lock();
 
     states
         .date_data_vec
@@ -19,8 +21,8 @@ pub fn find_first_unsafe_height(
         .last()
         .map(|date_data| date_data.date)
         .and_then(|last_safe_date| {
-            let min_datasets_last_height = datasets.get_min_initial_last_height();
-            let min_datasets_last_date = datasets.get_min_initial_last_date();
+            let min_datasets_last_height = datasets.get_min_initial_state().last_height.lock();
+            let min_datasets_last_date = datasets.get_min_initial_state().last_date.lock();
 
             println!("min_datasets_last_height: {:?}", min_datasets_last_height);
             println!("min_datasets_last_date: {:?}", min_datasets_last_date);
@@ -29,7 +31,15 @@ pub fn find_first_unsafe_height(
                 return None;
             }
 
-            datasets.get_date_to_last_height().get(&last_safe_date.to_string()).and_then(|last_safe_height| {
+            datasets
+                .date_metadata
+                .last_height
+                .inner
+                .lock()
+                .as_ref()
+                .unwrap()
+                .get(&last_safe_date)
+                .and_then(|last_safe_height| {
                 if min_datasets_last_height.map_or(true, |min_datasets_last_height| min_datasets_last_height < *last_safe_height) {
                     println!("last_safe_height ({last_safe_height}) > min_datasets_height ({min_datasets_last_height:?})");
 
