@@ -4,7 +4,6 @@ use std::{
     fs,
 };
 
-use bincode::{Decode, Encode};
 use derive_deref::{Deref, DerefMut};
 
 // https://docs.rs/sanakirja/latest/sanakirja/index.html
@@ -178,9 +177,7 @@ where
     }
 }
 
-#[derive(
-    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deref, DerefMut, Default, Copy, Encode, Decode,
-)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deref, DerefMut, Default, Copy)]
 pub struct U8x19([u8; 19]);
 direct_repr!(U8x19);
 impl From<&[u8]> for U8x19 {
@@ -191,9 +188,7 @@ impl From<&[u8]> for U8x19 {
     }
 }
 
-#[derive(
-    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deref, DerefMut, Default, Copy, Encode, Decode,
-)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deref, DerefMut, Default, Copy)]
 pub struct U8x31([u8; 31]);
 direct_repr!(U8x31);
 impl From<&[u8]> for U8x31 {

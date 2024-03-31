@@ -1,7 +1,7 @@
-use bincode::{Decode, Encode};
+use savefile_derive::Savefile;
 
 // https://unchained.com/blog/bitcoin-address-types-compared/
-#[derive(Debug, Encode, Decode, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default, Savefile)]
 pub enum RawAddressType {
     Empty,
     #[default]

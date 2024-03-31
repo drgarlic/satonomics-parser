@@ -1,4 +1,4 @@
-use bincode::{Decode, Encode};
+use savefile_derive::Savefile;
 use std::{
     fmt::Debug,
     fs, io,
@@ -10,7 +10,7 @@ use crate::{
     parse::{Counter, WNaiveDate},
 };
 
-#[derive(Encode, Decode, Default, Debug)]
+#[derive(Savefile, Default, Debug)]
 pub struct Metadata {
     path: String,
     data: MetadataData,
@@ -47,7 +47,7 @@ impl Metadata {
     }
 }
 
-#[derive(Encode, Decode, Default, Debug)]
+#[derive(Savefile, Default, Debug)]
 pub struct MetadataData {
     pub len: Counter,
     pub last_block: Option<u64>,

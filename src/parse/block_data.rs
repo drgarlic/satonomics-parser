@@ -1,6 +1,6 @@
-use bincode::{Decode, Encode};
+use savefile_derive::Savefile;
 
-#[derive(Encode, Decode, Debug)]
+#[derive(Savefile, Debug)]
 pub struct BlockData {
     pub height: u32,
     pub price: f32,

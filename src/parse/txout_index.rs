@@ -1,6 +1,6 @@
-use bincode::{Decode, Encode};
+use savefile_derive::Savefile;
 
-#[derive(Encode, Decode, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Savefile)]
 pub struct TxoutIndex {
     pub tx_index: u32,
     pub vout: u16,

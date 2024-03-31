@@ -1,7 +1,7 @@
-use bincode::{Decode, Encode};
 use derive_deref::{Deref, DerefMut};
+use savefile_derive::Savefile;
 
-#[derive(Debug, Deref, DerefMut, Default, Decode, Encode, Clone, Copy)]
+#[derive(Debug, Deref, DerefMut, Default, Savefile, Clone, Copy)]
 pub struct Counter(u32);
 
 impl Counter {

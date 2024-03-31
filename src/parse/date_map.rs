@@ -6,7 +6,6 @@ use std::{
     ops::{Add, AddAssign, Div, Mul, Sub, SubAssign},
 };
 
-use bincode::{Decode, Encode};
 use chrono::{Days, NaiveDate};
 use ordered_float::{FloatCore, OrderedFloat};
 use parking_lot::Mutex;
@@ -43,7 +42,14 @@ pub struct DateMap<T> {
 
 impl<T> DateMap<T>
 where
-    T: Clone + Default + Encode + Decode + Debug + Serialize + DeserializeOwned + Sum,
+    T: Clone
+        + Default
+        + Debug
+        + Serialize
+        + DeserializeOwned
+        + Sum
+        + savefile::Serialize
+        + savefile::Deserialize,
 {
     #[allow(unused)]
     pub fn new_on_disk_bin(path: &str) -> Self {
@@ -241,7 +247,16 @@ pub trait AnyDateMap: AnyMap {
 
 impl<T> AnyDateMap for DateMap<T>
 where
-    T: Clone + Default + Encode + Decode + Debug + Serialize + DeserializeOwned + Sum + Sync + Send,
+    T: Clone
+        + Default
+        + Debug
+        + Serialize
+        + DeserializeOwned
+        + Sum
+        + Sync
+        + Send
+        + savefile::Serialize
+        + savefile::Deserialize,
 {
     #[inline(always)]
     fn get_last_date(&self) -> Option<NaiveDate> {
@@ -270,7 +285,14 @@ where
 
 impl<T> AnyExportableMap for DateMap<T>
 where
-    T: Clone + Default + Encode + Decode + Debug + Serialize + DeserializeOwned + Sum,
+    T: Clone
+        + Default
+        + Debug
+        + Serialize
+        + DeserializeOwned
+        + Sum
+        + savefile::Serialize
+        + savefile::Deserialize,
 {
     fn export_then_clean(&self) -> color_eyre::Result<()> {
         self.export()?;
@@ -283,7 +305,14 @@ where
 
 impl<T> AnyMap for DateMap<T>
 where
-    T: Clone + Default + Encode + Decode + Debug + Serialize + DeserializeOwned + Sum,
+    T: Clone
+        + Default
+        + Debug
+        + Serialize
+        + DeserializeOwned
+        + Sum
+        + savefile::Serialize
+        + savefile::Deserialize,
 {
     fn prepare_tmp_data(&self) {
         if !self.modified.lock().to_owned() {
@@ -339,7 +368,14 @@ fn last_date_to_first_unsafe_date(last_date: Option<NaiveDate>) -> Option<NaiveD
 
 impl<T> DateMap<T>
 where
-    T: Clone + Default + Debug + Decode + Encode + Serialize + DeserializeOwned + Sum,
+    T: Clone
+        + Default
+        + Debug
+        + Serialize
+        + DeserializeOwned
+        + Sum
+        + savefile::Serialize
+        + savefile::Deserialize,
 {
     #[allow(unused)]
     pub fn transform<F>(&self, transform: F) -> BTreeMap<WNaiveDate, T>

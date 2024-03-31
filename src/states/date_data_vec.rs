@@ -1,11 +1,11 @@
-use bincode::{Decode, Encode};
 use derive_deref::{Deref, DerefMut};
+use savefile_derive::Savefile;
 
 use crate::parse::{BlockData, DateData};
 
 use super::AnyState;
 
-#[derive(Encode, Decode, Default, Deref, DerefMut, Debug)]
+#[derive(Default, Deref, DerefMut, Debug, Savefile)]
 pub struct DateDataVec(Vec<DateData>);
 
 impl DateDataVec {

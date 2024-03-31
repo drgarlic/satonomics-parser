@@ -1,10 +1,10 @@
-use bincode::{Decode, Encode};
+use savefile_derive::Savefile;
 
 use crate::bitcoin::sats_to_btc;
 
 use super::{EmptyAddressData, LiquidityClassification, RawAddressType};
 
-#[derive(Encode, Decode, Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Savefile)]
 pub struct AddressData {
     pub address_type: RawAddressType,
     pub amount: u64,

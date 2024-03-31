@@ -1,6 +1,5 @@
 use std::{collections::BTreeMap, fmt::Debug, iter::Sum};
 
-use bincode::{Decode, Encode};
 use chrono::NaiveDate;
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -8,7 +7,15 @@ use super::{AnyExportableMap, DateMap, HeightMap, HeightToDateConverter, WNaiveD
 
 pub struct BiMap<T>
 where
-    T: Clone + Default + Debug + Decode + Encode + Serialize + DeserializeOwned + Sum,
+    T: Clone
+        + Default
+        + Debug
+        + Serialize
+        + DeserializeOwned
+        + Sum
+        + savefile::Serialize
+        + savefile::Deserialize
+        + savefile::ReprC,
 {
     pub height: HeightMap<T>,
     pub date: DateMap<T>,
@@ -16,7 +23,15 @@ where
 
 impl<T> BiMap<T>
 where
-    T: Clone + Default + Debug + Decode + Encode + Serialize + DeserializeOwned + Sum,
+    T: Clone
+        + Default
+        + Debug
+        + Serialize
+        + DeserializeOwned
+        + Sum
+        + savefile::Serialize
+        + savefile::Deserialize
+        + savefile::ReprC,
 {
     pub fn new_on_disk_bin(path: &str) -> Self {
         Self {
@@ -78,7 +93,15 @@ pub trait AnyBiMap {
 
 impl<T> AnyBiMap for BiMap<T>
 where
-    T: Clone + Default + Debug + Decode + Encode + Serialize + DeserializeOwned + Sum,
+    T: Clone
+        + Default
+        + Debug
+        + Serialize
+        + DeserializeOwned
+        + Sum
+        + savefile::Serialize
+        + savefile::Deserialize
+        + savefile::ReprC,
 {
     #[inline(always)]
     fn are_date_and_height_safe(&self, date: NaiveDate, height: usize) -> bool {
@@ -88,7 +111,15 @@ where
 
 impl<T> AnyExportableMap for BiMap<T>
 where
-    T: Clone + Default + Debug + Decode + Encode + Serialize + DeserializeOwned + Sum,
+    T: Clone
+        + Default
+        + Debug
+        + Serialize
+        + DeserializeOwned
+        + Sum
+        + savefile::Serialize
+        + savefile::Deserialize
+        + savefile::ReprC,
 {
     fn export_then_clean(&self) -> color_eyre::Result<()> {
         self.height.export_then_clean()?;

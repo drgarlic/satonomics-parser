@@ -1,6 +1,5 @@
 use std::fmt::Debug;
 
-use bincode::{Decode, Encode};
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::io::{Binary, Json};
@@ -25,7 +24,7 @@ impl Serialization {
 
     pub fn import<T>(&self, path: &str) -> color_eyre::Result<T>
     where
-        T: Decode + DeserializeOwned + Debug,
+        T: savefile::Deserialize + DeserializeOwned + Debug,
     {
         match self {
             Serialization::Binary => Binary::import(path),
@@ -35,7 +34,7 @@ impl Serialization {
 
     pub fn export<T>(&self, path: &str, value: &T) -> color_eyre::Result<()>
     where
-        T: Encode + Serialize,
+        T: savefile::Serialize + Serialize,
     {
         match self {
             Serialization::Binary => Binary::export(path, value),

@@ -3,10 +3,11 @@ use std::collections::BTreeMap;
 use crate::parse::AddressData;
 
 use super::AnyState;
-use bincode::{Decode, Encode};
-use derive_deref::{Deref, DerefMut};
 
-#[derive(Encode, Decode, Default, Deref, DerefMut, Debug)]
+use derive_deref::{Deref, DerefMut};
+use savefile_derive::Savefile;
+
+#[derive(Default, Deref, DerefMut, Debug, Savefile)]
 pub struct AddressIndexToAddressData(BTreeMap<u32, AddressData>);
 
 impl AnyState for AddressIndexToAddressData {

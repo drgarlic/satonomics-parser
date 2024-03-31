@@ -6,7 +6,6 @@ use std::{
     ops::{Add, AddAssign, Div, Mul, Sub, SubAssign},
 };
 
-use bincode::{Decode, Encode};
 use itertools::Itertools;
 use ordered_float::{FloatCore, OrderedFloat};
 use parking_lot::Mutex;
@@ -22,7 +21,7 @@ use super::{AnyExportableMap, AnyMap, Storage};
 
 pub struct HeightMap<T>
 where
-    T: Clone + Default + Debug + Decode + Encode,
+    T: Clone + Default + Debug + savefile::Serialize + savefile::Deserialize,
 {
     storage: Storage,
 
@@ -42,7 +41,14 @@ where
 
 impl<T> HeightMap<T>
 where
-    T: Clone + Default + Debug + Decode + Encode + Serialize + DeserializeOwned,
+    T: Clone
+        + Default
+        + Debug
+        + Serialize
+        + DeserializeOwned
+        + savefile::Serialize
+        + savefile::Deserialize
+        + savefile::ReprC,
 {
     #[allow(unused)]
     pub fn new_on_disk_bin(path: &str) -> Self {
@@ -125,7 +131,7 @@ where
 
     fn get_last_height(&self) -> Option<usize>
     where
-        T: Clone + Default + Debug + Decode + Encode + Serialize + DeserializeOwned,
+        T: Clone + Default + Debug + Serialize + DeserializeOwned,
     {
         let len = self
             .inner
@@ -198,7 +204,15 @@ pub trait AnyHeightMap: AnyMap {
 
 impl<T> AnyHeightMap for HeightMap<T>
 where
-    T: Clone + Default + Debug + Decode + Encode + Serialize + DeserializeOwned + Send,
+    T: Clone
+        + Default
+        + Debug
+        + Serialize
+        + DeserializeOwned
+        + Send
+        + savefile::Serialize
+        + savefile::Deserialize
+        + savefile::ReprC,
 {
     #[inline(always)]
     fn get_initial_first_unsafe_height(&self) -> Option<usize> {
@@ -227,7 +241,14 @@ where
 
 impl<T> AnyExportableMap for HeightMap<T>
 where
-    T: Clone + Default + Debug + Decode + Encode + Serialize + DeserializeOwned,
+    T: Clone
+        + Default
+        + Debug
+        + Serialize
+        + DeserializeOwned
+        + savefile::Serialize
+        + savefile::Deserialize
+        + savefile::ReprC,
 {
     fn export_then_clean(&self) -> color_eyre::Result<()> {
         self.export()?;
@@ -240,7 +261,14 @@ where
 
 impl<T> AnyMap for HeightMap<T>
 where
-    T: Clone + Default + Debug + Decode + Encode + Serialize + DeserializeOwned,
+    T: Clone
+        + Default
+        + Debug
+        + Serialize
+        + DeserializeOwned
+        + savefile::Serialize
+        + savefile::Deserialize
+        + savefile::ReprC,
 {
     fn prepare_tmp_data(&self) {
         if !self.modified.lock().to_owned() {
@@ -300,7 +328,14 @@ fn last_height_to_first_unsafe_height(last_height: Option<usize>) -> Option<usiz
 
 impl<T> HeightMap<T>
 where
-    T: Clone + Default + Debug + Decode + Encode + Serialize + DeserializeOwned,
+    T: Clone
+        + Default
+        + Debug
+        + Serialize
+        + DeserializeOwned
+        + savefile::Serialize
+        + savefile::Deserialize
+        + savefile::ReprC,
 {
     pub fn transform<F>(&self, transform: F) -> Vec<T>
     where

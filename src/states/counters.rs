@@ -1,10 +1,10 @@
-use bincode::{Decode, Encode};
+use savefile_derive::Savefile;
 
 use crate::parse::Counter;
 
 use super::AnyState;
 
-#[derive(Encode, Decode, Default, Debug)]
+#[derive(Default, Debug, Savefile)]
 pub struct Counters {
     pub unknown_addresses: Counter,
     pub empty_addresses: Counter,

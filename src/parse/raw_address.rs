@@ -1,4 +1,3 @@
-use bincode::{Decode, Encode};
 use bitcoin::{address::Payload, TxOut};
 use bitcoin_hashes::{hash160, Hash};
 use itertools::Itertools;
@@ -10,7 +9,7 @@ use crate::{
 
 use super::{Counter, RawAddressType};
 
-#[derive(Encode, Decode, Debug, Clone, PartialEq, PartialOrd, Ord, Eq)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Ord, Eq)]
 pub enum RawAddress {
     // https://mempool.space/tx/7bd54def72825008b4ca0f4aeff13e6be2c5fe0f23430629a9d484a1ac2a29b8
     Empty(u32),

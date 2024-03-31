@@ -1,13 +1,4 @@
-use std::{
-    fmt::Debug,
-    fs::File,
-    io::{BufReader, BufWriter},
-};
-
-use bincode::{
-    config::{self},
-    decode_from_std_read, encode_into_std_write, Decode, Encode,
-};
+use savefile::{load_file, save_file, Deserialize, Serialize};
 
 pub struct Binary;
 
@@ -16,34 +7,15 @@ pub struct Binary;
 impl Binary {
     pub fn import<T>(path: &str) -> color_eyre::Result<T>
     where
-        T: Decode + Debug,
+        T: Deserialize,
     {
-        let config = config::standard();
-
-        let file = File::open(path)?;
-
-        let mut reader = BufReader::new(file);
-
-        let decoded = decode_from_std_read(&mut reader, config)?;
-
-        Ok(decoded)
+        Ok(load_file(path, 0)?)
     }
 
     pub fn export<T>(path: &str, value: &T) -> color_eyre::Result<()>
     where
-        T: Encode,
+        T: Serialize,
     {
-        let config = config::standard();
-
-        let file = File::create(path).unwrap_or_else(|_| {
-            dbg!(&path);
-            panic!("No such file or directory")
-        });
-
-        let mut writer = BufWriter::new(file);
-
-        encode_into_std_write(value, &mut writer, config)?;
-
-        Ok(())
+        Ok(save_file(path, 0, value)?)
     }
 }

@@ -1,8 +1,8 @@
-use bincode::{Decode, Encode};
+use savefile_derive::Savefile;
 
 use super::BlockPath;
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Debug, Savefile)]
 pub struct TxData {
     pub block_path: BlockPath,
     pub spendable_outputs: u16,

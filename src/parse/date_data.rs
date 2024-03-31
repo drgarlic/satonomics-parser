@@ -1,9 +1,9 @@
-use bincode::{Decode, Encode};
 use chrono::{Datelike, NaiveDate};
+use savefile_derive::Savefile;
 
 use super::{BlockData, WNaiveDate};
 
-#[derive(Encode, Decode, Debug)]
+#[derive(Savefile, Debug)]
 pub struct DateData {
     pub date: WNaiveDate,
     pub index: u16,

@@ -1,9 +1,8 @@
-use bincode::{Decode, Encode};
 use sanakirja::{direct_repr, Storable, UnsizedStorable};
 
 use super::{AddressData, RawAddressType};
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Decode, Encode, Default)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Default)]
 pub struct EmptyAddressData {
     pub address_type: RawAddressType,
     pub transfered: u64,
