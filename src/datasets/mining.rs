@@ -32,15 +32,18 @@ impl MiningDataset {
             min_initial_state: MinInitialState::default(),
 
             blocks_mined: DateMap::new_on_disk_bin(&f("blocks_mined")),
-            coinbase: BiMap::new_on_disk_bin(&f("coinbase")),
-            fees: BiMap::new_on_disk_bin(&f("fees")),
+            coinbase: BiMap::new_in_memory_bin(&f("coinbase")),
+            fees: BiMap::new_in_memory_bin(&f("fees")),
 
-            subsidy: BiMap::new_on_disk_bin(&f("subsidy")),
-            subsidy_in_dollars: BiMap::new_on_disk_bin(&f("subsidy_in_dollars")),
+            subsidy: BiMap::new_in_memory_bin(&f("subsidy")),
+            subsidy_in_dollars: BiMap::new_in_memory_bin(&f("subsidy_in_dollars")),
+
+            annualized_issuance: BiMap::new_in_memory_bin(&f("annualized_issuance")),
+            yearly_inflation_rate: BiMap::new_in_memory_bin(&f("yearly_inflation_rate")),
+
             last_subsidy: DateMap::new_on_disk_bin(&f("last_subsidy")),
             last_subsidy_in_dollars: DateMap::new_on_disk_bin(&f("last_subsidy_in_dollars")),
-            annualized_issuance: BiMap::new_on_disk_bin(&f("annualized_issuance")),
-            yearly_inflation_rate: BiMap::new_on_disk_bin(&f("yearly_inflation_rate")),
+
             blocks_mined_1w_sma: DateMap::new_on_disk_bin(&f("blocks_mined_7d_sma")),
             blocks_mined_1m_sma: DateMap::new_on_disk_bin(&f("blocks_mined_1m_sma")),
         };
@@ -73,9 +76,11 @@ impl GenericDataset for MiningDataset {
             ..
         }: &ProcessedBlockData,
     ) {
-        self.coinbase.insert(height, sats_to_btc(coinbase));
+        let sumed_fees = fees.iter().sum();
 
-        self.fees.insert(height, sats_to_btc(fees.iter().sum()));
+        self.coinbase.height.insert(height, sats_to_btc(coinbase));
+
+        self.fees.height.insert(height, sats_to_btc(sumed_fees));
     }
 }
 
@@ -85,30 +90,35 @@ impl AnyDataset for MiningDataset {
     }
 
     fn to_any_inserted_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
-        vec![&self.coinbase.height, &self.fees.height]
+        vec![
+            &self.coinbase.height,
+            &self.fees.height,
+            &self.subsidy.height,
+            &self.subsidy_in_dollars.height,
+        ]
     }
 
-    fn compute(
-        &mut self,
+    fn prepare(
+        &self,
         &ExportData {
             circulating_supply,
-            last_height_to_date,
-            sum_heights_to_date,
-            price,
+            convert_sum_heights_to_date,
+            height_price,
             ..
         }: &ExportData,
     ) {
-        self.coinbase.compute_date(sum_heights_to_date);
-        self.fees.compute_date(sum_heights_to_date);
+        self.coinbase.compute_date(convert_sum_heights_to_date);
+
+        self.fees.compute_date(convert_sum_heights_to_date);
 
         self.subsidy.set_height_then_compute_date(
             self.coinbase.height.subtract(&self.fees.height),
-            last_height_to_date,
+            convert_sum_heights_to_date,
         );
 
         self.subsidy_in_dollars.set_height_then_compute_date(
-            self.subsidy.height.multiply(&price.height),
-            last_height_to_date,
+            self.subsidy.height.multiply(height_price),
+            convert_sum_heights_to_date,
         );
 
         self.annualized_issuance
@@ -126,10 +136,18 @@ impl AnyDataset for MiningDataset {
                 .date
                 .divide(&circulating_supply.date),
         );
+    }
 
+    fn compute(
+        &self,
+        &ExportData {
+            convert_last_height_to_date,
+            ..
+        }: &ExportData,
+    ) {
         self.last_subsidy.compute_from_height_map(
             self.subsidy.height.inner.lock().as_ref().unwrap(),
-            last_height_to_date,
+            convert_last_height_to_date,
         );
         self.last_subsidy_in_dollars.compute_from_height_map(
             self.subsidy_in_dollars
@@ -138,7 +156,7 @@ impl AnyDataset for MiningDataset {
                 .lock()
                 .as_ref()
                 .unwrap(),
-            last_height_to_date,
+            convert_last_height_to_date,
         );
 
         self.blocks_mined_1w_sma

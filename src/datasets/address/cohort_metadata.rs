@@ -27,13 +27,13 @@ impl MetadataDataset {
 
 impl AnyDataset for MetadataDataset {
     fn compute(
-        &mut self,
+        &self,
         &ExportData {
-            last_height_to_date,
+            convert_last_height_to_date,
             ..
         }: &ExportData,
     ) {
-        self.address_count.compute_date(last_height_to_date);
+        self.address_count.compute_date(convert_last_height_to_date);
     }
 
     fn get_min_initial_state(&self) -> &MinInitialState {

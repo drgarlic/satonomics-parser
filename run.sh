@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+# https://stackoverflow.com/questions/31389483/find-and-delete-file-or-folder-older-than-x-days
+
 if [ "$(uname)" == "Darwin" ]; then
     ulimit -n 1000000
     # sudo mdutil -a -i off

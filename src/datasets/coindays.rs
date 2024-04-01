@@ -49,13 +49,13 @@ impl AnyDataset for CoindaysDataset {
     }
 
     fn compute(
-        &mut self,
+        &self,
         &ExportData {
-            sum_heights_to_date,
+            convert_sum_heights_to_date,
             ..
         }: &ExportData,
     ) {
-        self.destroyed.compute_date(sum_heights_to_date);
+        self.destroyed.compute_date(convert_sum_heights_to_date);
     }
 
     fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {

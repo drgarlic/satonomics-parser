@@ -11,7 +11,7 @@ use ordered_float::OrderedFloat;
 use rayon::prelude::*;
 
 use crate::{
-    bitcoin::{sats_to_btc, BitcoinDB},
+    bitcoin::BitcoinDB,
     databases::{
         AddressIndexToEmptyAddressData, Databases, RawAddressToAddressIndex, TxidToTxIndex,
     },
@@ -27,23 +27,15 @@ pub struct ParseData<'a> {
     pub bitcoin_db: &'a BitcoinDB,
     pub block: Block,
     pub block_index: usize,
-    pub coinbase_vec: &'a mut Vec<u64>,
     pub compute_addresses: bool,
     pub databases: &'a mut Databases,
     pub datasets: &'a mut AllDatasets,
     pub date: NaiveDate,
-    pub fees_vec: &'a mut Vec<Vec<u64>>,
     pub first_date_height: usize,
     pub height: usize,
     pub is_date_last_block: bool,
-    pub satblocks_destroyed_vec: &'a mut Vec<u64>,
-    pub satdays_destroyed_vec: &'a mut Vec<u64>,
-    pub sats_sent_vec: &'a mut Vec<u64>,
     pub states: &'a mut States,
-    pub subsidy_in_dollars_vec: &'a mut Vec<f32>,
-    pub subsidy_vec: &'a mut Vec<u64>,
     pub timestamp: u32,
-    pub transaction_count_vec: &'a mut Vec<usize>,
 }
 
 #[derive(Default, Debug)]
@@ -77,23 +69,15 @@ pub fn parse_block(
         bitcoin_db,
         block,
         block_index,
-        coinbase_vec,
         compute_addresses,
         databases,
         datasets,
         date,
-        fees_vec,
         first_date_height,
         height,
         is_date_last_block,
-        satblocks_destroyed_vec,
-        satdays_destroyed_vec,
-        sats_sent_vec,
         states,
-        subsidy_in_dollars_vec,
-        subsidy_vec,
         timestamp,
-        transaction_count_vec,
     }: ParseData,
 ) {
     // println!("block: {height}");
@@ -348,7 +332,6 @@ pub fn parse_block(
 
         if is_coinbase {
             coinbase = non_zero_amount;
-            coinbase_vec.push(coinbase);
         } else {
             outputs_sum += non_zero_amount;
         }
@@ -552,17 +535,6 @@ pub fn parse_block(
         ControlFlow::Continue(())
     });
 
-    let subsidy = coinbase - fees_total;
-    let subsidy_in_dollars = sats_to_btc(subsidy) * block_price;
-
-    satblocks_destroyed_vec.push(satblocks_destroyed);
-    satdays_destroyed_vec.push(satdays_destroyed);
-    sats_sent_vec.push(sats_sent);
-    transaction_count_vec.push(transaction_count);
-    fees_vec.push(fees.clone());
-    subsidy_vec.push(subsidy);
-    subsidy_in_dollars_vec.push(subsidy_in_dollars);
-
     let mut split_realized_states = None;
     let mut split_price_paid_states = None;
     let mut split_input_states = None;
@@ -670,21 +642,16 @@ pub fn parse_block(
         block_path_to_spent_data: &block_path_to_spent_data,
         block_price,
         coinbase,
-        coinbase_vec,
         databases,
         date,
         date_price,
         fees: &fees,
-        fees_vec,
         first_date_height,
         height,
         is_date_last_block,
         satblocks_destroyed,
-        satblocks_destroyed_vec,
         satdays_destroyed,
-        satdays_destroyed_vec,
         sats_sent,
-        sats_sent_vec,
         sorted_block_data_vec,
         split_input_states: &mut split_input_states,
         split_output_states: &mut split_output_states,
@@ -693,13 +660,8 @@ pub fn parse_block(
         split_unrealized_states_date: &split_unrealized_states_date,
         split_unrealized_states_height: &split_unrealized_states_height,
         states,
-        subsidy,
-        subsidy_in_dollars,
-        subsidy_in_dollars_vec,
-        subsidy_vec,
         timestamp,
         transaction_count,
-        transaction_count_vec,
     });
 }
 

@@ -81,10 +81,6 @@ where
         self.date
             .compute_from_height_map(self.height.inner.lock().as_ref().unwrap(), converter);
     }
-
-    pub fn insert(&self, height: usize, value: T) {
-        self.height.insert(height, value)
-    }
 }
 
 pub trait AnyBiMap {

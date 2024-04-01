@@ -7,6 +7,7 @@ use std::{
 };
 
 use chrono::{Days, NaiveDate};
+use itertools::Itertools;
 use ordered_float::{FloatCore, OrderedFloat};
 use parking_lot::Mutex;
 use serde::{de::DeserializeOwned, Serialize};
@@ -21,12 +22,12 @@ use super::{AnyExportableMap, AnyMap, Storage, WNaiveDate};
 const NUMBER_OF_UNSAFE_DATES: usize = 2;
 
 pub enum HeightToDateConverter<'a> {
-    Last(&'a BTreeMap<WNaiveDate, usize>),
+    Last(&'a DateMap<usize>),
     Sum {
-        date_to_first_height: &'a BTreeMap<WNaiveDate, usize>,
-        date_to_last_height: &'a BTreeMap<WNaiveDate, usize>,
+        first_height: &'a DateMap<usize>,
+        last_height: &'a DateMap<usize>,
     },
-    Manual,
+    // Manual,
 }
 
 pub struct DateMap<T> {
@@ -175,29 +176,43 @@ where
     pub fn compute_from_height_map(&self, map: &[T], converter: &HeightToDateConverter) {
         self.set_inner({
             match converter {
-                HeightToDateConverter::Last(date_to_last_height) => date_to_last_height
-                    .iter()
-                    .map(|(date, height)| {
-                        let v = map.get(*height).unwrap().clone();
+                HeightToDateConverter::Last(last_height) => {
+                    let last_height = last_height.inner.lock();
 
-                        (*date, v)
-                    })
-                    .collect(),
+                    last_height
+                        .as_ref()
+                        .unwrap()
+                        .iter()
+                        .map(|(date, height)| {
+                            let v = map.get(*height).unwrap().clone();
+
+                            (*date, v)
+                        })
+                        .collect()
+                }
                 HeightToDateConverter::Sum {
-                    date_to_first_height,
-                    date_to_last_height,
-                } => date_to_first_height
-                    .iter()
-                    .map(|(date, height)| {
-                        let v = map[*height..date_to_last_height.get(date).unwrap() + 1]
-                            .iter()
-                            .cloned()
-                            .sum::<T>();
+                    first_height,
+                    last_height,
+                } => {
+                    let last_height = last_height.inner.lock();
 
-                        (*date, v)
-                    })
-                    .collect(),
-                _ => todo!(),
+                    let first_height = first_height.inner.lock();
+
+                    first_height
+                        .as_ref()
+                        .unwrap()
+                        .iter()
+                        .map(|(date, height)| {
+                            let v = map
+                                [*height..last_height.as_ref().unwrap().get(date).unwrap() + 1]
+                                .iter()
+                                .cloned()
+                                .sum::<T>();
+
+                            (*date, v)
+                        })
+                        .collect()
+                }
             }
         });
     }
@@ -314,7 +329,9 @@ where
         + savefile::Serialize
         + savefile::Deserialize,
 {
-    fn prepare_tmp_data(&self) {
+    fn import_tmp_data(&self) {
+        // println!("import tmp {}", &self.path);
+
         if !self.modified.lock().to_owned() {
             return;
         }
@@ -415,11 +432,11 @@ where
     where
         T: Add<Output = T> + Copy + Default,
     {
-        if map1.len() != map2.len() {
-            panic!("Can't add two arrays with a different length");
-        }
-
-        Self::_transform(map1, |(date, value, ..)| *value + *map2.get(date).unwrap())
+        Self::_transform(map1, |(date, value, ..)| {
+            map2.get(date)
+                .map(|value2| *value + *value2)
+                .unwrap_or_default()
+        })
     }
 
     #[allow(unused)]
@@ -444,7 +461,11 @@ where
             panic!("Can't subtract two arrays with a different length");
         }
 
-        Self::_transform(map1, |(date, value, ..)| *value - *map2.get(date).unwrap())
+        Self::_transform(map1, |(date, value, ..)| {
+            map2.get(date)
+                .map(|value2| *value - *value2)
+                .unwrap_or_default()
+        })
     }
 
     #[allow(unused)]
@@ -465,11 +486,11 @@ where
     where
         T: Mul<Output = T> + Copy + Default,
     {
-        if map1.len() != map2.len() {
-            panic!("Can't multiply two arrays with a different length");
-        }
-
-        Self::_transform(map1, |(date, value, ..)| *value * *map2.get(date).unwrap())
+        Self::_transform(map1, |(date, value, ..)| {
+            map2.get(date)
+                .map(|value2| *value * *value2)
+                .unwrap_or_default()
+        })
     }
 
     #[allow(unused)]
@@ -490,11 +511,11 @@ where
     where
         T: Div<Output = T> + Copy + Default,
     {
-        if map1.len() != map2.len() {
-            panic!("Can't divide two arrays with a different length");
-        }
-
-        Self::_transform(map1, |(date, value, ..)| *value / *map2.get(date).unwrap())
+        Self::_transform(map1, |(date, value, ..)| {
+            map2.get(date)
+                .map(|value2| *value / *value2)
+                .unwrap_or_default()
+        })
     }
 
     #[allow(unused)]
@@ -629,16 +650,12 @@ where
             .map(|(index, (date, _))| {
                 let value = {
                     if index >= size - 1 {
-                        let starting_index = index - (size - 1);
-                        let len = index + 1 - starting_index;
-
-                        let mut chunks = map.values().skip(starting_index);
-
-                        let mut vec = Vec::with_capacity(len);
-
-                        for i in 0..len {
-                            vec[i] = OrderedFloat(*chunks.next().unwrap());
-                        }
+                        let mut vec = map
+                            .values()
+                            .rev()
+                            .take(size)
+                            .map(|v| OrderedFloat(*v))
+                            .collect_vec();
 
                         vec.sort_unstable();
 

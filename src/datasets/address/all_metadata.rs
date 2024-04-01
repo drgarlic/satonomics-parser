@@ -46,15 +46,16 @@ impl GenericDataset for AllAddressesMetadataDataset {
 
 impl AnyDataset for AllAddressesMetadataDataset {
     fn compute(
-        &mut self,
+        &self,
         &ExportData {
-            last_height_to_date,
+            convert_last_height_to_date,
             ..
         }: &ExportData,
     ) {
         self.total_addresses_created
-            .compute_date(last_height_to_date);
-        self.total_empty_addresses.compute_date(last_height_to_date);
+            .compute_date(convert_last_height_to_date);
+        self.total_empty_addresses
+            .compute_date(convert_last_height_to_date);
     }
 
     fn get_min_initial_state(&self) -> &MinInitialState {

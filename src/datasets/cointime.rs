@@ -152,27 +152,28 @@ impl AnyDataset for CointimeDataset {
     }
 
     fn compute(
-        &mut self,
+        &self,
         &ExportData {
             // height,
             annualized_transaction_volume,
             circulating_supply,
-            inflation_rate,
-            price,
+            yearly_inflation_rate: inflation_rate,
+            height_price,
             realized_cap,
             realized_price,
             subsidy_in_dollars,
-            sum_heights_to_date,
-            last_height_to_date,
+            convert_sum_heights_to_date,
+            convert_last_height_to_date,
             ..
         }: &ExportData,
     ) {
-        self.coinblocks_destroyed.compute_date(sum_heights_to_date);
+        self.coinblocks_destroyed
+            .compute_date(convert_sum_heights_to_date);
 
         self.cumulative_coinblocks_destroyed
             .set_height_then_compute_date(
                 self.coinblocks_destroyed.height.cumulate(),
-                last_height_to_date,
+                convert_last_height_to_date,
             );
 
         self.coinblocks_created.set_height_then_compute_date(
@@ -183,51 +184,51 @@ impl AnyDataset for CointimeDataset {
                 .as_ref()
                 .unwrap()
                 .clone(),
-            sum_heights_to_date,
+            convert_sum_heights_to_date,
         );
 
         self.cumulative_coinblocks_created
             .set_height_then_compute_date(
                 self.coinblocks_created.height.cumulate(),
-                last_height_to_date,
+                convert_last_height_to_date,
             );
 
         self.coinblocks_stored.set_height_then_compute_date(
             self.coinblocks_created
                 .height
                 .subtract(&self.coinblocks_destroyed.height),
-            sum_heights_to_date,
+            convert_sum_heights_to_date,
         );
 
         self.cumulative_coinblocks_stored
             .set_height_then_compute_date(
                 self.coinblocks_created.height.cumulate(),
-                last_height_to_date,
+                convert_last_height_to_date,
             );
 
         self.liveliness.set_height_then_compute_date(
             self.cumulative_coinblocks_destroyed
                 .height
                 .divide(&self.cumulative_coinblocks_created.height),
-            last_height_to_date,
+            convert_last_height_to_date,
         );
 
         self.vaultedness.set_height_then_compute_date(
             self.liveliness.height.transform(|(_, v, ..)| 1.0 - *v),
-            last_height_to_date,
+            convert_last_height_to_date,
         );
 
         self.activity_to_vaultedness_ratio
             .set_height_then_compute_date(
                 self.liveliness.height.divide(&self.vaultedness.height),
-                last_height_to_date,
+                convert_last_height_to_date,
             );
 
         self.concurrent_liveliness.set_height_then_compute_date(
             self.coinblocks_destroyed
                 .height
                 .divide(&self.coinblocks_created.height),
-            last_height_to_date,
+            convert_last_height_to_date,
         );
 
         self.concurrent_liveliness_2w_median.set_height(
@@ -253,19 +254,19 @@ impl AnyDataset for CointimeDataset {
 
         self.vaulted_supply.set_height_then_compute_date(
             self.vaultedness.height.multiply(&circulating_supply.height),
-            last_height_to_date,
+            convert_last_height_to_date,
         );
 
         self.vaulting_rate.set_height_then_compute_date(
             self.vaulted_supply
                 .height
                 .transform(|(_, v, ..)| *v * 365.0),
-            last_height_to_date,
+            convert_last_height_to_date,
         );
 
         self.active_supply.set_height_then_compute_date(
             self.liveliness.height.multiply(&circulating_supply.height),
-            last_height_to_date,
+            convert_last_height_to_date,
         );
 
         self.active_supply_net_change
@@ -290,7 +291,7 @@ impl AnyDataset for CointimeDataset {
                 inflation_rate
                     .height
                     .multiply(&self.activity_to_vaultedness_ratio.height),
-                last_height_to_date,
+                convert_last_height_to_date,
             );
 
         self.cointime_adjusted_velocity
@@ -298,7 +299,7 @@ impl AnyDataset for CointimeDataset {
                 annualized_transaction_volume
                     .height
                     .divide(&self.active_supply.height),
-                last_height_to_date,
+                convert_last_height_to_date,
             );
 
         // TODO:
@@ -311,18 +312,18 @@ impl AnyDataset for CointimeDataset {
 
         self.thermo_cap.set_height_then_compute_date(
             subsidy_in_dollars.height.cumulate(),
-            last_height_to_date,
+            convert_last_height_to_date,
         );
 
         self.investor_cap.set_height_then_compute_date(
             realized_cap.height.subtract(&self.thermo_cap.height),
-            last_height_to_date,
+            convert_last_height_to_date,
         );
 
         self.thermo_cap_to_investor_cap_ratio
             .set_height_then_compute_date(
                 self.thermo_cap.height.divide(&self.investor_cap.height),
-                last_height_to_date,
+                convert_last_height_to_date,
             );
 
         // TODO:
@@ -333,32 +334,32 @@ impl AnyDataset for CointimeDataset {
 
         self.active_price.set_height_then_compute_date(
             realized_price.height.divide(&self.liveliness.height),
-            last_height_to_date,
+            convert_last_height_to_date,
         );
 
         self.active_cap.set_height_then_compute_date(
-            self.active_supply.height.multiply(&price.height),
-            last_height_to_date,
+            self.active_supply.height.multiply(height_price),
+            convert_last_height_to_date,
         );
 
         self.vaulted_price.set_height_then_compute_date(
             realized_price.height.divide(&self.vaultedness.height),
-            last_height_to_date,
+            convert_last_height_to_date,
         );
 
         self.vaulted_cap.set_height_then_compute_date(
-            self.vaulted_supply.height.multiply(&price.height),
-            last_height_to_date,
+            self.vaulted_supply.height.multiply(height_price),
+            convert_last_height_to_date,
         );
 
         self.true_market_mean.set_height_then_compute_date(
             self.investor_cap.height.divide(&self.active_supply.height),
-            last_height_to_date,
+            convert_last_height_to_date,
         );
 
         self.true_market_deviation.set_height_then_compute_date(
             self.active_cap.height.divide(&self.investor_cap.height),
-            last_height_to_date,
+            convert_last_height_to_date,
         );
 
         self.true_market_net_unrealized_profit_and_loss
@@ -367,64 +368,64 @@ impl AnyDataset for CointimeDataset {
                     &self.active_cap.height.subtract(&self.investor_cap.height),
                     self.active_cap.height.inner.lock().as_ref().unwrap(),
                 ),
-                last_height_to_date,
+                convert_last_height_to_date,
             );
 
         self.investorness.set_height_then_compute_date(
             self.investor_cap.height.divide(&realized_cap.height),
-            last_height_to_date,
+            convert_last_height_to_date,
         );
 
         self.producerness.set_height_then_compute_date(
             self.thermo_cap.height.divide(&realized_cap.height),
-            last_height_to_date,
+            convert_last_height_to_date,
         );
 
         self.cointime_value_created.set_height_then_compute_date(
-            price.height.multiply(&self.coinblocks_created.height),
-            last_height_to_date,
+            height_price.multiply(&self.coinblocks_created.height),
+            convert_last_height_to_date,
         );
 
         self.cointime_value_destroyed.set_height_then_compute_date(
-            price.height.multiply(&self.coinblocks_destroyed.height),
-            last_height_to_date,
+            height_price.multiply(&self.coinblocks_destroyed.height),
+            convert_last_height_to_date,
         );
 
         self.cointime_value_stored.set_height_then_compute_date(
-            price.height.multiply(&self.coinblocks_stored.height),
-            last_height_to_date,
+            height_price.multiply(&self.coinblocks_stored.height),
+            convert_last_height_to_date,
         );
 
         self.total_cointime_value_created
             .set_height_then_compute_date(
                 self.cointime_value_created.height.cumulate(),
-                last_height_to_date,
+                convert_last_height_to_date,
             );
 
         self.total_cointime_value_destroyed
             .set_height_then_compute_date(
                 self.cointime_value_destroyed.height.cumulate(),
-                last_height_to_date,
+                convert_last_height_to_date,
             );
 
         self.total_cointime_value_stored
             .set_height_then_compute_date(
                 self.cointime_value_stored.height.cumulate(),
-                last_height_to_date,
+                convert_last_height_to_date,
             );
 
         self.cointime_price.set_height_then_compute_date(
             self.total_cointime_value_destroyed
                 .height
                 .divide(&self.cumulative_coinblocks_stored.height),
-            last_height_to_date,
+            convert_last_height_to_date,
         );
 
         self.cointime_cap.set_height_then_compute_date(
             self.cointime_price
                 .height
                 .multiply(&circulating_supply.height),
-            last_height_to_date,
+            convert_last_height_to_date,
         );
     }
 

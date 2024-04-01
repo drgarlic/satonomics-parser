@@ -39,12 +39,6 @@ pub trait AnyDataset {
                 })
     }
 
-    fn export(&self) -> color_eyre::Result<()> {
-        self.to_any_exported_map_vec()
-            .par_iter()
-            .try_for_each(|map| map.export_then_clean())
-    }
-
     fn to_any_inserted_map_vec(&self) -> Vec<&(dyn AnyMap + Send + Sync)> {
         // fn to_any_inserted_map_vec(&self) -> impl Iterator<Item = &(dyn AnyMap + Send + Sync)> {
         self.to_any_inserted_height_map_vec()
@@ -95,17 +89,19 @@ pub trait AnyDataset {
         self.to_any_inserted_map_vec().is_empty()
     }
 
-    fn prepare(&self) {
+    fn prepare(&self, _: &ExportData) {}
+
+    fn import_tmp_data(&self) {
         self.to_any_inserted_map_vec()
-            .par_iter()
-            .for_each(|map| map.prepare_tmp_data())
+            .into_par_iter()
+            .for_each(|map| map.import_tmp_data())
     }
 
-    fn compute(&mut self, _: &ExportData) {}
+    fn compute(&self, _: &ExportData) {}
 
-    fn export_then_clean(&mut self) -> color_eyre::Result<()> {
+    fn export_then_clean(&self) -> color_eyre::Result<()> {
         self.to_any_exported_map_vec()
-            .par_iter()
+            .into_par_iter()
             .try_for_each(|map| -> color_eyre::Result<()> { map.export_then_clean() })
     }
 }

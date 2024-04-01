@@ -7,7 +7,7 @@ use crate::{
 pub struct SupplySubDataset {
     min_initial_state: MinInitialState,
 
-    total_supply: BiMap<f32>,
+    pub total: BiMap<f32>,
 }
 
 impl SupplySubDataset {
@@ -17,7 +17,7 @@ impl SupplySubDataset {
         let s = Self {
             min_initial_state: MinInitialState::default(),
 
-            total_supply: BiMap::new_on_disk_bin(&f("total_supply")),
+            total: BiMap::new_in_memory_bin(&f("supply")),
         };
 
         s.min_initial_state.compute_from_dataset(&s);
@@ -30,21 +30,19 @@ impl SupplySubDataset {
         &ProcessedBlockData { height, .. }: &ProcessedBlockData,
         state: &SupplyState,
     ) {
-        self.total_supply
-            .height
-            .insert(height, sats_to_btc(state.total_supply));
+        self.total.height.insert(height, sats_to_btc(state.supply));
     }
 }
 
 impl AnyDataset for SupplySubDataset {
-    fn compute(
-        &mut self,
+    fn prepare(
+        &self,
         &ExportData {
-            last_height_to_date,
+            convert_last_height_to_date,
             ..
         }: &ExportData,
     ) {
-        self.total_supply.compute_date(last_height_to_date);
+        self.total.compute_date(convert_last_height_to_date);
     }
 
     fn get_min_initial_state(&self) -> &MinInitialState {
@@ -52,11 +50,11 @@ impl AnyDataset for SupplySubDataset {
     }
 
     fn to_any_inserted_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
-        vec![&self.total_supply.height]
+        vec![&self.total.height]
     }
 
     fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
-        vec![&self.total_supply]
+        vec![&self.total]
     }
 }
 
@@ -66,15 +64,15 @@ impl AnyDataset for SupplySubDataset {
 
 #[derive(Debug, Default)]
 pub struct SupplyState {
-    pub total_supply: u64,
+    pub supply: u64,
 }
 
 impl SupplyState {
     pub fn increment(&mut self, amount: u64) {
-        self.total_supply += amount;
+        self.supply += amount;
     }
 
     pub fn decrement(&mut self, amount: u64) {
-        self.total_supply -= amount;
+        self.supply -= amount;
     }
 }

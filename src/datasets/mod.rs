@@ -23,6 +23,7 @@ use cointime::*;
 use date_metadata::*;
 use mining::*;
 use price::*;
+use rayon::prelude::*;
 pub use subs::*;
 use transaction::*;
 use utxo::*;
@@ -32,8 +33,8 @@ use crate::{
     databases::Databases,
     io::Json,
     parse::{
-        AddressData, AddressRealizedData, BiMap, BlockData, BlockPath, HeightToDateConverter,
-        WNaiveDate,
+        AddressData, AddressRealizedData, BiMap, BlockData, BlockPath, DateMap, HeightMap,
+        HeightToDateConverter,
     },
     states::{
         SplitInputStates, SplitOutputStates, SplitPricePaidStates, SplitRealizedStates,
@@ -61,21 +62,16 @@ pub struct ProcessedBlockData<'a> {
     pub block_path_to_spent_data: &'a BTreeMap<BlockPath, SpentData>,
     pub block_price: f32,
     pub coinbase: u64,
-    pub coinbase_vec: &'a Vec<u64>,
     pub databases: &'a Databases,
     pub date: NaiveDate,
     pub date_price: f32,
     pub fees: &'a Vec<u64>,
-    pub fees_vec: &'a Vec<Vec<u64>>,
     pub first_date_height: usize,
     pub height: usize,
     pub is_date_last_block: bool,
     pub satblocks_destroyed: u64,
-    pub satblocks_destroyed_vec: &'a Vec<u64>,
     pub satdays_destroyed: u64,
-    pub satdays_destroyed_vec: &'a Vec<u64>,
     pub sats_sent: u64,
-    pub sats_sent_vec: &'a Vec<u64>,
     pub sorted_block_data_vec: Option<Vec<SortedBlockData<'a>>>,
     pub split_input_states: &'a mut Option<SplitInputStates>,
     pub split_output_states: &'a mut Option<SplitOutputStates>,
@@ -84,25 +80,18 @@ pub struct ProcessedBlockData<'a> {
     pub split_unrealized_states_date: &'a Option<SplitUnrealizedStates>,
     pub split_unrealized_states_height: &'a Option<SplitUnrealizedStates>,
     pub states: &'a States,
-    pub subsidy: u64,
-    pub subsidy_in_dollars: f32,
-    pub subsidy_in_dollars_vec: &'a Vec<f32>,
-    pub subsidy_vec: &'a Vec<u64>,
     pub timestamp: u32,
     pub transaction_count: usize,
-    pub transaction_count_vec: &'a Vec<usize>,
 }
 
 pub struct ExportData<'a> {
-    // pub height: usize,
     pub annualized_transaction_volume: &'a BiMap<f32>,
     pub circulating_supply: &'a BiMap<f32>,
-    pub date_to_first_height: &'a BTreeMap<WNaiveDate, usize>,
-    pub date_to_last_height: &'a BTreeMap<WNaiveDate, usize>,
-    pub last_height_to_date: &'a HeightToDateConverter<'a>,
-    pub sum_heights_to_date: &'a HeightToDateConverter<'a>,
-    pub inflation_rate: &'a BiMap<f32>,
-    pub price: &'a BiMap<f32>,
+    pub convert_last_height_to_date: &'a HeightToDateConverter<'a>,
+    pub convert_sum_heights_to_date: &'a HeightToDateConverter<'a>,
+    pub yearly_inflation_rate: &'a BiMap<f32>,
+    pub height_price: &'a HeightMap<f32>,
+    pub date_price: &'a DateMap<f32>,
     pub realized_cap: &'a BiMap<f32>,
     pub realized_price: &'a BiMap<f32>,
     pub subsidy_in_dollars: &'a BiMap<f32>,
@@ -115,12 +104,12 @@ pub struct AllDatasets {
     pub price: PriceDatasets,
     pub utxo: UTXODatasets,
 
-    block_metadata: BlockMetadataDataset,
-    cointime: CointimeDataset,
-    coindays: CoindaysDataset,
+    pub block_metadata: BlockMetadataDataset,
+    pub cointime: CointimeDataset,
+    pub coindays: CoindaysDataset,
     pub date_metadata: DateMetadataDataset,
-    mining: MiningDataset,
-    transaction: TransactionDataset,
+    pub mining: MiningDataset,
+    pub transaction: TransactionDataset,
 }
 
 impl AllDatasets {
@@ -190,6 +179,71 @@ impl AllDatasets {
             .collect();
 
         Json::export("./datasets/paths.json", &path_to_type)
+    }
+
+    pub fn export(&self) -> color_eyre::Result<()> {
+        self._export_if_needed(None, true)
+    }
+
+    pub fn export_if_needed(
+        &self,
+        date: NaiveDate,
+        height: usize,
+        compute: bool,
+    ) -> color_eyre::Result<()> {
+        self._export_if_needed(Some((height, date)), compute)
+    }
+
+    pub fn _export_if_needed(
+        &self,
+        height_and_date: Option<(usize, NaiveDate)>,
+        compute: bool,
+    ) -> color_eyre::Result<()> {
+        let export_data = ExportData {
+            // They all need to be:
+            // - Be stored memory
+            // - Either inserted or computed in the prepare function
+            annualized_transaction_volume: &self.transaction.annualized_volume,
+            circulating_supply: &self.utxo.all.subs.supply.total,
+            yearly_inflation_rate: &self.mining.yearly_inflation_rate,
+            height_price: &self.price.height.closes,
+            date_price: &self.price.date.closes,
+            realized_cap: &self.utxo.all.subs.price_paid.realized_cap,
+            realized_price: &self.utxo.all.subs.price_paid.realized_price,
+            subsidy_in_dollars: &self.mining.subsidy_in_dollars,
+
+            convert_last_height_to_date: &HeightToDateConverter::Last(
+                &self.date_metadata.first_height,
+            ),
+            convert_sum_heights_to_date: &HeightToDateConverter::Sum {
+                first_height: &self.date_metadata.first_height,
+                last_height: &self.date_metadata.last_height,
+            },
+        };
+
+        let vec = self.to_generic_dataset_vec();
+
+        vec.iter().for_each(|dataset| dataset.prepare(&export_data));
+
+        vec.into_par_iter()
+            .filter(|dataset| {
+                if let Some((height, date)) = height_and_date {
+                    dataset.should_insert(height, date)
+                } else {
+                    true
+                }
+            })
+            .try_for_each(|dataset| -> color_eyre::Result<()> {
+                dataset.import_tmp_data();
+
+                if compute {
+                    dataset.compute(&export_data);
+                }
+
+                dataset.export_then_clean()
+            })?;
+
+        Ok(())
     }
 }
 

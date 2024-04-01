@@ -39,15 +39,15 @@ impl OutputSubDataset {
 
 impl AnyDataset for OutputSubDataset {
     fn compute(
-        &mut self,
+        &self,
         &ExportData {
-            last_height_to_date,
-            sum_heights_to_date,
+            convert_last_height_to_date,
+            convert_sum_heights_to_date,
             ..
         }: &ExportData,
     ) {
-        self.count.compute_date(last_height_to_date);
-        self.volume.compute_date(sum_heights_to_date);
+        self.count.compute_date(convert_last_height_to_date);
+        self.volume.compute_date(convert_sum_heights_to_date);
     }
 
     fn get_min_initial_state(&self) -> &MinInitialState {

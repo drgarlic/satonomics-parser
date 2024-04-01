@@ -83,24 +83,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "98f7eed2b2781a6f0b5c903471d48e15f56fb4e1165df8a9a2337fd1a59d45ea"
 
 [[package]]
-name = "bincode"
-version = "2.0.0-rc.3"
-source = "git+https://github.com/bincode-org/bincode.git#8f65c60f192ff6093e6a1326b9d078a3b26c9a29"
-dependencies = [
- "bincode_derive",
- "serde",
- "unty",
-]
-
-[[package]]
-name = "bincode_derive"
-version = "2.0.0-rc.3"
-source = "git+https://github.com/bincode-org/bincode.git#8f65c60f192ff6093e6a1326b9d078a3b26c9a29"
-dependencies = [
- "virtue",
-]
-
-[[package]]
 name = "bit-set"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -407,33 +389,6 @@ checksum = "a258e46cdc063eb8519c00b9fc845fc47bcfca4130e2f08e88665ceda8474245"
 dependencies = [
  "libc",
  "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "explorer"
-version = "0.1.0"
-dependencies = [
- "bincode",
- "bitcoin",
- "bitcoin_hashes 0.14.0",
- "byteorder",
- "chrono",
- "color-eyre",
- "db-key",
- "derive_deref",
- "itertools",
- "leveldb",
- "ordered-float",
- "par-iter-sync",
- "parking_lot 0.12.1",
- "rayon",
- "reqwest",
- "rkyv",
- "sanakirja",
- "savefile",
- "savefile-derive",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -1102,6 +1057,32 @@ dependencies = [
  "redox_syscall 0.4.1",
  "smallvec",
  "windows-targets 0.48.5",
+]
+
+[[package]]
+name = "parser"
+version = "0.1.0"
+dependencies = [
+ "bitcoin",
+ "bitcoin_hashes 0.14.0",
+ "byteorder",
+ "chrono",
+ "color-eyre",
+ "db-key",
+ "derive_deref",
+ "itertools",
+ "leveldb",
+ "ordered-float",
+ "par-iter-sync",
+ "parking_lot 0.12.1",
+ "rayon",
+ "reqwest",
+ "rkyv",
+ "sanakirja",
+ "savefile",
+ "savefile-derive",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1814,12 +1795,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "unty"
-version = "0.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1a88342087869553c259588a3ec9ca73ce9b2d538b7051ba5789ff236b6c129"
-
-[[package]]
 name = "url"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1853,12 +1828,6 @@ name = "version_check"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
-
-[[package]]
-name = "virtue"
-version = "0.0.16"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b6826a786a78cf1bb0937507b5551fb6f827d66269a24b00af0de247b19bbc7"
 
 [[package]]
 name = "want"

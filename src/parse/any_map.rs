@@ -1,5 +1,5 @@
 pub trait AnyMap: AnyExportableMap {
-    fn prepare_tmp_data(&self);
+    fn import_tmp_data(&self);
 
     fn path(&self) -> &str;
 

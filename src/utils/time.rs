@@ -1,14 +1,14 @@
 use std::time::Instant;
 
-pub fn time<F, T>(name: &str, func: F) -> T
+pub fn time<F, T>(name: &str, function: F) -> T
 where
     F: FnOnce() -> T,
 {
     let time = Instant::now();
 
-    let out = func();
+    let returned = function();
 
-    println!("{name}: {} seconds\n", time.elapsed().as_secs_f32());
+    println!("{name}: {} seconds", time.elapsed().as_secs_f32());
 
-    out
+    returned
 }

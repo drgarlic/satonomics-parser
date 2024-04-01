@@ -2,13 +2,15 @@ use itertools::Itertools;
 
 use crate::{
     datasets::{AnyDataset, ExportData, MinInitialState, ProcessedBlockData},
-    parse::{AnyExportableMap, AnyHeightMap, BiMap},
+    parse::{AnyExportableMap, AnyHeightMap, AnyMap, BiMap},
 };
 
 pub struct PricePaidSubDataset {
     min_initial_state: MinInitialState,
 
-    realized_cap: BiMap<f32>,
+    pub realized_cap: BiMap<f32>,
+    pub realized_price: BiMap<f32>,
+
     pp_median: BiMap<f32>,
     pp_95p: BiMap<f32>,
     pp_90p: BiMap<f32>,
@@ -37,7 +39,9 @@ impl PricePaidSubDataset {
         let s = Self {
             min_initial_state: MinInitialState::default(),
 
-            realized_cap: BiMap::new_on_disk_bin(&f("realized_cap")),
+            realized_cap: BiMap::new_in_memory_bin(&f("realized_cap")),
+            realized_price: BiMap::new_in_memory_bin(&f("realized_price")),
+
             pp_median: BiMap::new_on_disk_bin(&f("median_price_paid")),
             pp_95p: BiMap::new_on_disk_bin(&f("95p_price_paid")),
             pp_90p: BiMap::new_on_disk_bin(&f("90p_price_paid")),
@@ -68,6 +72,7 @@ impl PricePaidSubDataset {
         &self,
         &ProcessedBlockData { height, .. }: &ProcessedBlockData,
         state: &PricePaidState,
+        cohort_supply: &BiMap<f32>,
     ) {
         let PricePaidState {
             realized_cap,
@@ -94,6 +99,29 @@ impl PricePaidSubDataset {
         } = state;
 
         self.realized_cap.height.insert(height, *realized_cap);
+
+        // TODO: Move to prepare function instead of inserting
+        {
+            let supply = cohort_supply.height.inner.lock();
+
+            self.realized_price.height.insert(
+                height,
+                supply
+                    .as_ref()
+                    .unwrap_or_else(|| {
+                        panic!("Cannot unwrap None: {}", &self.realized_price.height.path())
+                    })
+                    .get(height)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "Can't find height {}: {}",
+                            height,
+                            &self.realized_price.height.path()
+                        )
+                    })
+                    / realized_cap,
+            );
+        }
 
         // Check if iter was empty
         if pp_05p.is_none() {
@@ -132,6 +160,7 @@ impl PricePaidSubDataset {
     pub fn to_vec(&self) -> Vec<&BiMap<f32>> {
         vec![
             &self.realized_cap,
+            &self.realized_price,
             &self.pp_95p,
             &self.pp_90p,
             &self.pp_85p,
@@ -157,15 +186,15 @@ impl PricePaidSubDataset {
 
 impl AnyDataset for PricePaidSubDataset {
     fn compute(
-        &mut self,
+        &self,
         &ExportData {
-            last_height_to_date,
+            convert_last_height_to_date,
             ..
         }: &ExportData,
     ) {
         self.to_vec()
-            .iter()
-            .for_each(|dataset| dataset.compute_date(last_height_to_date));
+            .into_iter()
+            .for_each(|dataset| dataset.compute_date(convert_last_height_to_date));
     }
 
     fn get_min_initial_state(&self) -> &MinInitialState {

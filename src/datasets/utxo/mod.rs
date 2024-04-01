@@ -16,7 +16,7 @@ use super::{GenericDataset, MinInitialState};
 pub struct UTXODatasets {
     min_initial_state: MinInitialState,
 
-    all: UTXODataset,
+    pub all: UTXODataset,
 
     up_to_1d: UTXODataset,
     up_to_7d: UTXODataset,
@@ -289,8 +289,7 @@ impl AnyDatasets for UTXODatasets {
 
     fn to_generic_dataset_vec(&self) -> Vec<&(dyn GenericDataset + Send + Sync)> {
         self.to_vec()
-            .iter()
-            .cloned()
+            .into_iter()
             .map(|dataset| dataset as &(dyn GenericDataset + Send + Sync))
             .collect_vec()
     }

@@ -44,14 +44,15 @@ impl RealizedSubDataset {
 
 impl AnyDataset for RealizedSubDataset {
     fn compute(
-        &mut self,
+        &self,
         &ExportData {
-            sum_heights_to_date,
+            convert_sum_heights_to_date,
             ..
         }: &ExportData,
     ) {
-        self.realized_loss.compute_date(sum_heights_to_date);
-        self.realized_profit.compute_date(sum_heights_to_date);
+        self.realized_loss.compute_date(convert_sum_heights_to_date);
+        self.realized_profit
+            .compute_date(convert_sum_heights_to_date);
     }
 
     fn get_min_initial_state(&self) -> &MinInitialState {

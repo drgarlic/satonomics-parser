@@ -10,8 +10,8 @@ use super::{AnyDatasets, GenericDataset, MinInitialState};
 pub struct PriceDatasets {
     min_initial_state: MinInitialState,
 
-    date: DateDataset,
-    height: HeightDataset,
+    pub date: DateDataset,
+    pub height: HeightDataset,
 }
 
 impl PriceDatasets {

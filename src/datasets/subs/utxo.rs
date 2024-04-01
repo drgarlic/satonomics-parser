@@ -35,13 +35,15 @@ impl UTXOSubDataset {
 
 impl AnyDataset for UTXOSubDataset {
     fn compute(
-        &mut self,
+        &self,
         &ExportData {
-            last_height_to_date,
+            convert_last_height_to_date,
             ..
         }: &ExportData,
     ) {
-        self.count.compute_date(last_height_to_date);
+        println!("compute utxo count");
+
+        self.count.compute_date(convert_last_height_to_date);
     }
 
     fn get_min_initial_state(&self) -> &MinInitialState {

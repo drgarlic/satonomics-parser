@@ -96,7 +96,7 @@ impl GenericDataset for UTXODataset {
                 let sat_amount = block_data.amount;
                 let btc_amount = sats_to_btc(sat_amount);
 
-                supply_state.total_supply += sat_amount;
+                supply_state.supply += sat_amount;
                 utxo_state.count += block_data.spendable_outputs as usize;
 
                 if needs_unrealized_data {
@@ -108,7 +108,7 @@ impl GenericDataset for UTXODataset {
                 }
             });
 
-        let total_supply = supply_state.total_supply;
+        let total_supply = supply_state.supply;
 
         self.subs.supply.insert(processed_block_data, &supply_state);
 
@@ -144,7 +144,10 @@ impl GenericDataset for UTXODataset {
                     pp_state.iterate(price, btc_amount, sat_amount, total_supply);
                 });
 
-            self.subs.price_paid.insert(processed_block_data, &pp_state);
+            // MUST BE after insert supply
+            self.subs
+                .price_paid
+                .insert(processed_block_data, &pp_state, &self.subs.supply.total);
         }
 
         if needs_output_data {

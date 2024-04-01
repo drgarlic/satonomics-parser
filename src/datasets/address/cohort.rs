@@ -30,7 +30,7 @@ impl CohortDataset {
     ) -> color_eyre::Result<Self> {
         let folder_path = format!("{parent_path}/{name}");
 
-        let f = |s: &str| format!("{folder_path}/{s}");
+        let f = |s: &str| format!("{parent_path}/{s}/{name}");
 
         let s = Self {
             min_initial_state: MinInitialState::default(),
@@ -248,16 +248,24 @@ impl CohortDataset {
             .get_state(&self.split)
             .unwrap();
 
-        self.all.price_paid.insert(processed_block_data, &state.all);
-        self.illiquid
+        self.all
             .price_paid
-            .insert(processed_block_data, &state.illiquid);
-        self.liquid
-            .price_paid
-            .insert(processed_block_data, &state.liquid);
-        self.highly_liquid
-            .price_paid
-            .insert(processed_block_data, &state.highly_liquid);
+            .insert(processed_block_data, &state.all, &self.all.supply.total);
+        self.illiquid.price_paid.insert(
+            processed_block_data,
+            &state.illiquid,
+            &self.illiquid.supply.total,
+        );
+        self.liquid.price_paid.insert(
+            processed_block_data,
+            &state.liquid,
+            &self.liquid.supply.total,
+        );
+        self.highly_liquid.price_paid.insert(
+            processed_block_data,
+            &state.highly_liquid,
+            &self.highly_liquid.supply.total,
+        );
     }
 
     fn insert_input_data(&self, processed_block_data: &ProcessedBlockData) {
@@ -298,6 +306,16 @@ impl CohortDataset {
         self.highly_liquid
             .output
             .insert(processed_block_data, &state.highly_liquid);
+    }
+
+    fn to_vec(&self) -> Vec<&(dyn AnyDataset + Send + Sync)> {
+        vec![
+            &self.all,
+            &self.illiquid,
+            &self.liquid,
+            &self.highly_liquid,
+            &self.metadata,
+        ]
     }
 }
 
@@ -352,6 +370,7 @@ impl GenericDataset for CohortDataset {
             self.insert_unrealized_data(processed_block_data);
         }
 
+        // MUST BE after insert_supply
         if needs_price_paid {
             self.insert_price_paid_data(processed_block_data);
         }
@@ -368,68 +387,38 @@ impl GenericDataset for CohortDataset {
 
 impl AnyDataset for CohortDataset {
     fn to_any_inserted_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
-        [
-            self.all.to_any_inserted_height_map_vec(),
-            self.illiquid.to_any_inserted_height_map_vec(),
-            self.liquid.to_any_inserted_height_map_vec(),
-            self.highly_liquid.to_any_inserted_height_map_vec(),
-            self.metadata.to_any_inserted_height_map_vec(),
-        ]
-        .into_iter()
-        .flatten()
-        .collect_vec()
+        self.to_vec()
+            .into_iter()
+            .flat_map(|d| d.to_any_inserted_height_map_vec())
+            .collect_vec()
     }
 
     fn to_any_inserted_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
-        [
-            self.all.to_any_inserted_date_map_vec(),
-            self.illiquid.to_any_inserted_date_map_vec(),
-            self.liquid.to_any_inserted_date_map_vec(),
-            self.highly_liquid.to_any_inserted_date_map_vec(),
-            self.metadata.to_any_inserted_date_map_vec(),
-        ]
-        .into_iter()
-        .flatten()
-        .collect_vec()
+        self.to_vec()
+            .into_iter()
+            .flat_map(|d| d.to_any_inserted_date_map_vec())
+            .collect_vec()
     }
 
     fn to_any_exported_date_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
-        [
-            self.all.to_any_exported_date_map_vec(),
-            self.illiquid.to_any_exported_date_map_vec(),
-            self.liquid.to_any_exported_date_map_vec(),
-            self.highly_liquid.to_any_exported_date_map_vec(),
-            self.metadata.to_any_exported_date_map_vec(),
-        ]
-        .into_iter()
-        .flatten()
-        .collect_vec()
+        self.to_vec()
+            .into_iter()
+            .flat_map(|d| d.to_any_exported_date_map_vec())
+            .collect_vec()
     }
 
     fn to_any_exported_height_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
-        [
-            self.all.to_any_exported_height_map_vec(),
-            self.illiquid.to_any_exported_height_map_vec(),
-            self.liquid.to_any_exported_height_map_vec(),
-            self.highly_liquid.to_any_exported_height_map_vec(),
-            self.metadata.to_any_exported_height_map_vec(),
-        ]
-        .into_iter()
-        .flatten()
-        .collect_vec()
+        self.to_vec()
+            .into_iter()
+            .flat_map(|d| d.to_any_exported_height_map_vec())
+            .collect_vec()
     }
 
     fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
-        [
-            self.all.to_any_exported_bi_map_vec(),
-            self.illiquid.to_any_exported_bi_map_vec(),
-            self.liquid.to_any_exported_bi_map_vec(),
-            self.highly_liquid.to_any_exported_bi_map_vec(),
-            self.metadata.to_any_exported_bi_map_vec(),
-        ]
-        .into_iter()
-        .flatten()
-        .collect_vec()
+        self.to_vec()
+            .into_iter()
+            .flat_map(|d| d.to_any_exported_bi_map_vec())
+            .collect_vec()
     }
 
     fn get_min_initial_state(&self) -> &MinInitialState {

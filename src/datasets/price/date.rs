@@ -14,21 +14,19 @@ pub struct DateDataset {
 
     kraken_daily: Option<HashMap<String, f32>>,
 
-    closes: DateMap<f32>,
+    pub closes: DateMap<f32>,
 }
 
 impl DateDataset {
     pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
         let name = "close";
 
-        let closes = DateMap::new_in_memory_json(&format!("{parent_path}/{name}"));
-
         let s = Self {
             min_initial_state: MinInitialState::default(),
 
             kraken_daily: None,
 
-            closes,
+            closes: DateMap::new_in_memory_json(&format!("{parent_path}/{name}")),
         };
 
         s.min_initial_state.compute_from_dataset(&s);

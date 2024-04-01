@@ -107,7 +107,7 @@ impl ProcessedAddressesState {
 
     pub fn compute_price_paid_state(&self) -> PricePaidState {
         self.mean_price_paid_in_cents_to_amount
-            .compute_price_paid_state(self.supply.total_supply)
+            .compute_price_paid_state(self.supply.supply)
     }
 
     pub fn compute_unrealized_state(&self, ref_price: f32) -> UnrealizedState {

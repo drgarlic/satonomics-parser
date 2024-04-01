@@ -24,10 +24,10 @@ impl TransactionDataset {
         let s = Self {
             min_initial_state: MinInitialState::default(),
 
-            count: BiMap::new_on_disk_bin(&f("transaction_count")),
-            volume: BiMap::new_on_disk_bin(&f("transaction_volume")),
+            count: BiMap::new_in_memory_bin(&f("transaction_count")),
+            volume: BiMap::new_in_memory_bin(&f("transaction_volume")),
 
-            annualized_volume: BiMap::new_on_disk_bin(&f("annualized_transaction_volume")),
+            annualized_volume: BiMap::new_in_memory_bin(&f("annualized_transaction_volume")),
             velocity: BiMap::new_on_disk_bin(&f("transaction_velocity")),
         };
 
@@ -47,8 +47,8 @@ impl GenericDataset for TransactionDataset {
             ..
         }: &ProcessedBlockData,
     ) {
-        self.count.insert(height, transaction_count);
-        self.volume.insert(height, sats_to_btc(sats_sent));
+        self.count.height.insert(height, transaction_count);
+        self.volume.height.insert(height, sats_to_btc(sats_sent));
     }
 }
 
@@ -57,23 +57,29 @@ impl AnyDataset for TransactionDataset {
         vec![&self.count.height, &self.volume.height]
     }
 
-    fn compute(
-        &mut self,
+    fn prepare(
+        &self,
         &ExportData {
-            circulating_supply,
-            last_height_to_date,
-            sum_heights_to_date,
+            convert_last_height_to_date,
+            convert_sum_heights_to_date,
             ..
         }: &ExportData,
     ) {
-        self.count.compute_date(last_height_to_date);
-        self.volume.compute_date(sum_heights_to_date);
+        self.count.compute_date(convert_last_height_to_date);
+        self.volume.compute_date(convert_sum_heights_to_date);
 
         self.annualized_volume
             .set_height(self.volume.height.last_x_sum(ONE_YEAR_IN_BLOCK_TIME));
         self.annualized_volume
             .set_date(self.volume.date.last_x_sum(ONE_YEAR_IN_DAYS));
+    }
 
+    fn compute(
+        &self,
+        &ExportData {
+            circulating_supply, ..
+        }: &ExportData,
+    ) {
         self.velocity.set_height(
             self.annualized_volume
                 .height

@@ -16,14 +16,12 @@ pub struct HeightDataset {
     binance_1mn: Option<BTreeMap<u32, f32>>,
     binance_har: Option<BTreeMap<u32, f32>>,
 
-    closes: HeightMap<f32>,
+    pub closes: HeightMap<f32>,
 }
 
 impl HeightDataset {
     pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
         let name = "close";
-
-        let closes = HeightMap::new_in_memory_json(&format!("{parent_path}/{name}"));
 
         let s = Self {
             min_initial_state: MinInitialState::default(),
@@ -32,7 +30,7 @@ impl HeightDataset {
             binance_har: None,
             kraken_1mn: None,
 
-            closes,
+            closes: HeightMap::new_in_memory_json(&format!("{parent_path}/{name}")),
         };
 
         s.min_initial_state.compute_from_dataset(&s);

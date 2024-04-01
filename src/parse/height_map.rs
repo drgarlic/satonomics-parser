@@ -270,7 +270,9 @@ where
         + savefile::Deserialize
         + savefile::ReprC,
 {
-    fn prepare_tmp_data(&self) {
+    fn import_tmp_data(&self) {
+        // println!("import tmp {}", &self.path);
+
         if !self.modified.lock().to_owned() {
             return;
         }
@@ -371,11 +373,9 @@ where
     where
         T: Add<Output = T> + Copy + Default,
     {
-        if arr1.len() != arr2.len() {
-            panic!("Can't add two arrays with a different length");
-        }
-
-        Self::_transform(arr1, |(index, value, _)| *value + *arr2.get(index).unwrap())
+        Self::_transform(Self::slice_arr1(arr1, arr2), |(index, value, _)| {
+            *value + *arr2.get(index).unwrap()
+        })
     }
 
     pub fn subtract(&self, other: &Self) -> Vec<T>
@@ -392,11 +392,9 @@ where
     where
         T: Sub<Output = T> + Copy + Default,
     {
-        if arr1.len() != arr2.len() {
-            panic!("Can't subtract two arrays with a different length");
-        }
-
-        Self::_transform(arr1, |(index, value, _)| *value - *arr2.get(index).unwrap())
+        Self::_transform(Self::slice_arr1(arr1, arr2), |(index, value, _)| {
+            *value - *arr2.get(index).unwrap()
+        })
     }
 
     pub fn multiply(&self, other: &Self) -> Vec<T>
@@ -413,11 +411,9 @@ where
     where
         T: Mul<Output = T> + Copy + Default,
     {
-        if arr1.len() != arr2.len() {
-            panic!("Can't multiply two arrays with a different length");
-        }
-
-        Self::_transform(arr1, |(index, value, _)| *value * *arr2.get(index).unwrap())
+        Self::_transform(Self::slice_arr1(arr1, arr2), |(index, value, _)| {
+            *value * *arr2.get(index).unwrap()
+        })
     }
 
     pub fn divide(&self, other: &Self) -> Vec<T>
@@ -434,11 +430,17 @@ where
     where
         T: Div<Output = T> + Copy + Default,
     {
-        if arr1.len() != arr2.len() {
-            panic!("Can't divide two arrays with a different length");
-        }
+        Self::_transform(Self::slice_arr1(arr1, arr2), |(index, value, _)| {
+            *value / *arr2.get(index).unwrap()
+        })
+    }
 
-        Self::_transform(arr1, |(index, value, _)| *value / *arr2.get(index).unwrap())
+    fn slice_arr1<'a>(arr1: &'a [T], arr2: &'a [T]) -> &'a [T] {
+        if arr1.len() > arr2.len() {
+            &arr1[..arr2.len()]
+        } else {
+            arr1
+        }
     }
 
     pub fn cumulate(&self) -> Vec<T>
