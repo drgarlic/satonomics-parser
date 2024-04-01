@@ -11,7 +11,7 @@ pub struct LiquidityClassification {
 impl LiquidityClassification {
     /// Following this:
     /// https://insights.glassnode.com/bitcoin-liquid-supply/
-    /// https://www.desmos.com/calculator/ezvbhwk4ph
+    /// https://www.desmos.com/calculator/dutgni5rtj
     pub fn new(sent: u64, received: u64) -> Self {
         let liquidity = {
             let liquidity = sats_to_btc(sent) / sats_to_btc(received);

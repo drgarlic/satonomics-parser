@@ -9,6 +9,7 @@ mod utxo;
 pub use input::*;
 pub use output::*;
 pub use price_paid::*;
+use rayon::prelude::*;
 pub use realized::*;
 pub use supply::*;
 pub use unrealized::*;
@@ -21,7 +22,7 @@ use crate::{
     parse::{AnyDateMap, AnyExportableMap, AnyHeightMap},
 };
 
-use super::MinInitialState;
+use super::{ExportData, MinInitialState};
 
 // Doesn't impl Datasets as insert aren't generic
 pub struct SubDataset {
@@ -71,6 +72,18 @@ impl SubDataset {
 impl AnyDataset for SubDataset {
     fn get_min_initial_state(&self) -> &MinInitialState {
         &self.min_initial_state
+    }
+
+    fn prepare(&self, export_data: &ExportData) {
+        self.to_vec()
+            .into_par_iter()
+            .for_each(|d| d.prepare(export_data))
+    }
+
+    fn compute(&self, export_data: &ExportData) {
+        self.to_vec()
+            .into_par_iter()
+            .for_each(|d| d.compute(export_data))
     }
 
     fn to_any_inserted_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {

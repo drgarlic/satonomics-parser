@@ -41,8 +41,6 @@ impl AnyDataset for UTXOSubDataset {
             ..
         }: &ExportData,
     ) {
-        println!("compute utxo count");
-
         self.count.compute_date(convert_last_height_to_date);
     }
 

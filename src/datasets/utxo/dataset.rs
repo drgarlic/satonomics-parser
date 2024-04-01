@@ -3,8 +3,9 @@ use chrono::NaiveDate;
 use crate::{
     bitcoin::sats_to_btc,
     datasets::{
-        AnyDataset, GenericDataset, InputState, MinInitialState, OutputState, PricePaidState,
-        ProcessedBlockData, RealizedState, SubDataset, SupplyState, UTXOState, UnrealizedState,
+        AnyDataset, ExportData, GenericDataset, InputState, MinInitialState, OutputState,
+        PricePaidState, ProcessedBlockData, RealizedState, SubDataset, SupplyState, UTXOState,
+        UnrealizedState,
     },
     parse::{reverse_date_index, AnyDateMap, AnyExportableMap, AnyHeightMap, BlockData},
 };
@@ -228,6 +229,14 @@ impl GenericDataset for UTXODataset {
 impl AnyDataset for UTXODataset {
     fn get_min_initial_state(&self) -> &MinInitialState {
         &self.min_initial_state
+    }
+
+    fn prepare(&self, export_data: &ExportData) {
+        self.subs.prepare(export_data)
+    }
+
+    fn compute(&self, export_data: &ExportData) {
+        self.subs.compute(export_data)
     }
 
     fn to_any_inserted_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
