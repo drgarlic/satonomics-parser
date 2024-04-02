@@ -1,11 +1,12 @@
 use chrono::NaiveDate;
+use itertools::Itertools;
 
 use crate::{
     bitcoin::sats_to_btc,
     datasets::{
-        AnyDataset, ExportData, GenericDataset, InputState, MinInitialState, OutputState,
-        PricePaidState, ProcessedBlockData, RealizedState, SubDataset, SupplyState, UTXOState,
-        UnrealizedState,
+        AnyDataset, AnyDatasetGroup, ExportData, GenericDataset, InputState, MinInitialState,
+        OutputState, PricePaidState, ProcessedBlockData, RealizedState, SubDataset, SupplyState,
+        UTXOState, UnrealizedState,
     },
     parse::{reverse_date_index, AnyDateMap, AnyExportableMap, AnyHeightMap, BlockData},
 };
@@ -232,30 +233,56 @@ impl AnyDataset for UTXODataset {
     }
 
     fn prepare(&self, export_data: &ExportData) {
-        self.subs.prepare(export_data)
+        self.subs
+            .to_vec()
+            .into_iter()
+            .for_each(|d| d.prepare(export_data))
     }
 
     fn compute(&self, export_data: &ExportData) {
-        self.subs.compute(export_data)
+        self.subs
+            .to_vec()
+            .into_iter()
+            .for_each(|d| d.compute(export_data))
     }
 
     fn to_any_inserted_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
-        self.subs.to_any_inserted_height_map_vec()
+        self.subs
+            .to_vec()
+            .into_iter()
+            .flat_map(|d| d.to_any_inserted_height_map_vec())
+            .collect_vec()
     }
 
     fn to_any_inserted_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
-        self.subs.to_any_inserted_date_map_vec()
+        self.subs
+            .to_vec()
+            .into_iter()
+            .flat_map(|d| d.to_any_inserted_date_map_vec())
+            .collect_vec()
     }
 
     fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
-        self.subs.to_any_exported_bi_map_vec()
+        self.subs
+            .to_vec()
+            .into_iter()
+            .flat_map(|d| d.to_any_exported_bi_map_vec())
+            .collect_vec()
     }
 
     fn to_any_exported_date_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
-        self.subs.to_any_exported_date_map_vec()
+        self.subs
+            .to_vec()
+            .into_iter()
+            .flat_map(|d| d.to_any_exported_date_map_vec())
+            .collect_vec()
     }
 
     fn to_any_exported_height_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
-        self.subs.to_any_exported_height_map_vec()
+        self.subs
+            .to_vec()
+            .into_iter()
+            .flat_map(|d| d.to_any_exported_height_map_vec())
+            .collect_vec()
     }
 }

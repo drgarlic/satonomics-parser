@@ -1,7 +1,7 @@
 use std::{
     cmp::Ordering,
     fmt::Debug,
-    fs,
+    fs::{self},
     iter::Sum,
     ops::{Add, AddAssign, Div, Mul, Sub, SubAssign},
 };
@@ -25,7 +25,8 @@ where
 {
     storage: Storage,
 
-    path: String,
+    path_vec: String,
+    path_last: String,
 
     batch: Mutex<Vec<(usize, T)>>,
 
@@ -80,7 +81,8 @@ where
             batch: Mutex::new(vec![]),
             initial_first_unsafe_height: None,
             initial_last_height: None,
-            path: serialization.append_extension(&format!("{path}/height")),
+            path_vec: serialization.append_extension(&format!("{path}/height")),
+            path_last: serialization.append_extension(&format!("{path}/last")),
             inner: Mutex::new(None),
             modified: Mutex::new(false),
             serialization,
@@ -126,7 +128,9 @@ where
     }
 
     fn import(&self) -> Vec<T> {
-        self.serialization.import(&self.path).unwrap_or_default()
+        self.serialization
+            .import(&self.path_vec)
+            .unwrap_or_default()
     }
 
     fn get_last_height(&self) -> Option<usize>
@@ -156,8 +160,15 @@ where
 
         *modified = false;
 
+        let inner = self.inner.lock();
+
+        let vec = inner.as_ref().unwrap();
+
         self.serialization
-            .export(&self.path, self.inner.lock().as_ref().unwrap())
+            .export(&self.path_last, vec.last().unwrap())?;
+
+        self.serialization
+            .export(&self.path_vec, inner.as_ref().unwrap())
     }
 
     fn clean_tmp_data(&self) {
@@ -185,7 +196,7 @@ where
                     "Out of bound push (current len = {}, pushing to = {}, path = {})",
                     list.len(),
                     height,
-                    self.path
+                    self.path_vec
                 );
             }
         }
@@ -216,12 +227,6 @@ where
 {
     #[inline(always)]
     fn get_initial_first_unsafe_height(&self) -> Option<usize> {
-        // if self.initial_first_unsafe_height.is_none() {
-        //     println!("{} NONE", &self.path);
-        // } else {
-        //     println!("{} some", &self.path);
-        // }
-
         self.initial_first_unsafe_height
     }
 
@@ -279,7 +284,7 @@ where
 
         if self.storage == Storage::Disk {
             if self.inner.lock().is_some() {
-                dbg!(&self.path);
+                dbg!(&self.path_vec);
                 panic!("Probably forgot to drop inner after an export");
             }
 
@@ -292,7 +297,7 @@ where
     }
 
     fn path(&self) -> &str {
-        &self.path
+        &self.path_vec
     }
 
     fn t_name(&self) -> &str {
@@ -300,7 +305,7 @@ where
     }
 
     fn reset(&mut self) -> color_eyre::Result<()> {
-        fs::remove_dir(&self.path)?;
+        fs::remove_dir(&self.path_vec)?;
 
         self.batch.lock().clear();
         self.initial_last_height = None;

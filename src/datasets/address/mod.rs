@@ -35,6 +35,10 @@ pub struct AddressDatasets {
 impl AddressDatasets {
     pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
         thread::scope(|scope| {
+            //
+            // TODO: Add all
+            //
+
             let plankton_handle = scope.spawn(|| {
                 CohortDataset::import(
                     parent_path,

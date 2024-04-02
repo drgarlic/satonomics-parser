@@ -4,7 +4,8 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use crate::{
     datasets::{
-        AnyDataset, ExportData, GenericDataset, MinInitialState, ProcessedBlockData, SubDataset,
+        AnyDataset, AnyDatasetGroup, ExportData, GenericDataset, MinInitialState,
+        ProcessedBlockData, SubDataset,
     },
     parse::{AnyDateMap, AnyExportableMap, AnyHeightMap, RawAddressSplit},
     states::LiquiditySplitProcessedAddressState,
@@ -313,12 +314,15 @@ impl CohortDataset {
 
     fn to_vec(&self) -> Vec<&(dyn AnyDataset + Send + Sync)> {
         vec![
-            &self.all,
-            &self.illiquid,
-            &self.liquid,
-            &self.highly_liquid,
-            &self.metadata,
+            self.all.to_vec(),
+            self.illiquid.to_vec(),
+            self.liquid.to_vec(),
+            self.highly_liquid.to_vec(),
+            vec![&self.metadata],
         ]
+        .into_iter()
+        .flatten()
+        .collect_vec()
     }
 }
 

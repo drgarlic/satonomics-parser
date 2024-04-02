@@ -1,5 +1,5 @@
 use super::AnyDataset;
 
-pub trait DatasetGroup {
+pub trait AnyDatasetGroup {
     fn to_vec(&self) -> Vec<&(dyn AnyDataset + Send + Sync)>;
 }
