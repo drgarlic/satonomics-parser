@@ -3,7 +3,9 @@ use std::{collections::BTreeMap, fmt::Debug, iter::Sum};
 use chrono::NaiveDate;
 use serde::{de::DeserializeOwned, Serialize};
 
-use super::{AnyExportableMap, DateMap, HeightMap, HeightToDateConverter, WNaiveDate};
+use super::{
+    AnyDateMap, AnyHeightMap, AnyMap, DateMap, HeightMap, HeightToDateConverter, WNaiveDate,
+};
 
 pub struct BiMap<T>
 where
@@ -35,32 +37,32 @@ where
 {
     pub fn new_on_disk_bin(path: &str) -> Self {
         Self {
-            height: HeightMap::new_on_disk_bin(path),
-            date: DateMap::new_on_disk_bin(path),
+            height: HeightMap::_new_on_disk_bin(path, true),
+            date: DateMap::_new_on_disk_bin(path, false),
         }
     }
 
     #[allow(unused)]
     pub fn new_in_memory_bin(path: &str) -> Self {
         Self {
-            height: HeightMap::new_in_memory_bin(path),
-            date: DateMap::new_in_memory_bin(path),
+            height: HeightMap::_new_in_memory_bin(path, true),
+            date: DateMap::_new_in_memory_bin(path, false),
         }
     }
 
     #[allow(unused)]
     pub fn new_on_disk_json(path: &str) -> Self {
         Self {
-            height: HeightMap::new_on_disk_json(path),
-            date: DateMap::new_on_disk_json(path),
+            height: HeightMap::_new_on_disk_json(path, true),
+            date: DateMap::_new_on_disk_json(path, false),
         }
     }
 
     #[allow(unused)]
     pub fn new_in_memory_json(path: &str) -> Self {
         Self {
-            height: HeightMap::new_in_memory_json(path),
-            date: DateMap::new_in_memory_json(path),
+            height: HeightMap::_new_in_memory_json(path, true),
+            date: DateMap::_new_in_memory_json(path, false),
         }
     }
 
@@ -85,6 +87,10 @@ where
 
 pub trait AnyBiMap {
     fn are_date_and_height_safe(&self, date: NaiveDate, height: usize) -> bool;
+
+    fn any_height(&self) -> &(dyn AnyMap + Send + Sync);
+
+    fn any_date(&self) -> &(dyn AnyMap + Send + Sync);
 }
 
 impl<T> AnyBiMap for BiMap<T>
@@ -97,31 +103,20 @@ where
         + Sum
         + savefile::Serialize
         + savefile::Deserialize
-        + savefile::ReprC,
+        + savefile::ReprC
+        + Send
+        + Sync,
 {
     #[inline(always)]
     fn are_date_and_height_safe(&self, date: NaiveDate, height: usize) -> bool {
         self.date.is_date_safe(date) && self.height.is_height_safe(height)
     }
-}
 
-impl<T> AnyExportableMap for BiMap<T>
-where
-    T: Clone
-        + Default
-        + Debug
-        + Serialize
-        + DeserializeOwned
-        + Sum
-        + savefile::Serialize
-        + savefile::Deserialize
-        + savefile::ReprC,
-{
-    fn export_then_clean(&self) -> color_eyre::Result<()> {
-        self.height.export_then_clean()?;
+    fn any_date(&self) -> &(dyn AnyMap + Send + Sync) {
+        self.date.as_any_map()
+    }
 
-        self.date.export_then_clean()?;
-
-        Ok(())
+    fn any_height(&self) -> &(dyn AnyMap + Send + Sync) {
+        self.height.as_any_map()
     }
 }

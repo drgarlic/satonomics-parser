@@ -5,7 +5,7 @@ use color_eyre::eyre::Error;
 
 use crate::{
     datasets::{AnyDataset, GenericDataset, MinInitialState},
-    parse::{AnyExportableMap, AnyHeightMap, HeightMap},
+    parse::{AnyHeightMap, HeightMap},
     price::{Binance, Kraken},
 };
 
@@ -122,7 +122,7 @@ impl AnyDataset for HeightDataset {
         vec![&self.closes]
     }
 
-    fn to_any_exported_height_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
+    fn to_any_exported_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
         vec![&self.closes]
     }
 }

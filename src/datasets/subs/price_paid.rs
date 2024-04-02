@@ -2,7 +2,7 @@ use itertools::Itertools;
 
 use crate::{
     datasets::{AnyDataset, ExportData, MinInitialState, ProcessedBlockData},
-    parse::{AnyExportableMap, AnyHeightMap, AnyMap, BiMap},
+    parse::{AnyBiMap, AnyHeightMap, AnyMap, BiMap},
 };
 
 pub struct PricePaidSubDataset {
@@ -208,10 +208,10 @@ impl AnyDataset for PricePaidSubDataset {
             .collect_vec()
     }
 
-    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
+    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         self.to_vec()
             .iter()
-            .map(|dataset| *dataset as &(dyn AnyExportableMap + Send + Sync))
+            .map(|dataset| *dataset as &(dyn AnyBiMap + Send + Sync))
             .collect_vec()
     }
 }

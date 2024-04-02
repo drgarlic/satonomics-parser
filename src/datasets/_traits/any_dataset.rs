@@ -4,7 +4,7 @@ use rayon::prelude::*;
 
 use crate::{
     datasets::ExportData,
-    parse::{AnyDateMap, AnyExportableMap, AnyHeightMap, AnyMap},
+    parse::{AnyBiMap, AnyDateMap, AnyHeightMap, AnyMap},
 };
 
 use super::MinInitialState;
@@ -60,28 +60,35 @@ pub trait AnyDataset {
         vec![]
     }
 
-    fn to_any_exported_height_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
+    fn to_any_exported_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
         vec![]
     }
 
-    fn to_any_exported_date_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
+    fn to_any_exported_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
         vec![]
     }
 
-    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
+    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         vec![]
     }
 
-    fn to_any_exported_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
-        let mut heights = self.to_any_exported_height_map_vec();
-        let mut dates = self.to_any_exported_date_map_vec();
+    fn to_any_exported_map_vec(&self) -> Vec<&(dyn AnyMap + Send + Sync)> {
+        let heights = self
+            .to_any_exported_height_map_vec()
+            .into_iter()
+            .map(|d| d.as_any_map());
 
-        let mut any = self.to_any_exported_bi_map_vec();
+        let dates = self
+            .to_any_exported_date_map_vec()
+            .into_iter()
+            .map(|d| d.as_any_map());
 
-        any.append(&mut dates);
-        any.append(&mut heights);
+        let bis = self
+            .to_any_exported_bi_map_vec()
+            .into_iter()
+            .flat_map(|d| vec![d.any_height(), d.any_date()]);
 
-        any
+        heights.chain(dates.chain(bis)).collect_vec()
     }
 
     #[inline(always)]

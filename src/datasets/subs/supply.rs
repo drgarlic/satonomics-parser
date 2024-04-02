@@ -1,7 +1,7 @@
 use crate::{
     bitcoin::sats_to_btc,
     datasets::{AnyDataset, ExportData, MinInitialState, ProcessedBlockData},
-    parse::{AnyExportableMap, AnyHeightMap, BiMap},
+    parse::{AnyBiMap, AnyHeightMap, BiMap},
 };
 
 pub struct SupplySubDataset {
@@ -53,7 +53,7 @@ impl AnyDataset for SupplySubDataset {
         vec![&self.total.height]
     }
 
-    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
+    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         vec![&self.total]
     }
 }

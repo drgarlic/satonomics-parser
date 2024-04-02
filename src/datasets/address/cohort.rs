@@ -7,7 +7,7 @@ use crate::{
         AnyDataset, AnyDatasetGroup, ExportData, GenericDataset, MinInitialState,
         ProcessedBlockData, SubDataset,
     },
-    parse::{AnyDateMap, AnyExportableMap, AnyHeightMap, RawAddressSplit},
+    parse::{AnyBiMap, AnyDateMap, AnyHeightMap, RawAddressSplit},
     states::LiquiditySplitProcessedAddressState,
 };
 
@@ -419,21 +419,21 @@ impl AnyDataset for CohortDataset {
             .collect_vec()
     }
 
-    fn to_any_exported_date_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
+    fn to_any_exported_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
         self.to_vec()
             .into_iter()
             .flat_map(|d| d.to_any_exported_date_map_vec())
             .collect_vec()
     }
 
-    fn to_any_exported_height_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
+    fn to_any_exported_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
         self.to_vec()
             .into_iter()
             .flat_map(|d| d.to_any_exported_height_map_vec())
             .collect_vec()
     }
 
-    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
+    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         self.to_vec()
             .into_iter()
             .flat_map(|d| d.to_any_exported_bi_map_vec())

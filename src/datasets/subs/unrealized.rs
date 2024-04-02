@@ -3,7 +3,7 @@ use std::ops::Add;
 use crate::{
     bitcoin::sats_to_btc,
     datasets::{AnyDataset, MinInitialState, ProcessedBlockData},
-    parse::{AnyDateMap, AnyExportableMap, AnyHeightMap, BiMap},
+    parse::{AnyBiMap, AnyDateMap, AnyHeightMap, BiMap},
 };
 
 pub struct UnrealizedSubDataset {
@@ -91,7 +91,7 @@ impl AnyDataset for UnrealizedSubDataset {
         ]
     }
 
-    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
+    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         vec![
             &self.supply_in_profit,
             &self.unrealized_profit,

@@ -162,20 +162,18 @@ impl AllDatasets {
             .to_generic_dataset_vec()
             .iter()
             .flat_map(|dataset| {
-                vec![
-                    dataset
-                        .to_any_inserted_date_map_vec()
-                        .iter()
-                        .map(|map| (map.path(), map.t_name()))
-                        .collect_vec(),
-                    dataset
-                        .to_any_inserted_height_map_vec()
-                        .iter()
-                        .map(|map| (map.path(), map.t_name()))
-                        .collect_vec(),
-                ]
+                dataset
+                    .to_any_exported_map_vec()
+                    .into_iter()
+                    .flat_map(|map| map.exported_paths_with_t_name())
+                    .chain(
+                        dataset
+                            .to_any_exported_map_vec()
+                            .into_iter()
+                            .flat_map(|map| map.exported_paths_with_t_name()),
+                    )
+                    .collect_vec()
             })
-            .flatten()
             .collect();
 
         Json::export("./datasets/paths.json", &path_to_type)

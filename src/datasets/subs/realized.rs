@@ -1,6 +1,6 @@
 use crate::{
     datasets::{AnyDataset, ExportData, MinInitialState, ProcessedBlockData},
-    parse::{AnyExportableMap, AnyHeightMap, BiMap},
+    parse::{AnyBiMap, AnyHeightMap, BiMap},
 };
 
 /// TODO: Fix fees not taken into account ?
@@ -63,7 +63,7 @@ impl AnyDataset for RealizedSubDataset {
         vec![&self.realized_loss.height, &self.realized_profit.height]
     }
 
-    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
+    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         vec![&self.realized_loss, &self.realized_profit]
     }
 }

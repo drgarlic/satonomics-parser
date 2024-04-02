@@ -5,7 +5,7 @@ use color_eyre::eyre::Error;
 
 use crate::{
     datasets::{AnyDataset, GenericDataset, MinInitialState},
-    parse::{AnyDateMap, AnyExportableMap, DateMap, WNaiveDate},
+    parse::{AnyDateMap, DateMap, WNaiveDate},
     price::Kraken,
 };
 
@@ -79,7 +79,7 @@ impl AnyDataset for DateDataset {
         vec![&self.closes]
     }
 
-    fn to_any_exported_date_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
+    fn to_any_exported_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
         vec![&self.closes]
     }
 }

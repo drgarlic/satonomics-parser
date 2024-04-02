@@ -8,7 +8,7 @@ use crate::{
         OutputState, PricePaidState, ProcessedBlockData, RealizedState, SubDataset, SupplyState,
         UTXOState, UnrealizedState,
     },
-    parse::{reverse_date_index, AnyDateMap, AnyExportableMap, AnyHeightMap, BlockData},
+    parse::{reverse_date_index, AnyBiMap, AnyDateMap, AnyHeightMap, BlockData},
 };
 
 use super::UTXOFilter;
@@ -262,7 +262,7 @@ impl AnyDataset for UTXODataset {
             .collect_vec()
     }
 
-    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
+    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         self.subs
             .to_vec()
             .into_iter()
@@ -270,7 +270,7 @@ impl AnyDataset for UTXODataset {
             .collect_vec()
     }
 
-    fn to_any_exported_date_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
+    fn to_any_exported_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
         self.subs
             .to_vec()
             .into_iter()
@@ -278,7 +278,7 @@ impl AnyDataset for UTXODataset {
             .collect_vec()
     }
 
-    fn to_any_exported_height_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
+    fn to_any_exported_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
         self.subs
             .to_vec()
             .into_iter()

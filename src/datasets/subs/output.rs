@@ -1,6 +1,6 @@
 use crate::{
     datasets::{AnyDataset, ExportData, MinInitialState, ProcessedBlockData},
-    parse::{AnyExportableMap, AnyHeightMap, BiMap},
+    parse::{AnyBiMap, AnyHeightMap, BiMap},
 };
 
 pub struct OutputSubDataset {
@@ -58,7 +58,7 @@ impl AnyDataset for OutputSubDataset {
         vec![&self.count.height, &self.volume.height]
     }
 
-    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
+    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         vec![&self.count, &self.volume]
     }
 }

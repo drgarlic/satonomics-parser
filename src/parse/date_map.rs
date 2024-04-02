@@ -17,7 +17,7 @@ use crate::{
     utils::ToF32,
 };
 
-use super::{AnyExportableMap, AnyMap, Storage, WNaiveDate};
+use super::{AnyMap, Storage, WNaiveDate};
 
 const NUMBER_OF_UNSAFE_DATES: usize = 2;
 
@@ -32,12 +32,19 @@ pub enum HeightToDateConverter<'a> {
 
 pub struct DateMap<T> {
     storage: Storage,
+
     batch: Mutex<Vec<(NaiveDate, T)>>,
+
     path: String,
+    path_last: Option<String>,
+
     initial_last_date: Option<NaiveDate>,
     initial_first_unsafe_date: Option<NaiveDate>,
+
     pub inner: Mutex<Option<BTreeMap<WNaiveDate, T>>>,
+
     modified: Mutex<bool>,
+
     serialization: Serialization,
 }
 
@@ -54,28 +61,56 @@ where
 {
     #[allow(unused)]
     pub fn new_on_disk_bin(path: &str) -> Self {
-        Self::new(path, Storage::Disk, Serialization::Binary)
+        Self::new(path, Storage::Disk, Serialization::Binary, true)
+    }
+
+    #[allow(unused)]
+    pub fn _new_on_disk_bin(path: &str, export_last: bool) -> Self {
+        Self::new(path, Storage::Disk, Serialization::Binary, export_last)
     }
 
     #[allow(unused)]
     pub fn new_in_memory_bin(path: &str) -> Self {
-        Self::new(path, Storage::Memory, Serialization::Binary)
+        Self::new(path, Storage::Memory, Serialization::Binary, true)
+    }
+
+    #[allow(unused)]
+    pub fn _new_in_memory_bin(path: &str, export_last: bool) -> Self {
+        Self::new(path, Storage::Memory, Serialization::Binary, export_last)
     }
 
     #[allow(unused)]
     pub fn new_on_disk_json(path: &str) -> Self {
-        Self::new(path, Storage::Disk, Serialization::Json)
+        Self::new(path, Storage::Disk, Serialization::Json, true)
+    }
+
+    #[allow(unused)]
+    pub fn _new_on_disk_json(path: &str, export_last: bool) -> Self {
+        Self::new(path, Storage::Disk, Serialization::Json, export_last)
     }
 
     #[allow(unused)]
     pub fn new_in_memory_json(path: &str) -> Self {
-        Self::new(path, Storage::Memory, Serialization::Json)
+        Self::new(path, Storage::Memory, Serialization::Json, true)
     }
 
-    fn new(path: &str, storage: Storage, serialization: Serialization) -> Self {
+    #[allow(unused)]
+    pub fn _new_in_memory_json(path: &str, export_last: bool) -> Self {
+        Self::new(path, Storage::Memory, Serialization::Json, export_last)
+    }
+
+    fn new(path: &str, storage: Storage, serialization: Serialization, export_last: bool) -> Self {
         let path = format_path(path);
 
         fs::create_dir_all(&path).unwrap();
+
+        let path_last = {
+            if export_last {
+                Some(serialization.append_extension(&format!("{path}/last")))
+            } else {
+                None
+            }
+        };
 
         let mut s = Self {
             storage,
@@ -83,6 +118,7 @@ where
             initial_last_date: None,
             initial_first_unsafe_date: None,
             path: serialization.append_extension(&format!("{path}/date")),
+            path_last,
             inner: Mutex::new(None),
             modified: Mutex::new(false),
             serialization,
@@ -110,19 +146,6 @@ where
         }
     }
 
-    // pub fn insert_default(&self, date: NaiveDate) {
-    //     self.insert(date, T::default())
-    // }
-
-    // pub fn compute_then_export_then_clean(
-    //     &mut self,
-    //     map: &[T],
-    //     method: &HeightToDateConverter,
-    // ) -> color_eyre::Result<()> {
-    //     self.compute_from_height_map(map, method);
-    //     self.export_then_clean()
-    // }
-
     fn insert_to_inner(&self, date: NaiveDate, value: T) {
         self.inner
             .lock()
@@ -138,14 +161,6 @@ where
                 initial_first_unsafe_date > date
             })
     }
-
-    // pub fn set_then_export_then_clean(
-    //     &mut self,
-    //     map: BTreeMap<WNaiveDate, T>,
-    // ) -> color_eyre::Result<()> {
-    //     self.set_inner(map);
-    //     self.export_then_clean()
-    // }
 
     pub fn set_inner(&self, map: BTreeMap<WNaiveDate, T>) {
         *self.modified.lock() = true;
@@ -224,21 +239,22 @@ where
 
         *self.modified.lock() = false;
 
-        if let Some(inner) = self.inner.lock().as_ref() {
-            self.serialization.export(&self.path, inner)
+        let inner = self.inner.lock();
+
+        if let Some(map) = inner.as_ref() {
+            self._export(map)
         } else {
-            if self.batch.lock().is_empty() {
-                return Ok(());
-            }
-
-            let mut map = self.import();
-
-            self.batch.lock().drain(..).for_each(|(date, value)| {
-                map.insert(WNaiveDate::wrap(date), value);
-            });
-
-            self.serialization.export(&self.path, &map)
+            self._export(&self.import())
         }
+    }
+
+    fn _export(&self, map: &BTreeMap<WNaiveDate, T>) -> color_eyre::Result<()> {
+        if let Some(path_last) = self.path_last.as_ref() {
+            self.serialization
+                .export(path_last, map.values().last().unwrap())?;
+        }
+
+        self.serialization.export(&self.path, map)
     }
 
     fn clean_tmp_data(&self) {
@@ -298,26 +314,6 @@ where
     }
 }
 
-impl<T> AnyExportableMap for DateMap<T>
-where
-    T: Clone
-        + Default
-        + Debug
-        + Serialize
-        + DeserializeOwned
-        + Sum
-        + savefile::Serialize
-        + savefile::Deserialize,
-{
-    fn export_then_clean(&self) -> color_eyre::Result<()> {
-        self.export()?;
-
-        self.clean_tmp_data();
-
-        Ok(())
-    }
-}
-
 impl<T> AnyMap for DateMap<T>
 where
     T: Clone
@@ -354,6 +350,10 @@ where
         &self.path
     }
 
+    fn path_last(&self) -> Option<&String> {
+        self.path_last.as_ref()
+    }
+
     fn t_name(&self) -> &str {
         std::any::type_name::<T>()
     }
@@ -370,6 +370,14 @@ where
         }
 
         *self.modified.lock() = false;
+
+        Ok(())
+    }
+
+    fn export_then_clean(&self) -> color_eyre::Result<()> {
+        self.export()?;
+
+        self.clean_tmp_data();
 
         Ok(())
     }

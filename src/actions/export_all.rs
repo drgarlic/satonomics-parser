@@ -24,6 +24,10 @@ pub fn export_all(
     println!("{:?} - Saving... (Don't close !!)", Local::now());
 
     time("Total save time", || -> color_eyre::Result<()> {
+        time("Datasets saved", || {
+            datasets.export_if_needed(date, height, date.month0() == 0)
+        })?;
+
         // time("States saved in", || states.export())?;
 
         // time("Databases saved in", || databases.export())?;
@@ -35,11 +39,11 @@ pub fn export_all(
         thread::scope(|s| {
             s.spawn(|| time("Databases saved", || databases.export()));
             s.spawn(|| time("States saved", || states.export()));
-            s.spawn(|| {
-                time("Datasets saved", || {
-                    datasets.export_if_needed(date, height, date.month0() == 0)
-                })
-            });
+            // s.spawn(|| {
+            //     time("Datasets saved", || {
+            //         datasets.export_if_needed(date, height, date.month0() == 0)
+            //     })
+            // });
         });
 
         Ok(())

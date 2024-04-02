@@ -1,6 +1,6 @@
 use crate::{
     datasets::AnyDataset,
-    parse::{AnyDateMap, AnyExportableMap, DateMap},
+    parse::{AnyDateMap, DateMap},
 };
 
 use super::{GenericDataset, MinInitialState, ProcessedDateData};
@@ -50,7 +50,7 @@ impl AnyDataset for DateMetadataDataset {
         vec![&self.first_height, &self.last_height]
     }
 
-    fn to_any_exported_date_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
+    fn to_any_exported_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
         vec![&self.first_height, &self.last_height]
     }
 

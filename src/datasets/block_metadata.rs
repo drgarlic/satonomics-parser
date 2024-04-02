@@ -1,6 +1,6 @@
 use crate::{
     datasets::AnyDataset,
-    parse::{AnyExportableMap, AnyHeightMap, HeightMap, WNaiveDate},
+    parse::{AnyHeightMap, HeightMap, WNaiveDate},
     utils::timestamp_to_naive_date,
 };
 
@@ -49,7 +49,7 @@ impl AnyDataset for BlockMetadataDataset {
         vec![&self.date, &self.timestamp]
     }
 
-    fn to_any_exported_height_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
+    fn to_any_exported_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
         vec![&self.date, &self.timestamp]
     }
 

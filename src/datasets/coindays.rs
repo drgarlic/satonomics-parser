@@ -1,7 +1,7 @@
 use crate::{
     bitcoin::sats_to_btc,
     datasets::AnyDataset,
-    parse::{AnyExportableMap, AnyHeightMap, BiMap},
+    parse::{AnyBiMap, AnyHeightMap, BiMap},
 };
 
 use super::{ExportData, GenericDataset, MinInitialState, ProcessedBlockData};
@@ -58,7 +58,7 @@ impl AnyDataset for CoindaysDataset {
         self.destroyed.compute_date(convert_sum_heights_to_date);
     }
 
-    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyExportableMap + Send + Sync)> {
+    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         vec![&self.destroyed]
     }
 

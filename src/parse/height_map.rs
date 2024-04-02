@@ -17,7 +17,7 @@ use crate::{
     utils::ToF32,
 };
 
-use super::{AnyExportableMap, AnyMap, Storage};
+use super::{AnyMap, Storage};
 
 pub struct HeightMap<T>
 where
@@ -25,8 +25,8 @@ where
 {
     storage: Storage,
 
-    path_vec: String,
-    path_last: String,
+    path: String,
+    path_last: Option<String>,
 
     batch: Mutex<Vec<(usize, T)>>,
 
@@ -53,36 +53,64 @@ where
 {
     #[allow(unused)]
     pub fn new_on_disk_bin(path: &str) -> Self {
-        Self::new(path, Storage::Disk, Serialization::Binary)
+        Self::new(path, Storage::Disk, Serialization::Binary, true)
+    }
+
+    #[allow(unused)]
+    pub fn _new_on_disk_bin(path: &str, export_last: bool) -> Self {
+        Self::new(path, Storage::Disk, Serialization::Binary, export_last)
     }
 
     #[allow(unused)]
     pub fn new_in_memory_bin(path: &str) -> Self {
-        Self::new(path, Storage::Memory, Serialization::Binary)
+        Self::new(path, Storage::Memory, Serialization::Binary, true)
+    }
+
+    #[allow(unused)]
+    pub fn _new_in_memory_bin(path: &str, export_last: bool) -> Self {
+        Self::new(path, Storage::Memory, Serialization::Binary, export_last)
     }
 
     #[allow(unused)]
     pub fn new_on_disk_json(path: &str) -> Self {
-        Self::new(path, Storage::Disk, Serialization::Json)
+        Self::new(path, Storage::Disk, Serialization::Json, true)
+    }
+
+    #[allow(unused)]
+    pub fn _new_on_disk_json(path: &str, export_last: bool) -> Self {
+        Self::new(path, Storage::Disk, Serialization::Json, export_last)
     }
 
     #[allow(unused)]
     pub fn new_in_memory_json(path: &str) -> Self {
-        Self::new(path, Storage::Memory, Serialization::Json)
+        Self::new(path, Storage::Memory, Serialization::Json, true)
     }
 
-    fn new(path: &str, storage: Storage, serialization: Serialization) -> Self {
+    #[allow(unused)]
+    pub fn _new_in_memory_json(path: &str, export_last: bool) -> Self {
+        Self::new(path, Storage::Memory, Serialization::Json, export_last)
+    }
+
+    fn new(path: &str, storage: Storage, serialization: Serialization, export_last: bool) -> Self {
         let path = format_path(path);
 
         fs::create_dir_all(&path).unwrap();
+
+        let path_last = {
+            if export_last {
+                Some(serialization.append_extension(&format!("{path}/last")))
+            } else {
+                None
+            }
+        };
 
         let mut s = Self {
             storage: storage.to_owned(),
             batch: Mutex::new(vec![]),
             initial_first_unsafe_height: None,
             initial_last_height: None,
-            path_vec: serialization.append_extension(&format!("{path}/height")),
-            path_last: serialization.append_extension(&format!("{path}/last")),
+            path: serialization.append_extension(&format!("{path}/height")),
+            path_last,
             inner: Mutex::new(None),
             modified: Mutex::new(false),
             serialization,
@@ -128,9 +156,7 @@ where
     }
 
     fn import(&self) -> Vec<T> {
-        self.serialization
-            .import(&self.path_vec)
-            .unwrap_or_default()
+        self.serialization.import(&self.path).unwrap_or_default()
     }
 
     fn get_last_height(&self) -> Option<usize>
@@ -162,13 +188,19 @@ where
 
         let inner = self.inner.lock();
 
-        let vec = inner.as_ref().unwrap();
+        if let Some(vec) = inner.as_ref() {
+            self._export(vec)
+        } else {
+            self._export(&self.import())
+        }
+    }
 
-        self.serialization
-            .export(&self.path_last, vec.last().unwrap())?;
+    fn _export(&self, vec: &Vec<T>) -> color_eyre::Result<()> {
+        if let Some(path_last) = self.path_last.as_ref() {
+            self.serialization.export(path_last, vec.last().unwrap())?;
+        }
 
-        self.serialization
-            .export(&self.path_vec, inner.as_ref().unwrap())
+        self.serialization.export(&self.path, vec)
     }
 
     fn clean_tmp_data(&self) {
@@ -196,7 +228,7 @@ where
                     "Out of bound push (current len = {}, pushing to = {}, path = {})",
                     list.len(),
                     height,
-                    self.path_vec
+                    self.path
                 );
             }
         }
@@ -244,26 +276,6 @@ where
     }
 }
 
-impl<T> AnyExportableMap for HeightMap<T>
-where
-    T: Clone
-        + Default
-        + Debug
-        + Serialize
-        + DeserializeOwned
-        + savefile::Serialize
-        + savefile::Deserialize
-        + savefile::ReprC,
-{
-    fn export_then_clean(&self) -> color_eyre::Result<()> {
-        self.export()?;
-
-        self.clean_tmp_data();
-
-        Ok(())
-    }
-}
-
 impl<T> AnyMap for HeightMap<T>
 where
     T: Clone
@@ -284,7 +296,7 @@ where
 
         if self.storage == Storage::Disk {
             if self.inner.lock().is_some() {
-                dbg!(&self.path_vec);
+                dbg!(&self.path);
                 panic!("Probably forgot to drop inner after an export");
             }
 
@@ -297,7 +309,11 @@ where
     }
 
     fn path(&self) -> &str {
-        &self.path_vec
+        &self.path
+    }
+
+    fn path_last(&self) -> Option<&String> {
+        self.path_last.as_ref()
     }
 
     fn t_name(&self) -> &str {
@@ -305,7 +321,7 @@ where
     }
 
     fn reset(&mut self) -> color_eyre::Result<()> {
-        fs::remove_dir(&self.path_vec)?;
+        fs::remove_dir(&self.path)?;
 
         self.batch.lock().clear();
         self.initial_last_height = None;
@@ -316,6 +332,14 @@ where
         }
 
         *self.modified.lock() = false;
+
+        Ok(())
+    }
+
+    fn export_then_clean(&self) -> color_eyre::Result<()> {
+        self.export()?;
+
+        self.clean_tmp_data();
 
         Ok(())
     }
