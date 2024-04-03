@@ -15,7 +15,7 @@ use crate::{
     databases::{
         AddressIndexToEmptyAddressData, Databases, RawAddressToAddressIndex, TxidToTxIndex,
     },
-    datasets::{AllDatasets, AnyDatasets, ProcessedBlockData, SortedBlockData},
+    datasets::{AllDatasets, AnyDatasets, ProcessedBlockData},
     parse::{
         AddressData, AddressRealizedData, BlockData, BlockPath, Counter, EmptyAddressData,
         PartialTxoutData, RawAddress, TxData, TxoutIndex,
@@ -125,6 +125,10 @@ pub fn parse_block(
         date_index: date_index as u16,
         block_index: block_index as u16,
     };
+
+    states
+        .price_to_block_path
+        .insert(OrderedFloat(block_price), block_path.to_owned());
 
     let (
         (
@@ -542,101 +546,61 @@ pub fn parse_block(
     let mut split_unrealized_states_height = None;
     let mut split_unrealized_states_date = None;
 
-    let mut sorted_block_data_vec = None;
+    if compute_addresses {
+        split_realized_states.replace(SplitRealizedStates::default());
+        split_input_states.replace(SplitInputStates::default());
+        split_output_states.replace(SplitOutputStates::default());
 
-    thread::scope(|scope| {
-        if datasets.utxo.needs_sorted_block_data_vec(date, height) {
-            scope.spawn(|| {
-                let date_data_vec = &states.date_data_vec;
-                let len = date_data_vec.len() as u16;
+        let processed_addresses_split_states = &mut states.split_address;
 
-                let mut vec = date_data_vec
-                    .par_iter()
-                    .flat_map(|date_data| {
-                        let reversed_date_index = date_data.reverse_index(len);
-
-                        date_data
-                            .blocks
-                            .par_iter()
-                            .map(move |block_data| SortedBlockData {
-                                reversed_date_index,
-                                year: date_data.year,
-                                block_data,
-                            })
-                    })
-                    .collect::<Vec<_>>();
-
-                vec.par_sort_unstable_by(|a, b| {
-                    Ord::cmp(
-                        &OrderedFloat(a.block_data.price),
-                        &OrderedFloat(b.block_data.price),
-                    )
-                });
-
-                sorted_block_data_vec.replace(vec);
-            });
-        }
-
-        if compute_addresses {
-            scope.spawn(|| {
-                split_realized_states.replace(SplitRealizedStates::default());
-                split_input_states.replace(SplitInputStates::default());
-                split_output_states.replace(SplitOutputStates::default());
-
-                let processed_addresses_split_states = &mut states.split_address;
-
-                address_index_to_address_realized_data.iter().for_each(
-                    |(address_index, address_realized_data)| {
-                        let current_address_data = states
-                            .address_index_to_address_data
+        address_index_to_address_realized_data.iter().for_each(
+            |(address_index, address_realized_data)| {
+                let current_address_data = states
+                    .address_index_to_address_data
+                    .get(address_index)
+                    .unwrap_or_else(|| {
+                        address_index_to_removed_address_data
                             .get(address_index)
-                            .unwrap_or_else(|| {
-                                address_index_to_removed_address_data
-                                    .get(address_index)
-                                    .unwrap()
-                            });
-
-                        processed_addresses_split_states
-                            .iterate(address_realized_data, current_address_data);
-
-                        // Realized == previous amount
-                        // If a whale sent all its sats to another address at a loss, it's the whale that realized the loss not the empty adress
-                        let liquidity_classification = address_realized_data
-                            .initial_address_data
-                            .compute_liquidity_classification();
-
-                        split_realized_states
-                            .as_mut()
                             .unwrap()
-                            .iterate_realized(address_realized_data, &liquidity_classification);
+                    });
 
-                        split_input_states
-                            .as_mut()
-                            .unwrap()
-                            .iterate_input(address_realized_data, &liquidity_classification);
+                processed_addresses_split_states
+                    .iterate(address_realized_data, current_address_data);
 
-                        split_output_states
-                            .as_mut()
-                            .unwrap()
-                            .iterate_output(address_realized_data, &liquidity_classification);
-                    },
-                );
+                // Realized == previous amount
+                // If a whale sent all its sats to another address at a loss, it's the whale that realized the loss not the empty adress
+                let liquidity_classification = address_realized_data
+                    .initial_address_data
+                    .compute_liquidity_classification();
 
-                split_price_paid_states
-                    .replace(processed_addresses_split_states.compute_price_paid_states());
+                split_realized_states
+                    .as_mut()
+                    .unwrap()
+                    .iterate_realized(address_realized_data, &liquidity_classification);
 
-                split_unrealized_states_height.replace(
-                    processed_addresses_split_states.compute_unrealized_states(block_price),
-                );
+                split_input_states
+                    .as_mut()
+                    .unwrap()
+                    .iterate_input(address_realized_data, &liquidity_classification);
 
-                if is_date_last_block {
-                    split_unrealized_states_date.replace(
-                        processed_addresses_split_states.compute_unrealized_states(date_price),
-                    );
-                }
-            });
+                split_output_states
+                    .as_mut()
+                    .unwrap()
+                    .iterate_output(address_realized_data, &liquidity_classification);
+            },
+        );
+
+        split_price_paid_states
+            .replace(processed_addresses_split_states.compute_price_paid_states());
+
+        split_unrealized_states_height
+            .replace(processed_addresses_split_states.compute_unrealized_states(block_price));
+
+        if is_date_last_block {
+            split_unrealized_states_date
+                .replace(processed_addresses_split_states.compute_unrealized_states(date_price));
         }
-    });
+    }
 
     datasets.insert_block_data(ProcessedBlockData {
         address_index_to_address_realized_data: &address_index_to_address_realized_data,
@@ -655,7 +619,6 @@ pub fn parse_block(
         satblocks_destroyed,
         satdays_destroyed,
         sats_sent,
-        sorted_block_data_vec,
         split_input_states: &mut split_input_states,
         split_output_states: &mut split_output_states,
         split_price_paid_states: &split_price_paid_states,

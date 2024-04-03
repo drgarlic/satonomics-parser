@@ -1,4 +1,3 @@
-use chrono::NaiveDate;
 use itertools::Itertools;
 
 use crate::{
@@ -46,10 +45,6 @@ impl UTXODataset {
         s.min_initial_state.compute_from_dataset(&s);
 
         Ok(s)
-    }
-
-    pub fn needs_sorted_block_data_vec(&self, date: NaiveDate, height: usize) -> bool {
-        self.subs.price_paid.should_insert(height, date)
     }
 }
 
@@ -125,20 +120,26 @@ impl GenericDataset for UTXODataset {
         }
 
         if needs_price_paid_data {
-            processed_block_data
-                .sorted_block_data_vec
-                .as_ref()
-                .unwrap()
-                .iter()
-                .filter(|sorted_block_data| {
-                    self.filter.check(
-                        &sorted_block_data.reversed_date_index,
-                        &sorted_block_data.year,
+            let len = states.date_data_vec.len() as u16;
+
+            states
+                .price_to_block_path
+                .values()
+                .map(|block_path| {
+                    (
+                        states
+                            .date_data_vec
+                            .get(block_path.date_index as usize)
+                            .unwrap(),
+                        block_path.block_index,
                     )
                 })
-                .for_each(|sorted_block_data| {
-                    let block_data = sorted_block_data.block_data;
-
+                .filter(|(date_data, _)| {
+                    self.filter
+                        .check(&date_data.reverse_index(len), &date_data.year)
+                })
+                .map(|(date_data, block_index)| date_data.blocks.get(block_index as usize).unwrap())
+                .for_each(|block_data| {
                     let price = block_data.price;
                     let sat_amount = block_data.amount;
                     let btc_amount = sats_to_btc(sat_amount);

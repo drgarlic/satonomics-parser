@@ -33,7 +33,7 @@ use crate::{
     databases::Databases,
     io::Json,
     parse::{
-        AddressData, AddressRealizedData, BiMap, BlockData, BlockPath, DateMap, HeightMap,
+        AddressData, AddressRealizedData, BiMap, BlockPath, DateMap, HeightMap,
         HeightToDateConverter,
     },
     states::{
@@ -47,12 +47,6 @@ pub struct ProcessedDateData {
     pub first_height: usize,
     pub height: usize,
     pub date: NaiveDate,
-}
-
-pub struct SortedBlockData<'a> {
-    pub reversed_date_index: u16,
-    pub year: u16,
-    pub block_data: &'a BlockData,
 }
 
 pub struct ProcessedBlockData<'a> {
@@ -72,7 +66,6 @@ pub struct ProcessedBlockData<'a> {
     pub satblocks_destroyed: u64,
     pub satdays_destroyed: u64,
     pub sats_sent: u64,
-    pub sorted_block_data_vec: Option<Vec<SortedBlockData<'a>>>,
     pub split_input_states: &'a mut Option<SplitInputStates>,
     pub split_output_states: &'a mut Option<SplitOutputStates>,
     pub split_price_paid_states: &'a Option<SplitPricePaidStates>,

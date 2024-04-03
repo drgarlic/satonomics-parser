@@ -4,16 +4,17 @@ mod _trait;
 mod address_index_to_address_data;
 mod counters;
 mod date_data_vec;
+mod price_to_block_path;
 mod processed_split_states;
 mod tx_index_to_tx_data;
 mod txout_index_to_address_index;
-
 mod txout_index_to_sats;
 
 pub use _trait::*;
 use address_index_to_address_data::*;
 use counters::*;
 use date_data_vec::*;
+use price_to_block_path::*;
 pub use processed_split_states::*;
 use tx_index_to_tx_data::*;
 use txout_index_to_address_index::*;
@@ -22,6 +23,7 @@ use txout_index_to_sats::*;
 #[derive(Default)]
 pub struct States {
     pub address_index_to_address_data: AddressIndexToAddressData,
+    pub price_to_block_path: PriceToBlockPath,
     pub counters: Counters,
     pub date_data_vec: DateDataVec,
     pub split_address: SplitVariousAddressStates,
@@ -56,10 +58,13 @@ impl States {
 
         let split_address = SplitVariousAddressStates::init(&address_index_to_address_data);
 
+        let price_to_block_path = PriceToBlockPath::build(&date_data_vec);
+
         Ok(Self {
             address_index_to_address_data,
             counters,
             date_data_vec,
+            price_to_block_path,
             split_address,
             tx_index_to_tx_data,
             txout_index_to_address_index,

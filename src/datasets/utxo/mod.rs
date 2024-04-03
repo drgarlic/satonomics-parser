@@ -6,7 +6,7 @@ use structs::*;
 
 use std::thread;
 
-use chrono::{Datelike, NaiveDate};
+use chrono::Datelike;
 use itertools::Itertools;
 
 use crate::datasets::AnyDatasets;
@@ -236,12 +236,6 @@ impl UTXODatasets {
 
             Ok(s)
         })
-    }
-
-    pub fn needs_sorted_block_data_vec(&self, date: NaiveDate, height: usize) -> bool {
-        self.to_vec()
-            .iter()
-            .any(|dataset| dataset.needs_sorted_block_data_vec(date, height))
     }
 
     fn to_vec(&self) -> Vec<&UTXODataset> {
