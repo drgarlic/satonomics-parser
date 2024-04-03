@@ -8,7 +8,6 @@ pub fn find_first_unsafe_height(
     states: &mut States,
     databases: &mut Databases,
     datasets: &AllDatasets,
-    addresses: bool,
 ) -> usize {
     let min_initial_last_address_date = datasets.address.get_min_initial_state().last_date.lock();
 
@@ -54,7 +53,7 @@ pub fn find_first_unsafe_height(
 
             states.reset();
 
-            let include_addresses = addresses && (min_initial_last_address_date.is_none() || min_initial_last_address_height.is_none());
+            let include_addresses = min_initial_last_address_date.is_none() || min_initial_last_address_height.is_none();
 
             databases.reset(include_addresses);
 

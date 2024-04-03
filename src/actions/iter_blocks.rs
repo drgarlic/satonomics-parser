@@ -17,7 +17,6 @@ use crate::{
 pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Result<()> {
     let insert = true;
     let export = true;
-    let addresses = true;
 
     println!("{:?} - Starting aged", Local::now());
 
@@ -45,11 +44,11 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
 
     println!("{:?} - Imported databases", Local::now());
 
-    let mut states = States::import(addresses).unwrap_or_default();
+    let mut states = States::import().unwrap_or_default();
 
     println!("{:?} - Imported states", Local::now());
 
-    let mut height = find_first_unsafe_height(&mut states, &mut databases, &datasets, addresses);
+    let mut height = find_first_unsafe_height(&mut states, &mut databases, &datasets);
 
     println!("{:?} - Starting parsing at height: {height}", Local::now());
 
@@ -118,17 +117,16 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
                         // Do NOT change `blocks_loop_date` to `current_block_date` !!!
                         .map_or(true, |next_block_date| blocks_loop_date < next_block_date);
 
-                    let compute_addresses = addresses
-                        && (min_initial_first_unsafe_address_date
-                            .map_or(true, |min_initial_unsafe_date| {
-                                current_block_date >= min_initial_unsafe_date
-                            })
-                            || min_initial_first_unsafe_address_height.map_or(
-                                true,
-                                |min_initial_unsafe_height| {
-                                    current_block_height >= min_initial_unsafe_height
-                                },
-                            ));
+                    let compute_addresses = min_initial_first_unsafe_address_date
+                        .map_or(true, |min_initial_unsafe_date| {
+                            current_block_date >= min_initial_unsafe_date
+                        })
+                        || min_initial_first_unsafe_address_height.map_or(
+                            true,
+                            |min_initial_unsafe_height| {
+                                current_block_height >= min_initial_unsafe_height
+                            },
+                        );
 
                     if insert {
                         parse_block(ParseData {

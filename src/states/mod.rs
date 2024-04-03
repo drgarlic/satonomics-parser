@@ -4,7 +4,7 @@ mod _trait;
 mod address_index_to_address_data;
 mod counters;
 mod date_data_vec;
-mod processed_addresses_split_states;
+mod processed_split_states;
 mod tx_index_to_tx_data;
 mod txout_index_to_address_index;
 
@@ -14,18 +14,16 @@ pub use _trait::*;
 use address_index_to_address_data::*;
 use counters::*;
 use date_data_vec::*;
-pub use processed_addresses_split_states::*;
+pub use processed_split_states::*;
 use tx_index_to_tx_data::*;
 use txout_index_to_address_index::*;
 use txout_index_to_sats::*;
 
 #[derive(Default)]
 pub struct States {
-    // TODO: Change to Option
     pub address_index_to_address_data: AddressIndexToAddressData,
     pub counters: Counters,
     pub date_data_vec: DateDataVec,
-    // TODO: Change to Option
     pub split_address: SplitVariousAddressStates,
     pub tx_index_to_tx_data: TxIndexToTxData,
     pub txout_index_to_address_index: TxoutIndexToAddressIndex,
@@ -33,7 +31,7 @@ pub struct States {
 }
 
 impl States {
-    pub fn import(compute_address_states: bool) -> color_eyre::Result<Self> {
+    pub fn import() -> color_eyre::Result<Self> {
         let address_index_to_address_data_handle = thread::spawn(AddressIndexToAddressData::import);
 
         let tx_index_to_tx_data_handle = thread::spawn(TxIndexToTxData::import);
@@ -54,10 +52,8 @@ impl States {
 
         let tx_index_to_tx_data = tx_index_to_tx_data_handle.join().unwrap()?;
 
-        // TODO: Use compute_address_states
         let address_index_to_address_data = address_index_to_address_data_handle.join().unwrap()?;
 
-        // TODO: Use compute_address_states
         let split_address = SplitVariousAddressStates::init(&address_index_to_address_data);
 
         Ok(Self {

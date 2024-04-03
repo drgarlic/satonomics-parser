@@ -161,22 +161,22 @@ impl CohortDataset {
     ) {
         self.all.supply.insert(
             processed_block_data,
-            &liquidity_split_state.split.all.supply,
+            &liquidity_split_state.split.all.supply_state,
         );
 
         self.illiquid.supply.insert(
             processed_block_data,
-            &liquidity_split_state.split.illiquid.supply,
+            &liquidity_split_state.split.illiquid.supply_state,
         );
 
         self.liquid.supply.insert(
             processed_block_data,
-            &liquidity_split_state.split.liquid.supply,
+            &liquidity_split_state.split.liquid.supply_state,
         );
 
         self.highly_liquid.supply.insert(
             processed_block_data,
-            &liquidity_split_state.split.highly_liquid.supply,
+            &liquidity_split_state.split.highly_liquid.supply_state,
         );
     }
 
@@ -187,22 +187,22 @@ impl CohortDataset {
     ) {
         self.all.utxo.insert(
             processed_block_data,
-            &liquidity_split_state.split.all.utxos_metadata,
+            &liquidity_split_state.split.all.utxo_state,
         );
 
         self.illiquid.utxo.insert(
             processed_block_data,
-            &liquidity_split_state.split.illiquid.utxos_metadata,
+            &liquidity_split_state.split.illiquid.utxo_state,
         );
 
         self.liquid.utxo.insert(
             processed_block_data,
-            &liquidity_split_state.split.liquid.utxos_metadata,
+            &liquidity_split_state.split.liquid.utxo_state,
         );
 
         self.highly_liquid.utxo.insert(
             processed_block_data,
-            &liquidity_split_state.split.highly_liquid.utxos_metadata,
+            &liquidity_split_state.split.highly_liquid.utxo_state,
         );
     }
 

@@ -541,6 +541,7 @@ pub fn parse_block(
     let mut split_output_states = None;
     let mut split_unrealized_states_height = None;
     let mut split_unrealized_states_date = None;
+
     let mut sorted_block_data_vec = None;
 
     thread::scope(|scope| {
@@ -552,11 +553,13 @@ pub fn parse_block(
                 let mut vec = date_data_vec
                     .par_iter()
                     .flat_map(|date_data| {
+                        let reversed_date_index = date_data.reverse_index(len);
+
                         date_data
                             .blocks
                             .par_iter()
                             .map(move |block_data| SortedBlockData {
-                                reversed_date_index: date_data.reverse_index(len),
+                                reversed_date_index,
                                 year: date_data.year,
                                 block_data,
                             })
