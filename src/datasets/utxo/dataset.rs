@@ -7,7 +7,7 @@ use crate::{
         OutputState, PricePaidState, ProcessedBlockData, RealizedState, SubDataset, SupplyState,
         UTXOState, UnrealizedState,
     },
-    parse::{reverse_date_index, AnyBiMap, AnyDateMap, AnyHeightMap, BlockData},
+    parse::{AnyBiMap, AnyDateMap, AnyHeightMap, BlockData},
 };
 
 use super::UTXOFilter;
@@ -70,8 +70,12 @@ impl GenericDataset for UTXODataset {
         let mut output_state = OutputState::default();
         let mut pp_state = PricePaidState::default();
         let mut realized_state = RealizedState::default();
-        let mut unrealized_height_state = UnrealizedState::default();
-        let mut unrealized_date_state = UnrealizedState::default();
+        let mut unrealized_block_state = UnrealizedState::default();
+        let mut unrealized_date_state = if is_date_last_block {
+            Some(UnrealizedState::default())
+        } else {
+            None
+        };
 
         let date_data_vec_len = states.date_data_vec.len() as u16;
 
@@ -97,15 +101,15 @@ impl GenericDataset for UTXODataset {
                 utxo_state.count += block_data.spendable_outputs as usize;
 
                 if needs_unrealized_data {
-                    unrealized_height_state.iterate(price, block_price, sat_amount, btc_amount);
+                    unrealized_block_state.iterate(price, block_price, sat_amount, btc_amount);
 
-                    if is_date_last_block {
+                    if let Some(unrealized_date_state) = unrealized_date_state.as_mut() {
                         unrealized_date_state.iterate(price, date_price, sat_amount, btc_amount);
                     }
                 }
             });
 
-        let total_supply = supply_state.supply;
+        let supply = supply_state.supply;
 
         self.subs.supply.insert(processed_block_data, &supply_state);
 
@@ -114,38 +118,60 @@ impl GenericDataset for UTXODataset {
         if needs_unrealized_data {
             self.subs.unrealized.insert(
                 processed_block_data,
-                &unrealized_height_state,
+                &unrealized_block_state,
                 &unrealized_date_state,
             );
         }
 
         if needs_price_paid_data {
-            let len = states.date_data_vec.len() as u16;
+            let mut processed_amount = 0;
 
             states
                 .price_to_block_path
                 .values()
+                .flatten()
                 .map(|block_path| {
                     (
                         states
                             .date_data_vec
                             .get(block_path.date_index as usize)
-                            .unwrap(),
+                            .unwrap_or_else(|| {
+                                dbg!(
+                                    states.date_data_vec.len(),
+                                    &block_path.date_index,
+                                    &states.date_data_vec,
+                                    &states.price_to_block_path.values()
+                                );
+                                panic!("Out of bound")
+                            }),
                         block_path.block_index,
                     )
                 })
                 .filter(|(date_data, _)| {
                     self.filter
-                        .check(&date_data.reverse_index(len), &date_data.year)
+                        .check(&date_data.reverse_index(date_data_vec_len), &date_data.year)
                 })
                 .map(|(date_data, block_index)| date_data.blocks.get(block_index as usize).unwrap())
                 .for_each(|block_data| {
-                    let price = block_data.price;
                     let sat_amount = block_data.amount;
+
+                    processed_amount += sat_amount;
+
+                    let price = block_data.price;
                     let btc_amount = sats_to_btc(sat_amount);
 
-                    pp_state.iterate(price, btc_amount, sat_amount, total_supply);
+                    pp_state.iterate(price, btc_amount, sat_amount, supply);
                 });
+
+            if processed_amount != supply {
+                dbg!(
+                    processed_amount,
+                    supply,
+                    date_data_vec,
+                    states.price_to_block_path.values().collect_vec()
+                );
+                panic!("processed_amount isn't equal to supply")
+            }
 
             // MUST BE after insert supply
             self.subs
@@ -158,15 +184,13 @@ impl GenericDataset for UTXODataset {
                 .iter()
                 .map(|(block_path, data)| {
                     let date_data = date_data_vec.get(block_path.date_index as usize).unwrap();
-                    (block_path, date_data, data)
+                    (date_data, data)
                 })
-                .filter(|(block_path, date_data, _)| {
-                    self.filter.check(
-                        &reverse_date_index(block_path.date_index, date_data_vec_len),
-                        &date_data.year,
-                    )
+                .filter(|(date_data, _)| {
+                    self.filter
+                        .check(&date_data.reverse_index(date_data_vec_len), &date_data.year)
                 })
-                .for_each(|(_, _, data)| {
+                .for_each(|(_, data)| {
                     output_state.iterate(data.count as f32, sats_to_btc(data.volume));
                 });
 
@@ -180,11 +204,9 @@ impl GenericDataset for UTXODataset {
                     let date_data = date_data_vec.get(block_path.date_index as usize).unwrap();
                     (block_path, date_data, data)
                 })
-                .filter(|(block_path, date_data, _)| {
-                    self.filter.check(
-                        &reverse_date_index(block_path.date_index, date_data_vec_len),
-                        &date_data.year,
-                    )
+                .filter(|(_, date_data, _)| {
+                    self.filter
+                        .check(&date_data.reverse_index(date_data_vec_len), &date_data.year)
                 })
                 .for_each(|(block_path, date_data, spent_value)| {
                     let btc_spent = sats_to_btc(spent_value.volume);

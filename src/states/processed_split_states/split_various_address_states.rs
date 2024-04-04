@@ -7,9 +7,7 @@ use crate::{
     states::AddressIndexToAddressData,
 };
 
-use super::{
-    LiquiditySplitProcessedAddressState, SplitByCohort, SplitPricePaidStates, SplitUnrealizedStates,
-};
+use super::{LiquiditySplitProcessedAddressState, SplitByCohort, SplitOneShotStates};
 
 #[derive(Default, Deref, DerefMut)]
 pub struct SplitVariousAddressStates(SplitByCohort<LiquiditySplitProcessedAddressState>);
@@ -34,64 +32,49 @@ impl SplitVariousAddressStates {
         self.increment(current_address_data);
     }
 
-    pub fn compute_price_paid_states(&mut self) -> SplitPricePaidStates {
+    pub fn compute_one_shot_states(
+        &mut self,
+        block_price: f32,
+        date_price: Option<f32>,
+    ) -> SplitOneShotStates {
         thread::scope(|scope| {
-            let plankton_handle = scope.spawn(|| self.plankton.compute_price_paid_state());
-            let shrimp_handle = scope.spawn(|| self.shrimp.compute_price_paid_state());
-            let crab_handle = scope.spawn(|| self.crab.compute_price_paid_state());
-            let fish_handle = scope.spawn(|| self.fish.compute_price_paid_state());
-            let shark_handle = scope.spawn(|| self.shark.compute_price_paid_state());
-            let whale_handle = scope.spawn(|| self.whale.compute_price_paid_state());
-            let humpback_handle = scope.spawn(|| self.humpback.compute_price_paid_state());
-            let megalodon_handle = scope.spawn(|| self.megalodon.compute_price_paid_state());
+            let plankton_handle = scope.spawn(|| {
+                self.plankton
+                    .compute_one_shot_states(block_price, date_price)
+            });
+            let shrimp_handle =
+                scope.spawn(|| self.shrimp.compute_one_shot_states(block_price, date_price));
+            let crab_handle =
+                scope.spawn(|| self.crab.compute_one_shot_states(block_price, date_price));
+            let fish_handle =
+                scope.spawn(|| self.fish.compute_one_shot_states(block_price, date_price));
+            let shark_handle =
+                scope.spawn(|| self.shark.compute_one_shot_states(block_price, date_price));
+            let whale_handle =
+                scope.spawn(|| self.whale.compute_one_shot_states(block_price, date_price));
+            let humpback_handle = scope.spawn(|| {
+                self.humpback
+                    .compute_one_shot_states(block_price, date_price)
+            });
+            let megalodon_handle = scope.spawn(|| {
+                self.megalodon
+                    .compute_one_shot_states(block_price, date_price)
+            });
 
-            let p2pk_handle = scope.spawn(|| self.p2pk.compute_price_paid_state());
-            let p2pkh_handle = scope.spawn(|| self.p2pkh.compute_price_paid_state());
-            let p2sh_handle = scope.spawn(|| self.p2sh.compute_price_paid_state());
-            let p2wpkh_handle = scope.spawn(|| self.p2wpkh.compute_price_paid_state());
-            let p2wsh_handle = scope.spawn(|| self.p2wsh.compute_price_paid_state());
-            let p2tr_handle = scope.spawn(|| self.p2tr.compute_price_paid_state());
+            let p2pk_handle =
+                scope.spawn(|| self.p2pk.compute_one_shot_states(block_price, date_price));
+            let p2pkh_handle =
+                scope.spawn(|| self.p2pkh.compute_one_shot_states(block_price, date_price));
+            let p2sh_handle =
+                scope.spawn(|| self.p2sh.compute_one_shot_states(block_price, date_price));
+            let p2wpkh_handle =
+                scope.spawn(|| self.p2wpkh.compute_one_shot_states(block_price, date_price));
+            let p2wsh_handle =
+                scope.spawn(|| self.p2wsh.compute_one_shot_states(block_price, date_price));
+            let p2tr_handle =
+                scope.spawn(|| self.p2tr.compute_one_shot_states(block_price, date_price));
 
-            SplitPricePaidStates(SplitByCohort {
-                plankton: plankton_handle.join().unwrap(),
-                shrimp: shrimp_handle.join().unwrap(),
-                crab: crab_handle.join().unwrap(),
-                fish: fish_handle.join().unwrap(),
-                shark: shark_handle.join().unwrap(),
-                whale: whale_handle.join().unwrap(),
-                humpback: humpback_handle.join().unwrap(),
-                megalodon: megalodon_handle.join().unwrap(),
-
-                p2pk: p2pk_handle.join().unwrap(),
-                p2pkh: p2pkh_handle.join().unwrap(),
-                p2sh: p2sh_handle.join().unwrap(),
-                p2wpkh: p2wpkh_handle.join().unwrap(),
-                p2wsh: p2wsh_handle.join().unwrap(),
-                p2tr: p2tr_handle.join().unwrap(),
-            })
-        })
-    }
-
-    pub fn compute_unrealized_states(&mut self, ref_price: f32) -> SplitUnrealizedStates {
-        thread::scope(|scope| {
-            let plankton_handle = scope.spawn(|| self.plankton.compute_unrealized_state(ref_price));
-            let shrimp_handle = scope.spawn(|| self.shrimp.compute_unrealized_state(ref_price));
-            let crab_handle = scope.spawn(|| self.crab.compute_unrealized_state(ref_price));
-            let fish_handle = scope.spawn(|| self.fish.compute_unrealized_state(ref_price));
-            let shark_handle = scope.spawn(|| self.shark.compute_unrealized_state(ref_price));
-            let whale_handle = scope.spawn(|| self.whale.compute_unrealized_state(ref_price));
-            let humpback_handle = scope.spawn(|| self.humpback.compute_unrealized_state(ref_price));
-            let megalodon_handle =
-                scope.spawn(|| self.megalodon.compute_unrealized_state(ref_price));
-
-            let p2pk_handle = scope.spawn(|| self.p2pk.compute_unrealized_state(ref_price));
-            let p2pkh_handle = scope.spawn(|| self.p2pkh.compute_unrealized_state(ref_price));
-            let p2sh_handle = scope.spawn(|| self.p2sh.compute_unrealized_state(ref_price));
-            let p2wpkh_handle = scope.spawn(|| self.p2wpkh.compute_unrealized_state(ref_price));
-            let p2wsh_handle = scope.spawn(|| self.p2wsh.compute_unrealized_state(ref_price));
-            let p2tr_handle = scope.spawn(|| self.p2tr.compute_unrealized_state(ref_price));
-
-            SplitUnrealizedStates(SplitByCohort {
+            SplitOneShotStates(SplitByCohort {
                 plankton: plankton_handle.join().unwrap(),
                 shrimp: shrimp_handle.join().unwrap(),
                 crab: crab_handle.join().unwrap(),

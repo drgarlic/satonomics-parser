@@ -9,18 +9,18 @@ use crate::parse::BlockPath;
 use super::DateDataVec;
 
 #[derive(Deref, DerefMut, Default)]
-pub struct PriceToBlockPath(BTreeMap<OrderedFloat<f32>, BlockPath>);
+pub struct PriceToBlockPathVec(BTreeMap<OrderedFloat<f32>, Vec<BlockPath>>);
 
-impl PriceToBlockPath {
+impl PriceToBlockPathVec {
     pub fn build(date_data_vec: &DateDataVec) -> Self {
         Self(
             date_data_vec
-                .par_iter()
+                .iter()
                 .enumerate()
                 .flat_map(|(date_index, date_data)| {
                     date_data
                         .blocks
-                        .par_iter()
+                        .iter()
                         .enumerate()
                         .map(move |(block_index, block_data)| {
                             (
@@ -32,7 +32,10 @@ impl PriceToBlockPath {
                             )
                         })
                 })
-                .collect(),
+                .fold(BTreeMap::new(), |mut tree, (price, block_path)| {
+                    tree.entry(price).or_default().push(block_path);
+                    tree
+                }),
         )
     }
 }

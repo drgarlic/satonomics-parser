@@ -37,8 +37,7 @@ use crate::{
         HeightToDateConverter,
     },
     states::{
-        SplitInputStates, SplitOutputStates, SplitPricePaidStates, SplitRealizedStates,
-        SplitUnrealizedStates, States,
+        SplitInputStates, SplitOneShotStates, SplitOutputStates, SplitRealizedStates, States,
     },
 };
 
@@ -66,12 +65,10 @@ pub struct ProcessedBlockData<'a> {
     pub satblocks_destroyed: u64,
     pub satdays_destroyed: u64,
     pub sats_sent: u64,
-    pub split_input_states: &'a mut Option<SplitInputStates>,
-    pub split_output_states: &'a mut Option<SplitOutputStates>,
-    pub split_price_paid_states: &'a Option<SplitPricePaidStates>,
-    pub split_realized_states: &'a mut Option<SplitRealizedStates>,
-    pub split_unrealized_states_date: &'a Option<SplitUnrealizedStates>,
-    pub split_unrealized_states_height: &'a Option<SplitUnrealizedStates>,
+    pub split_input_states: &'a Option<SplitInputStates>,
+    pub split_one_shot_states: &'a Option<SplitOneShotStates>,
+    pub split_output_states: &'a Option<SplitOutputStates>,
+    pub split_realized_states: &'a Option<SplitRealizedStates>,
     pub states: &'a States,
     pub timestamp: u32,
     pub transaction_count: usize,

@@ -23,11 +23,6 @@ impl DateData {
 
     #[inline(always)]
     pub fn reverse_index(&self, len: u16) -> u16 {
-        reverse_date_index(self.index, len)
+        len - 1 - self.index
     }
-}
-
-#[inline(always)]
-pub fn reverse_date_index(date_index: u16, dates_len: u16) -> u16 {
-    dates_len - 1 - date_index
 }

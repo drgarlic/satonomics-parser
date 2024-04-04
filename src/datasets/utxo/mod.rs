@@ -18,6 +18,9 @@ pub struct UTXODatasets {
 
     pub all: UTXODataset,
 
+    sth: UTXODataset,
+    lth: UTXODataset,
+
     up_to_1d: UTXODataset,
     up_to_7d: UTXODataset,
     up_to_1m: UTXODataset,
@@ -43,10 +46,9 @@ pub struct UTXODatasets {
     from_3y_to_5y: UTXODataset,
     from_5y_to_7y: UTXODataset,
     from_7y_to_10y: UTXODataset,
-    from_10y_to_end: UTXODataset,
 
-    sth: UTXODataset,
-    lth: UTXODataset,
+    from_1y: UTXODataset,
+    from_10y: UTXODataset,
 
     yearly: Vec<UTXODataset>,
 }
@@ -166,12 +168,12 @@ impl UTXODatasets {
                     UTXOFilter::new_from_to(7 * 365, 10 * 365),
                 )
             });
+
+            let from_1y_to_end_handle = scope
+                .spawn(|| UTXODataset::import(parent_path, Some("from_1y"), UTXOFilter::From(365)));
+
             let from_10y_to_end_handle = scope.spawn(|| {
-                UTXODataset::import(
-                    parent_path,
-                    Some("from_10y_to_end"),
-                    UTXOFilter::From(10 * 365),
-                )
+                UTXODataset::import(parent_path, Some("from_10y"), UTXOFilter::From(10 * 365))
             });
 
             let yearly_handles = (2009..=(chrono::Utc::now().year() as u16))
@@ -221,7 +223,9 @@ impl UTXODatasets {
                 from_3y_to_5y: from_3y_to_5y_handle.join().unwrap()?,
                 from_5y_to_7y: from_5y_to_7y_handle.join().unwrap()?,
                 from_7y_to_10y: from_7y_to_10y_handle.join().unwrap()?,
-                from_10y_to_end: from_10y_to_end_handle.join().unwrap()?,
+
+                from_1y: from_1y_to_end_handle.join().unwrap()?,
+                from_10y: from_10y_to_end_handle.join().unwrap()?,
 
                 sth: sth_handle.join().unwrap()?,
                 lth,
@@ -265,7 +269,8 @@ impl UTXODatasets {
             &self.from_3y_to_5y,
             &self.from_5y_to_7y,
             &self.from_7y_to_10y,
-            &self.from_10y_to_end,
+            &self.from_1y,
+            &self.from_10y,
             &self.sth,
             &self.lth,
         ];

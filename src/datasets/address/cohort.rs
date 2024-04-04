@@ -207,67 +207,67 @@ impl CohortDataset {
     }
 
     fn insert_unrealized_data(&self, processed_block_data: &ProcessedBlockData) {
-        let height_state = processed_block_data
-            .split_unrealized_states_height
+        let states = processed_block_data
+            .split_one_shot_states
             .as_ref()
             .unwrap()
             .get_state(&self.split)
             .unwrap();
 
-        let date_state = processed_block_data
-            .split_unrealized_states_height
-            .as_ref()
-            .unwrap()
-            .get_state(&self.split)
-            .unwrap();
-
-        self.all
-            .unrealized
-            .insert(processed_block_data, &height_state.all, &date_state.all);
+        self.all.unrealized.insert(
+            processed_block_data,
+            &states.all.unrealized_block_state,
+            &states.all.unrealized_date_state,
+        );
 
         self.illiquid.unrealized.insert(
             processed_block_data,
-            &height_state.illiquid,
-            &date_state.illiquid,
+            &states.illiquid.unrealized_block_state,
+            &states.illiquid.unrealized_date_state,
         );
 
         self.liquid.unrealized.insert(
             processed_block_data,
-            &height_state.liquid,
-            &date_state.liquid,
+            &states.liquid.unrealized_block_state,
+            &states.liquid.unrealized_date_state,
         );
 
         self.highly_liquid.unrealized.insert(
             processed_block_data,
-            &height_state.highly_liquid,
-            &date_state.highly_liquid,
+            &states.highly_liquid.unrealized_block_state,
+            &states.highly_liquid.unrealized_date_state,
         );
     }
 
     fn insert_price_paid_data(&self, processed_block_data: &ProcessedBlockData) {
-        let state = processed_block_data
-            .split_price_paid_states
+        let states = processed_block_data
+            .split_one_shot_states
             .as_ref()
             .unwrap()
             .get_state(&self.split)
             .unwrap();
 
-        self.all
-            .price_paid
-            .insert(processed_block_data, &state.all, &self.all.supply.total);
+        self.all.price_paid.insert(
+            processed_block_data,
+            &states.all.price_paid_state,
+            &self.all.supply.total,
+        );
+
         self.illiquid.price_paid.insert(
             processed_block_data,
-            &state.illiquid,
+            &states.illiquid.price_paid_state,
             &self.illiquid.supply.total,
         );
+
         self.liquid.price_paid.insert(
             processed_block_data,
-            &state.liquid,
+            &states.liquid.price_paid_state,
             &self.liquid.supply.total,
         );
+
         self.highly_liquid.price_paid.insert(
             processed_block_data,
-            &state.highly_liquid,
+            &states.highly_liquid.price_paid_state,
             &self.highly_liquid.supply.total,
         );
     }

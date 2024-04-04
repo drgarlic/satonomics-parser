@@ -1,6 +1,6 @@
-use crate::datasets::{PricePaidState, SupplyState, UTXOState, UnrealizedState};
+use crate::datasets::{SupplyState, UTXOState};
 
-use super::MeanPricePaidInCentsToAmount;
+use super::{MeanPricePaidInCentsToAmount, OneShotStates};
 
 #[derive(Default, Debug)]
 pub struct ProcessedAddressesState {
@@ -38,13 +38,12 @@ impl ProcessedAddressesState {
             .decrement(mean_price_paid_in_cents, amount);
     }
 
-    pub fn compute_price_paid_state(&self) -> PricePaidState {
+    pub fn compute_one_shot_states(
+        &self,
+        block_price: f32,
+        date_price: Option<f32>,
+    ) -> OneShotStates {
         self.mean_price_paid_in_cents_to_amount
-            .compute_price_paid_state(self.supply_state.supply)
-    }
-
-    pub fn compute_unrealized_state(&self, ref_price: f32) -> UnrealizedState {
-        self.mean_price_paid_in_cents_to_amount
-            .compute_unrealized_state(ref_price)
+            .compute_on_shot_states(self.supply_state.supply, block_price, date_price)
     }
 }

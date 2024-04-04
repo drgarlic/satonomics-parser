@@ -33,28 +33,23 @@ impl UnrealizedSubDataset {
 
     pub fn insert(
         &self,
-        &ProcessedBlockData {
-            height,
-            date,
-            is_date_last_block,
-            ..
-        }: &ProcessedBlockData,
-        height_state: &UnrealizedState,
-        date_state: &UnrealizedState,
+        &ProcessedBlockData { height, date, .. }: &ProcessedBlockData,
+        block_state: &UnrealizedState,
+        date_state: &Option<UnrealizedState>,
     ) {
         self.supply_in_profit
             .height
-            .insert(height, sats_to_btc(height_state.supply_in_profit));
+            .insert(height, sats_to_btc(block_state.supply_in_profit));
 
         self.unrealized_profit
             .height
-            .insert(height, height_state.unrealized_profit);
+            .insert(height, block_state.unrealized_profit);
 
         self.unrealized_loss
             .height
-            .insert(height, height_state.unrealized_loss);
+            .insert(height, block_state.unrealized_loss);
 
-        if is_date_last_block {
+        if let Some(date_state) = date_state {
             self.supply_in_profit
                 .date
                 .insert(date, sats_to_btc(date_state.supply_in_profit));

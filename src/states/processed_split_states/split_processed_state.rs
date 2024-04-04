@@ -1,11 +1,8 @@
 use std::thread;
 
-use crate::{
-    datasets::{PricePaidState, UnrealizedState},
-    parse::{LiquiditySplitResult, SplitByLiquidity},
-};
+use crate::parse::{LiquiditySplitResult, SplitByLiquidity};
 
-use super::ProcessedAddressesState;
+use super::{OneShotStates, ProcessedAddressesState};
 
 #[derive(Default)]
 pub struct LiquiditySplitProcessedAddressState {
@@ -80,32 +77,32 @@ impl LiquiditySplitProcessedAddressState {
         );
     }
 
-    pub fn compute_price_paid_state(&self) -> SplitByLiquidity<PricePaidState> {
+    pub fn compute_one_shot_states(
+        &self,
+        block_price: f32,
+        date_price: Option<f32>,
+    ) -> SplitByLiquidity<OneShotStates> {
         thread::scope(|scope| {
-            let all_handle = scope.spawn(|| self.split.all.compute_price_paid_state());
-            let illiquid_handle = scope.spawn(|| self.split.illiquid.compute_price_paid_state());
-            let liquid_handle = scope.spawn(|| self.split.liquid.compute_price_paid_state());
-            let highly_liquid_handle =
-                scope.spawn(|| self.split.highly_liquid.compute_price_paid_state());
-
-            SplitByLiquidity {
-                all: all_handle.join().unwrap(),
-                illiquid: illiquid_handle.join().unwrap(),
-                liquid: liquid_handle.join().unwrap(),
-                highly_liquid: highly_liquid_handle.join().unwrap(),
-            }
-        })
-    }
-
-    pub fn compute_unrealized_state(&self, ref_price: f32) -> SplitByLiquidity<UnrealizedState> {
-        thread::scope(|scope| {
-            let all_handle = scope.spawn(|| self.split.all.compute_unrealized_state(ref_price));
-            let illiquid_handle =
-                scope.spawn(|| self.split.illiquid.compute_unrealized_state(ref_price));
-            let liquid_handle =
-                scope.spawn(|| self.split.liquid.compute_unrealized_state(ref_price));
-            let highly_liquid_handle =
-                scope.spawn(|| self.split.highly_liquid.compute_unrealized_state(ref_price));
+            let all_handle = scope.spawn(|| {
+                self.split
+                    .all
+                    .compute_one_shot_states(block_price, date_price)
+            });
+            let illiquid_handle = scope.spawn(|| {
+                self.split
+                    .illiquid
+                    .compute_one_shot_states(block_price, date_price)
+            });
+            let liquid_handle = scope.spawn(|| {
+                self.split
+                    .liquid
+                    .compute_one_shot_states(block_price, date_price)
+            });
+            let highly_liquid_handle = scope.spawn(|| {
+                self.split
+                    .highly_liquid
+                    .compute_one_shot_states(block_price, date_price)
+            });
 
             SplitByLiquidity {
                 all: all_handle.join().unwrap(),

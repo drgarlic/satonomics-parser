@@ -88,6 +88,11 @@ pub fn parse_block(
 
     let date_index = states.date_data_vec.len() - 1;
 
+    let block_path = BlockPath {
+        date_index: date_index as u16,
+        block_index: block_index as u16,
+    };
+
     let block_price = datasets
         .price
         .height_to_close(height, timestamp)
@@ -105,6 +110,12 @@ pub fn parse_block(
         .blocks
         .push(BlockData::new(height as u32, block_price));
 
+    states
+        .price_to_block_path
+        .entry(OrderedFloat(block_price))
+        .or_default()
+        .push(block_path.to_owned());
+
     let mut block_path_to_spent_data: BTreeMap<BlockPath, SpentData> = BTreeMap::new();
     let mut block_path_to_received_data: BTreeMap<BlockPath, ReceivedData> = BTreeMap::new();
     let mut address_index_to_address_realized_data: BTreeMap<u32, AddressRealizedData> =
@@ -120,15 +131,6 @@ pub fn parse_block(
     let mut transaction_count = 0;
     let mut fees = vec![];
     let mut fees_total = 0;
-
-    let block_path = BlockPath {
-        date_index: date_index as u16,
-        block_index: block_index as u16,
-    };
-
-    states
-        .price_to_block_path
-        .insert(OrderedFloat(block_price), block_path.to_owned());
 
     let (
         (
@@ -540,11 +542,9 @@ pub fn parse_block(
     });
 
     let mut split_realized_states = None;
-    let mut split_price_paid_states = None;
+    let mut split_one_shot_states = None;
     let mut split_input_states = None;
     let mut split_output_states = None;
-    let mut split_unrealized_states_height = None;
-    let mut split_unrealized_states_date = None;
 
     if compute_addresses {
         split_realized_states.replace(SplitRealizedStates::default());
@@ -590,16 +590,14 @@ pub fn parse_block(
             },
         );
 
-        split_price_paid_states
-            .replace(processed_addresses_split_states.compute_price_paid_states());
-
-        split_unrealized_states_height
-            .replace(processed_addresses_split_states.compute_unrealized_states(block_price));
-
-        if is_date_last_block {
-            split_unrealized_states_date
-                .replace(processed_addresses_split_states.compute_unrealized_states(date_price));
-        }
+        split_one_shot_states.replace(processed_addresses_split_states.compute_one_shot_states(
+            block_price,
+            if is_date_last_block {
+                Some(date_price)
+            } else {
+                None
+            },
+        ));
     }
 
     datasets.insert_block_data(ProcessedBlockData {
@@ -619,12 +617,10 @@ pub fn parse_block(
         satblocks_destroyed,
         satdays_destroyed,
         sats_sent,
-        split_input_states: &mut split_input_states,
-        split_output_states: &mut split_output_states,
-        split_price_paid_states: &split_price_paid_states,
-        split_realized_states: &mut split_realized_states,
-        split_unrealized_states_date: &split_unrealized_states_date,
-        split_unrealized_states_height: &split_unrealized_states_height,
+        split_input_states: &split_input_states,
+        split_output_states: &split_output_states,
+        split_one_shot_states: &split_one_shot_states,
+        split_realized_states: &split_realized_states,
         states,
         timestamp,
         transaction_count,

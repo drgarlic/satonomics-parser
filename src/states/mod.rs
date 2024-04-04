@@ -23,7 +23,7 @@ use txout_index_to_sats::*;
 #[derive(Default)]
 pub struct States {
     pub address_index_to_address_data: AddressIndexToAddressData,
-    pub price_to_block_path: PriceToBlockPath,
+    pub price_to_block_path: PriceToBlockPathVec,
     pub counters: Counters,
     pub date_data_vec: DateDataVec,
     pub split_address: SplitVariousAddressStates,
@@ -58,13 +58,13 @@ impl States {
 
         let split_address = SplitVariousAddressStates::init(&address_index_to_address_data);
 
-        let price_to_block_path = PriceToBlockPath::build(&date_data_vec);
+        let price_to_block_path_vec = PriceToBlockPathVec::build(&date_data_vec);
 
         Ok(Self {
             address_index_to_address_data,
             counters,
             date_data_vec,
-            price_to_block_path,
+            price_to_block_path: price_to_block_path_vec,
             split_address,
             tx_index_to_tx_data,
             txout_index_to_address_index,
@@ -81,6 +81,8 @@ impl States {
         let _ = self.tx_index_to_tx_data.reset();
         let _ = self.txout_index_to_address_index.reset();
         let _ = self.txout_index_to_sats.reset();
+
+        self.price_to_block_path.clear();
 
         self.split_address = SplitVariousAddressStates::default();
     }
