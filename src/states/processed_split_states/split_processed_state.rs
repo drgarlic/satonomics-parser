@@ -88,16 +88,19 @@ impl LiquiditySplitProcessedAddressState {
                     .all
                     .compute_one_shot_states(block_price, date_price)
             });
+
             let illiquid_handle = scope.spawn(|| {
                 self.split
                     .illiquid
                     .compute_one_shot_states(block_price, date_price)
             });
+
             let liquid_handle = scope.spawn(|| {
                 self.split
                     .liquid
                     .compute_one_shot_states(block_price, date_price)
             });
+
             let highly_liquid_handle = scope.spawn(|| {
                 self.split
                     .highly_liquid

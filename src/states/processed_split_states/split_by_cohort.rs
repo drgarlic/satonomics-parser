@@ -1,7 +1,9 @@
-use crate::parse::{RawAddressSize, RawAddressSplit, RawAddressType};
+use crate::parse::{AddressData, RawAddressSize, RawAddressSplit, RawAddressType};
 
 #[derive(Default)]
 pub struct SplitByCohort<T> {
+    pub all: T,
+
     pub plankton: T,
     pub shrimp: T,
     pub crab: T,
@@ -22,6 +24,8 @@ pub struct SplitByCohort<T> {
 impl<T> SplitByCohort<T> {
     pub fn get_state(&self, split: &RawAddressSplit) -> Option<&T> {
         match &split {
+            RawAddressSplit::All => Some(&self.all),
+
             RawAddressSplit::Type(address_type) => match address_type {
                 RawAddressType::P2PK => Some(&self.p2pk),
                 RawAddressType::P2PKH => Some(&self.p2pkh),
@@ -31,6 +35,7 @@ impl<T> SplitByCohort<T> {
                 RawAddressType::P2TR => Some(&self.p2tr),
                 _ => None,
             },
+
             RawAddressSplit::Size(address_size) => match address_size {
                 RawAddressSize::Empty => None,
                 RawAddressSize::Plankton => Some(&self.plankton),
@@ -45,8 +50,26 @@ impl<T> SplitByCohort<T> {
         }
     }
 
-    pub fn get_mut_state(&mut self, split: &RawAddressSplit) -> Option<&mut T> {
+    pub fn iterate(&mut self, address_data: &AddressData, iterate: &dyn Fn(&mut T)) {
+        if let Some(state) = self.get_mut_state(&RawAddressSplit::All) {
+            iterate(state);
+        }
+
+        if let Some(state) = self.get_mut_state(&RawAddressSplit::Type(address_data.address_type)) {
+            iterate(state);
+        }
+
+        if let Some(state) = self.get_mut_state(&RawAddressSplit::Size(
+            RawAddressSize::from_amount(address_data.amount),
+        )) {
+            iterate(state);
+        }
+    }
+
+    fn get_mut_state(&mut self, split: &RawAddressSplit) -> Option<&mut T> {
         match &split {
+            RawAddressSplit::All => Some(&mut self.all),
+
             RawAddressSplit::Type(address_type) => match address_type {
                 RawAddressType::P2PK => Some(&mut self.p2pk),
                 RawAddressType::P2PKH => Some(&mut self.p2pkh),
@@ -56,6 +79,7 @@ impl<T> SplitByCohort<T> {
                 RawAddressType::P2TR => Some(&mut self.p2tr),
                 _ => None,
             },
+
             RawAddressSplit::Size(address_size) => match address_size {
                 RawAddressSize::Empty => None,
                 RawAddressSize::Plankton => Some(&mut self.plankton),

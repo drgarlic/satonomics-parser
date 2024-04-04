@@ -192,12 +192,12 @@ impl AllDatasets {
             // - Be stored memory
             // - Either inserted or computed in the prepare function
             annualized_transaction_volume: &self.transaction.annualized_volume,
-            circulating_supply: &self.utxo.all.subs.supply.total,
+            circulating_supply: &self.address.all.all.supply.total,
             yearly_inflation_rate: &self.mining.yearly_inflation_rate,
             height_price: &self.price.height.closes,
             date_price: &self.price.date.closes,
-            realized_cap: &self.utxo.all.subs.price_paid.realized_cap,
-            realized_price: &self.utxo.all.subs.price_paid.realized_price,
+            realized_cap: &self.address.all.all.price_paid.realized_cap,
+            realized_price: &self.address.all.all.price_paid.realized_price,
             subsidy_in_dollars: &self.mining.subsidy_in_dollars,
 
             convert_last_height_to_date: &HeightToDateConverter::Last(

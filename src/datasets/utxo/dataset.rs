@@ -21,18 +21,8 @@ pub struct UTXODataset {
 }
 
 impl UTXODataset {
-    pub fn import(
-        parent_path: &str,
-        name: Option<&str>,
-        range: UTXOFilter,
-    ) -> color_eyre::Result<Self> {
-        let folder_path = {
-            if let Some(name) = name {
-                format!("{parent_path}/{name}")
-            } else {
-                parent_path.to_owned()
-            }
-        };
+    pub fn import(parent_path: &str, name: &str, range: UTXOFilter) -> color_eyre::Result<Self> {
+        let folder_path = format!("{parent_path}/{name}");
 
         let s = Self {
             min_initial_state: MinInitialState::default(),

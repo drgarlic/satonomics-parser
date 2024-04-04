@@ -1,5 +1,4 @@
 pub enum UTXOFilter {
-    Full,
     To(u16),
     FromTo { from: u16, to: u16 },
     From(u16),
@@ -13,7 +12,6 @@ impl UTXOFilter {
 
     pub fn check(&self, reversed_date_index: &u16, year: &u16) -> bool {
         match self {
-            UTXOFilter::Full => true,
             UTXOFilter::From(from) => from <= reversed_date_index,
             UTXOFilter::To(to) => to > reversed_date_index,
             UTXOFilter::FromTo { from, to } => {

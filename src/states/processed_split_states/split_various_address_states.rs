@@ -3,7 +3,7 @@ use std::thread;
 use derive_deref::{Deref, DerefMut};
 
 use crate::{
-    parse::{AddressData, AddressRealizedData, RawAddressSize, RawAddressSplit},
+    parse::{AddressData, AddressRealizedData},
     states::AddressIndexToAddressData,
 };
 
@@ -38,6 +38,9 @@ impl SplitVariousAddressStates {
         date_price: Option<f32>,
     ) -> SplitOneShotStates {
         thread::scope(|scope| {
+            let all_handle =
+                scope.spawn(|| self.all.compute_one_shot_states(block_price, date_price));
+
             let plankton_handle = scope.spawn(|| {
                 self.plankton
                     .compute_one_shot_states(block_price, date_price)
@@ -75,6 +78,8 @@ impl SplitVariousAddressStates {
                 scope.spawn(|| self.p2tr.compute_one_shot_states(block_price, date_price));
 
             SplitOneShotStates(SplitByCohort {
+                all: all_handle.join().unwrap(),
+
                 plankton: plankton_handle.join().unwrap(),
                 shrimp: shrimp_handle.join().unwrap(),
                 crab: crab_handle.join().unwrap(),
@@ -129,46 +134,27 @@ impl SplitVariousAddressStates {
         let split_sat_amount_amount = liquidity_classification.split(amount as f32);
         let split_utxo_count = liquidity_classification.split(utxo_count as f32);
 
-        if let Some(state) = self.get_mut_state(&RawAddressSplit::Type(address_data.address_type)) {
-            if increment {
-                state.increment(
-                    amount,
-                    utxo_count,
-                    mean_price_paid_in_cents,
-                    &split_sat_amount_amount,
-                    &split_utxo_count,
-                );
-            } else {
-                state.decrement(
-                    amount,
-                    utxo_count,
-                    mean_price_paid_in_cents,
-                    &split_sat_amount_amount,
-                    &split_utxo_count,
-                )
-            }
-        }
-
-        if let Some(state) =
-            self.get_mut_state(&RawAddressSplit::Size(RawAddressSize::from_amount(amount)))
-        {
-            if increment {
-                state.increment(
-                    amount,
-                    utxo_count,
-                    mean_price_paid_in_cents,
-                    &split_sat_amount_amount,
-                    &split_utxo_count,
-                );
-            } else {
-                state.decrement(
-                    amount,
-                    utxo_count,
-                    mean_price_paid_in_cents,
-                    &split_sat_amount_amount,
-                    &split_utxo_count,
-                )
-            }
-        }
+        self.0.iterate(
+            address_data,
+            &|state: &mut LiquiditySplitProcessedAddressState| {
+                if increment {
+                    state.increment(
+                        amount,
+                        utxo_count,
+                        mean_price_paid_in_cents,
+                        &split_sat_amount_amount,
+                        &split_utxo_count,
+                    );
+                } else {
+                    state.decrement(
+                        amount,
+                        utxo_count,
+                        mean_price_paid_in_cents,
+                        &split_sat_amount_amount,
+                        &split_utxo_count,
+                    )
+                }
+            },
+        );
     }
 }

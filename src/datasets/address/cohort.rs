@@ -20,7 +20,7 @@ pub struct CohortDataset {
 
     metadata: MetadataDataset,
 
-    all: SubDataset,
+    pub all: SubDataset,
     illiquid: SubDataset,
     liquid: SubDataset,
     highly_liquid: SubDataset,
@@ -29,12 +29,24 @@ pub struct CohortDataset {
 impl CohortDataset {
     pub fn import(
         parent_path: &str,
-        name: &str,
+        name: Option<&str>,
         split: RawAddressSplit,
     ) -> color_eyre::Result<Self> {
-        let folder_path = format!("{parent_path}/{name}");
+        let folder_path = {
+            if let Some(name) = name {
+                format!("{parent_path}/{name}")
+            } else {
+                parent_path.to_owned()
+            }
+        };
 
-        let f = |s: &str| format!("{parent_path}/{s}/{name}");
+        let f = |s: &str| {
+            if let Some(name) = name {
+                format!("{parent_path}/{s}/{name}")
+            } else {
+                format!("{parent_path}/{s}")
+            }
+        };
 
         let s = Self {
             min_initial_state: MinInitialState::default(),

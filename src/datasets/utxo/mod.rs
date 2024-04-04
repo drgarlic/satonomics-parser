@@ -16,8 +16,6 @@ use super::{GenericDataset, MinInitialState};
 pub struct UTXODatasets {
     min_initial_state: MinInitialState,
 
-    pub all: UTXODataset,
-
     sth: UTXODataset,
     lth: UTXODataset,
 
@@ -56,147 +54,119 @@ pub struct UTXODatasets {
 impl UTXODatasets {
     pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
         thread::scope(|scope| {
-            let all_handle =
-                scope.spawn(|| UTXODataset::import(parent_path, None, UTXOFilter::Full));
-
-            let up_to_1d_handle = scope
-                .spawn(|| UTXODataset::import(parent_path, Some("up_to_1d"), UTXOFilter::To(1)));
-            let up_to_7d_handle = scope
-                .spawn(|| UTXODataset::import(parent_path, Some("up_to_7d"), UTXOFilter::To(7)));
-            let up_to_1m_handle = scope
-                .spawn(|| UTXODataset::import(parent_path, Some("up_to_1m"), UTXOFilter::To(30)));
-            let up_to_2m_handle = scope.spawn(|| {
-                UTXODataset::import(parent_path, Some("up_to_2m"), UTXOFilter::To(2 * 30))
-            });
-            let up_to_3m_handle = scope.spawn(|| {
-                UTXODataset::import(parent_path, Some("up_to_3m"), UTXOFilter::To(3 * 30))
-            });
-            let up_to_4m_handle = scope.spawn(|| {
-                UTXODataset::import(parent_path, Some("up_to_4m"), UTXOFilter::To(4 * 30))
-            });
-            let up_to_5m_handle = scope.spawn(|| {
-                UTXODataset::import(parent_path, Some("up_to_5m"), UTXOFilter::To(5 * 30))
-            });
-            let up_to_6m_handle = scope.spawn(|| {
-                UTXODataset::import(parent_path, Some("up_to_6m"), UTXOFilter::To(6 * 30))
-            });
-            let up_to_1y_handle = scope
-                .spawn(|| UTXODataset::import(parent_path, Some("up_to_1y"), UTXOFilter::To(365)));
-            let up_to_2y_handle = scope.spawn(|| {
-                UTXODataset::import(parent_path, Some("up_to_2y"), UTXOFilter::To(2 * 365))
-            });
-            let up_to_3y_handle = scope.spawn(|| {
-                UTXODataset::import(parent_path, Some("up_to_3y"), UTXOFilter::To(3 * 365))
-            });
-            let up_to_5y_handle = scope.spawn(|| {
-                UTXODataset::import(parent_path, Some("up_to_5y"), UTXOFilter::To(5 * 365))
-            });
-            let up_to_7y_handle = scope.spawn(|| {
-                UTXODataset::import(parent_path, Some("up_to_7y"), UTXOFilter::To(7 * 365))
-            });
-            let up_to_10y_handle = scope.spawn(|| {
-                UTXODataset::import(parent_path, Some("up_to_10y"), UTXOFilter::To(10 * 365))
-            });
+            let up_to_1d_handle =
+                scope.spawn(|| UTXODataset::import(parent_path, "up_to_1d", UTXOFilter::To(1)));
+            let up_to_7d_handle =
+                scope.spawn(|| UTXODataset::import(parent_path, "up_to_7d", UTXOFilter::To(7)));
+            let up_to_1m_handle =
+                scope.spawn(|| UTXODataset::import(parent_path, "up_to_1m", UTXOFilter::To(30)));
+            let up_to_2m_handle = scope
+                .spawn(|| UTXODataset::import(parent_path, "up_to_2m", UTXOFilter::To(2 * 30)));
+            let up_to_3m_handle = scope
+                .spawn(|| UTXODataset::import(parent_path, "up_to_3m", UTXOFilter::To(3 * 30)));
+            let up_to_4m_handle = scope
+                .spawn(|| UTXODataset::import(parent_path, "up_to_4m", UTXOFilter::To(4 * 30)));
+            let up_to_5m_handle = scope
+                .spawn(|| UTXODataset::import(parent_path, "up_to_5m", UTXOFilter::To(5 * 30)));
+            let up_to_6m_handle = scope
+                .spawn(|| UTXODataset::import(parent_path, "up_to_6m", UTXOFilter::To(6 * 30)));
+            let up_to_1y_handle =
+                scope.spawn(|| UTXODataset::import(parent_path, "up_to_1y", UTXOFilter::To(365)));
+            let up_to_2y_handle = scope
+                .spawn(|| UTXODataset::import(parent_path, "up_to_2y", UTXOFilter::To(2 * 365)));
+            let up_to_3y_handle = scope
+                .spawn(|| UTXODataset::import(parent_path, "up_to_3y", UTXOFilter::To(3 * 365)));
+            let up_to_5y_handle = scope
+                .spawn(|| UTXODataset::import(parent_path, "up_to_5y", UTXOFilter::To(5 * 365)));
+            let up_to_7y_handle = scope
+                .spawn(|| UTXODataset::import(parent_path, "up_to_7y", UTXOFilter::To(7 * 365)));
+            let up_to_10y_handle = scope
+                .spawn(|| UTXODataset::import(parent_path, "up_to_10y", UTXOFilter::To(10 * 365)));
 
             let from_1d_to_7d_handle = scope.spawn(|| {
-                UTXODataset::import(
-                    parent_path,
-                    Some("from_1d_to_7d"),
-                    UTXOFilter::new_from_to(1, 7),
-                )
+                UTXODataset::import(parent_path, "from_1d_to_7d", UTXOFilter::new_from_to(1, 7))
             });
             let from_7d_to_1m_handle = scope.spawn(|| {
-                UTXODataset::import(
-                    parent_path,
-                    Some("from_7d_to_1m"),
-                    UTXOFilter::new_from_to(7, 30),
-                )
+                UTXODataset::import(parent_path, "from_7d_to_1m", UTXOFilter::new_from_to(7, 30))
             });
             let from_1m_to_3m_handle = scope.spawn(|| {
                 UTXODataset::import(
                     parent_path,
-                    Some("from_1m_to_3m"),
+                    "from_1m_to_3m",
                     UTXOFilter::new_from_to(30, 3 * 30),
                 )
             });
             let from_3m_to_6m_handle = scope.spawn(|| {
                 UTXODataset::import(
                     parent_path,
-                    Some("from_3m_to_6m"),
+                    "from_3m_to_6m",
                     UTXOFilter::new_from_to(3 * 30, 6 * 30),
                 )
             });
             let from_6m_to_1y_handle = scope.spawn(|| {
                 UTXODataset::import(
                     parent_path,
-                    Some("from_6m_to_1y"),
+                    "from_6m_to_1y",
                     UTXOFilter::new_from_to(6 * 30, 365),
                 )
             });
             let from_1y_to_2y_handle = scope.spawn(|| {
                 UTXODataset::import(
                     parent_path,
-                    Some("from_1y_to_2y"),
+                    "from_1y_to_2y",
                     UTXOFilter::new_from_to(365, 2 * 365),
                 )
             });
             let from_2y_to_3y_handle = scope.spawn(|| {
                 UTXODataset::import(
                     parent_path,
-                    Some("from_2y_to_3y"),
+                    "from_2y_to_3y",
                     UTXOFilter::new_from_to(2 * 365, 3 * 365),
                 )
             });
             let from_3y_to_5y_handle = scope.spawn(|| {
                 UTXODataset::import(
                     parent_path,
-                    Some("from_3y_to_5y"),
+                    "from_3y_to_5y",
                     UTXOFilter::new_from_to(3 * 365, 5 * 365),
                 )
             });
             let from_5y_to_7y_handle = scope.spawn(|| {
                 UTXODataset::import(
                     parent_path,
-                    Some("from_5y_to_7y"),
+                    "from_5y_to_7y",
                     UTXOFilter::new_from_to(5 * 365, 7 * 365),
                 )
             });
             let from_7y_to_10y_handle = scope.spawn(|| {
                 UTXODataset::import(
                     parent_path,
-                    Some("from_7y_to_10y"),
+                    "from_7y_to_10y",
                     UTXOFilter::new_from_to(7 * 365, 10 * 365),
                 )
             });
 
-            let from_1y_to_end_handle = scope
-                .spawn(|| UTXODataset::import(parent_path, Some("from_1y"), UTXOFilter::From(365)));
+            let from_1y_to_end_handle =
+                scope.spawn(|| UTXODataset::import(parent_path, "from_1y", UTXOFilter::From(365)));
 
-            let from_10y_to_end_handle = scope.spawn(|| {
-                UTXODataset::import(parent_path, Some("from_10y"), UTXOFilter::From(10 * 365))
-            });
+            let from_10y_to_end_handle = scope
+                .spawn(|| UTXODataset::import(parent_path, "from_10y", UTXOFilter::From(10 * 365)));
 
             let yearly_handles = (2009..=(chrono::Utc::now().year() as u16))
                 .map(|year| {
                     scope.spawn(move || {
-                        UTXODataset::import(
-                            parent_path,
-                            Some(&year.to_string()),
-                            UTXOFilter::Year(year),
-                        )
+                        UTXODataset::import(parent_path, &year.to_string(), UTXOFilter::Year(year))
                     })
                 })
                 .collect_vec();
 
             let sth_handle =
-                scope.spawn(|| UTXODataset::import(parent_path, Some("sth"), UTXOFilter::To(155)));
+                scope.spawn(|| UTXODataset::import(parent_path, "sth", UTXOFilter::To(155)));
 
-            let lth = UTXODataset::import(parent_path, Some("lth"), UTXOFilter::From(155))?;
+            let lth = UTXODataset::import(parent_path, "lth", UTXOFilter::From(155))?;
 
             let s = Self {
                 min_initial_state: MinInitialState::default(),
-
-                all: all_handle.join().unwrap()?,
 
                 up_to_1d: up_to_1d_handle.join().unwrap()?,
                 up_to_7d: up_to_7d_handle.join().unwrap()?,
@@ -244,7 +214,6 @@ impl UTXODatasets {
 
     fn to_vec(&self) -> Vec<&UTXODataset> {
         let flats = vec![
-            &self.all,
             &self.up_to_1d,
             &self.up_to_7d,
             &self.up_to_1m,

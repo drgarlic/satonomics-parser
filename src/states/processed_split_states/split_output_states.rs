@@ -2,10 +2,7 @@ use derive_deref::{Deref, DerefMut};
 
 use crate::{
     datasets::OutputState,
-    parse::{
-        AddressRealizedData, LiquidityClassification, RawAddressSize, RawAddressSplit,
-        SplitByLiquidity,
-    },
+    parse::{AddressRealizedData, LiquidityClassification, SplitByLiquidity},
 };
 
 use super::SplitByCohort;
@@ -41,16 +38,6 @@ impl SplitOutputStates {
                 .iterate(split_count.highly_liquid, split_volume.highly_liquid);
         };
 
-        if let Some(state) = self.get_mut_state(&RawAddressSplit::Type(
-            realized_data.initial_address_data.address_type,
-        )) {
-            iterate(state);
-        }
-
-        if let Some(state) = self.get_mut_state(&RawAddressSplit::Size(
-            RawAddressSize::from_amount(realized_data.initial_address_data.amount),
-        )) {
-            iterate(state);
-        }
+        self.iterate(&realized_data.initial_address_data, &iterate);
     }
 }

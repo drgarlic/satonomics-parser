@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 
 use derive_deref::{Deref, DerefMut};
 use ordered_float::OrderedFloat;
-use rayon::prelude::*;
 
 use crate::parse::BlockPath;
 
