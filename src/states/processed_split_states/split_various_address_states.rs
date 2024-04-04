@@ -136,7 +136,7 @@ impl SplitVariousAddressStates {
 
         self.0.iterate(
             address_data,
-            &|state: &mut LiquiditySplitProcessedAddressState| {
+            |state: &mut LiquiditySplitProcessedAddressState| {
                 if increment {
                     state.increment(
                         amount,

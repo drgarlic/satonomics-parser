@@ -33,11 +33,12 @@ impl<T> SplitByCohort<T> {
                 RawAddressType::P2WPKH => Some(&self.p2wpkh),
                 RawAddressType::P2WSH => Some(&self.p2wsh),
                 RawAddressType::P2TR => Some(&self.p2tr),
-                _ => None,
+                RawAddressType::MultiSig => None,
+                RawAddressType::Unknown => None,
+                RawAddressType::Empty => None,
             },
 
             RawAddressSplit::Size(address_size) => match address_size {
-                RawAddressSize::Empty => None,
                 RawAddressSize::Plankton => Some(&self.plankton),
                 RawAddressSize::Shrimp => Some(&self.shrimp),
                 RawAddressSize::Crab => Some(&self.crab),
@@ -46,11 +47,12 @@ impl<T> SplitByCohort<T> {
                 RawAddressSize::Whale => Some(&self.whale),
                 RawAddressSize::Humpback => Some(&self.humpback),
                 RawAddressSize::Megalodon => Some(&self.megalodon),
+                RawAddressSize::Empty => None,
             },
         }
     }
 
-    pub fn iterate(&mut self, address_data: &AddressData, iterate: &dyn Fn(&mut T)) {
+    pub fn iterate(&mut self, address_data: &AddressData, iterate: impl Fn(&mut T)) {
         if let Some(state) = self.get_mut_state(&RawAddressSplit::All) {
             iterate(state);
         }
@@ -77,11 +79,12 @@ impl<T> SplitByCohort<T> {
                 RawAddressType::P2WPKH => Some(&mut self.p2wpkh),
                 RawAddressType::P2WSH => Some(&mut self.p2wsh),
                 RawAddressType::P2TR => Some(&mut self.p2tr),
-                _ => None,
+                RawAddressType::MultiSig => None,
+                RawAddressType::Unknown => None,
+                RawAddressType::Empty => None,
             },
 
             RawAddressSplit::Size(address_size) => match address_size {
-                RawAddressSize::Empty => None,
                 RawAddressSize::Plankton => Some(&mut self.plankton),
                 RawAddressSize::Shrimp => Some(&mut self.shrimp),
                 RawAddressSize::Crab => Some(&mut self.crab),
@@ -90,6 +93,7 @@ impl<T> SplitByCohort<T> {
                 RawAddressSize::Whale => Some(&mut self.whale),
                 RawAddressSize::Humpback => Some(&mut self.humpback),
                 RawAddressSize::Megalodon => Some(&mut self.megalodon),
+                RawAddressSize::Empty => None,
             },
         }
     }

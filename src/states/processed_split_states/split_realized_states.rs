@@ -36,6 +36,6 @@ impl SplitRealizedStates {
                 .iterate(split_profit.highly_liquid, split_loss.highly_liquid);
         };
 
-        self.iterate(&realized_data.initial_address_data, &iterate);
+        self.iterate(&realized_data.initial_address_data, iterate);
     }
 }

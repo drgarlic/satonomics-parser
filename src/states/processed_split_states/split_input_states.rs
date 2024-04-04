@@ -38,6 +38,6 @@ impl SplitInputStates {
                 .iterate(split_count.highly_liquid, split_volume.highly_liquid);
         };
 
-        self.iterate(&realized_data.initial_address_data, &iterate);
+        self.iterate(&realized_data.initial_address_data, iterate);
     }
 }
