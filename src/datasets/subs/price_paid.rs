@@ -1,7 +1,7 @@
 use itertools::Itertools;
 
 use crate::{
-    datasets::{AnyDataset, ExportData, MinInitialState, ProcessedBlockData},
+    datasets::{AnyDataset, MinInitialState, ProcessedBlockData},
     parse::{AnyBiMap, AnyHeightMap, AnyMap, BiMap},
 };
 
@@ -39,28 +39,28 @@ impl PricePaidSubDataset {
         let s = Self {
             min_initial_state: MinInitialState::default(),
 
-            realized_cap: BiMap::new_in_memory_bin(&f("realized_cap")),
-            realized_price: BiMap::new_in_memory_bin(&f("realized_price")),
+            realized_cap: BiMap::new_bin(&f("realized_cap")),
+            realized_price: BiMap::new_bin(&f("realized_price")),
 
-            pp_median: BiMap::new_on_disk_bin(&f("median_price_paid")),
-            pp_95p: BiMap::new_on_disk_bin(&f("95p_price_paid")),
-            pp_90p: BiMap::new_on_disk_bin(&f("90p_price_paid")),
-            pp_85p: BiMap::new_on_disk_bin(&f("85p_price_paid")),
-            pp_80p: BiMap::new_on_disk_bin(&f("80p_price_paid")),
-            pp_75p: BiMap::new_on_disk_bin(&f("75p_price_paid")),
-            pp_70p: BiMap::new_on_disk_bin(&f("70p_price_paid")),
-            pp_65p: BiMap::new_on_disk_bin(&f("65p_price_paid")),
-            pp_60p: BiMap::new_on_disk_bin(&f("60p_price_paid")),
-            pp_55p: BiMap::new_on_disk_bin(&f("55p_price_paid")),
-            pp_45p: BiMap::new_on_disk_bin(&f("45p_price_paid")),
-            pp_40p: BiMap::new_on_disk_bin(&f("40p_price_paid")),
-            pp_35p: BiMap::new_on_disk_bin(&f("35p_price_paid")),
-            pp_30p: BiMap::new_on_disk_bin(&f("30p_price_paid")),
-            pp_25p: BiMap::new_on_disk_bin(&f("25p_price_paid")),
-            pp_20p: BiMap::new_on_disk_bin(&f("20p_price_paid")),
-            pp_15p: BiMap::new_on_disk_bin(&f("15p_price_paid")),
-            pp_10p: BiMap::new_on_disk_bin(&f("10p_price_paid")),
-            pp_05p: BiMap::new_on_disk_bin(&f("05p_price_paid")),
+            pp_median: BiMap::new_bin(&f("median_price_paid")),
+            pp_95p: BiMap::new_bin(&f("95p_price_paid")),
+            pp_90p: BiMap::new_bin(&f("90p_price_paid")),
+            pp_85p: BiMap::new_bin(&f("85p_price_paid")),
+            pp_80p: BiMap::new_bin(&f("80p_price_paid")),
+            pp_75p: BiMap::new_bin(&f("75p_price_paid")),
+            pp_70p: BiMap::new_bin(&f("70p_price_paid")),
+            pp_65p: BiMap::new_bin(&f("65p_price_paid")),
+            pp_60p: BiMap::new_bin(&f("60p_price_paid")),
+            pp_55p: BiMap::new_bin(&f("55p_price_paid")),
+            pp_45p: BiMap::new_bin(&f("45p_price_paid")),
+            pp_40p: BiMap::new_bin(&f("40p_price_paid")),
+            pp_35p: BiMap::new_bin(&f("35p_price_paid")),
+            pp_30p: BiMap::new_bin(&f("30p_price_paid")),
+            pp_25p: BiMap::new_bin(&f("25p_price_paid")),
+            pp_20p: BiMap::new_bin(&f("20p_price_paid")),
+            pp_15p: BiMap::new_bin(&f("15p_price_paid")),
+            pp_10p: BiMap::new_bin(&f("10p_price_paid")),
+            pp_05p: BiMap::new_bin(&f("05p_price_paid")),
         };
 
         s.min_initial_state.compute_from_dataset(&s);
@@ -100,28 +100,16 @@ impl PricePaidSubDataset {
 
         self.realized_cap.height.insert(height, *realized_cap);
 
-        // TODO: Move to prepare function instead of inserting
-        {
-            let supply = cohort_supply.height.inner.lock();
-
-            self.realized_price.height.insert(
-                height,
-                supply
-                    .as_ref()
-                    .unwrap_or_else(|| {
-                        panic!("Cannot unwrap None: {}", &self.realized_price.height.path())
-                    })
-                    .get(height)
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "Can't find height {}: {}",
-                            height,
-                            &self.realized_price.height.path()
-                        )
-                    })
-                    / realized_cap,
-            );
-        }
+        self.realized_price.height.insert(
+            height,
+            cohort_supply.height.get(&height).unwrap_or_else(|| {
+                panic!(
+                    "Can't find height {}: {}",
+                    height,
+                    &self.realized_price.height.path()
+                )
+            }) / realized_cap,
+        );
 
         // Check if iter was empty
         if pp_05p.is_none() {
@@ -185,17 +173,17 @@ impl PricePaidSubDataset {
 }
 
 impl AnyDataset for PricePaidSubDataset {
-    fn compute(
-        &self,
-        &ExportData {
-            convert_last_height_to_date,
-            ..
-        }: &ExportData,
-    ) {
-        self.to_vec()
-            .into_iter()
-            .for_each(|dataset| dataset.compute_date(convert_last_height_to_date));
-    }
+    // fn compute(
+    //     &self,
+    //     &ExportData {
+    //         convert_last_height_to_date,
+    //         ..
+    //     }: &ExportData,
+    // ) {
+    // self.to_vec()
+    //     .into_iter()
+    //     .for_each(|dataset| dataset.compute_date(convert_last_height_to_date));
+    // }
 
     fn get_min_initial_state(&self) -> &MinInitialState {
         &self.min_initial_state

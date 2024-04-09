@@ -30,7 +30,7 @@ impl HeightDataset {
             binance_har: None,
             kraken_1mn: None,
 
-            closes: HeightMap::new_in_memory_json(&format!("{parent_path}/{name}")),
+            closes: HeightMap::new_json(&format!("{parent_path}/{name}")),
         };
 
         s.min_initial_state.compute_from_dataset(&s);
@@ -39,15 +39,9 @@ impl HeightDataset {
     }
 
     pub fn get(&mut self, height: usize, timestamp: u32) -> color_eyre::Result<f32> {
-        {
-            let inner = self.closes.inner.lock();
-
-            let closes = inner.as_ref().unwrap();
-
-            if height < closes.len() - 1 {
-                return Ok(closes.get(height).unwrap().to_owned());
-            }
-        };
+        if let Some(price) = self.closes.get(&height) {
+            return Ok(price);
+        }
 
         let date_time = Utc.timestamp_opt(i64::from(timestamp), 0).unwrap();
         let timestamp = NaiveDateTime::new(

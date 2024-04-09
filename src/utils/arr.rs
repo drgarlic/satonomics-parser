@@ -1,149 +1,228 @@
 use std::{
-    cmp::Ordering,
     iter::Sum,
     ops::{Add, AddAssign, Div, Mul, Sub, SubAssign},
 };
 
 use itertools::Itertools;
-use ordered_float::OrderedFloat;
-use rayon::prelude::*;
+use ordered_float::{FloatCore, OrderedFloat};
 
-pub fn transform<T, F>(arr: &[T], transform: F) -> Vec<T>
-where
-    T: Copy + Default,
-    F: Fn((usize, &T)) -> T,
-{
-    arr.iter().enumerate().map(transform).collect_vec()
+use super::ToF32;
+
+pub trait ArrayOperations<T> {
+    fn transform<F>(&self, transform: F) -> Vec<T>
+    where
+        T: Copy + Default,
+        F: Fn((usize, &T, &[T])) -> T;
+
+    fn add(&self, other: &[T]) -> Vec<T>
+    where
+        T: Add<Output = T> + Copy + Default;
+
+    fn subtract(&self, other: &[T]) -> Vec<T>
+    where
+        T: Sub<Output = T> + Copy + Default;
+
+    fn multiply(&self, other: &[T]) -> Vec<T>
+    where
+        T: Mul<Output = T> + Copy + Default;
+
+    fn divide(&self, other: &[T]) -> Vec<T>
+    where
+        T: Div<Output = T> + Copy + Default;
+
+    fn match_size<'a>(&'a self, other: &'a [T]) -> &'a [T];
+
+    fn cumulate(&self) -> Vec<T>
+    where
+        T: Sum + Copy + Default + AddAssign;
+
+    fn last_x_sum(&self, x: usize) -> Vec<T>
+    where
+        T: Sum + Copy + Default + AddAssign + SubAssign;
+
+    fn moving_average(&self, x: usize) -> Vec<f32>
+    where
+        T: Sum + Copy + Default + AddAssign + SubAssign + ToF32;
+
+    fn net_change(&self, offset: usize) -> Vec<T>
+    where
+        T: Copy + Default + Sub<Output = T>;
+
+    fn median(&self, size: usize) -> Vec<Option<T>>
+    where
+        T: FloatCore;
 }
 
-pub fn add<T>(arr1: &[T], arr2: &[T]) -> Vec<T>
-where
-    T: Add<Output = T> + Copy + Default,
-{
-    if arr1.len() != arr2.len() {
-        panic!("Can't add two arrays with a different length");
+impl<T> ArrayOperations<T> for &[T] {
+    fn transform<F>(&self, transform: F) -> Vec<T>
+    where
+        T: Copy + Default,
+        F: Fn((usize, &T, &[T])) -> T,
+    {
+        self.iter()
+            .enumerate()
+            .map(|(index, value)| transform((index, value, self)))
+            .collect_vec()
     }
 
-    transform(arr1, |(index, value)| *value + *arr2.get(index).unwrap())
-}
-
-pub fn subtract<T>(arr1: &[T], arr2: &[T]) -> Vec<T>
-where
-    T: Sub<Output = T> + Copy + Default,
-{
-    if arr1.len() != arr2.len() {
-        panic!("Can't subtract two arrays with a different length");
+    #[allow(unused)]
+    fn add(&self, other: &[T]) -> Vec<T>
+    where
+        T: Add<Output = T> + Copy + Default,
+    {
+        self.match_size(other)
+            .transform(|(index, value, _)| *value + *other.get(index).unwrap())
     }
 
-    transform(arr1, |(index, value)| *value - *arr2.get(index).unwrap())
-}
-
-pub fn multiply<T>(arr1: &[T], arr2: &[T]) -> Vec<T>
-where
-    T: Mul<Output = T> + Copy + Default,
-{
-    if arr1.len() != arr2.len() {
-        panic!("Can't multiply two arrays with a different length");
+    #[allow(unused)]
+    fn subtract(&self, other: &[T]) -> Vec<T>
+    where
+        T: Sub<Output = T> + Copy + Default,
+    {
+        self.match_size(other)
+            .transform(|(index, value, _)| *value - *other.get(index).unwrap())
     }
 
-    transform(arr1, |(index, value)| *value * *arr2.get(index).unwrap())
-}
-
-pub fn divide<T>(arr1: &[T], arr2: &[T]) -> Vec<T>
-where
-    T: Div<Output = T> + Copy + Default,
-{
-    if arr1.len() != arr2.len() {
-        panic!("Can't divide two arrays with a different length");
+    #[allow(unused)]
+    fn multiply(&self, other: &[T]) -> Vec<T>
+    where
+        T: Mul<Output = T> + Copy + Default,
+    {
+        self.match_size(other)
+            .transform(|(index, value, _)| *value * *other.get(index).unwrap())
     }
 
-    transform(arr1, |(index, value)| *value / *arr2.get(index).unwrap())
-}
-
-pub fn cumulate<T>(arr: &[T]) -> Vec<T>
-where
-    T: Sum + Copy + Default + AddAssign,
-{
-    let mut sum = T::default();
-
-    arr.iter()
-        .map(|value| {
-            sum += *value;
-            sum
-        })
-        .collect_vec()
-}
-
-pub fn last_x_sum<T>(arr: &[T], x: usize) -> Vec<T>
-where
-    T: Sum + Copy + Default + AddAssign + SubAssign,
-{
-    let mut sum = T::default();
-
-    arr.iter()
-        .enumerate()
-        .map(|(index, value)| {
-            sum += *value;
-
-            if index >= x - 1 {
-                sum -= *arr.get(index + 1 - x).unwrap()
-            }
-
-            sum
-        })
-        .collect_vec()
-}
-
-pub fn net_change<T>(arr: &[T], offset: usize) -> Vec<T>
-where
-    T: Copy + Default + Sub<Output = T>,
-{
-    transform(arr, |(index, value)| {
-        let previous = {
-            if let Some(previous_index) = index.checked_sub(offset) {
-                *arr.get(previous_index).unwrap()
-            } else {
-                T::default()
-            }
-        };
-
-        *value - previous
-    })
-}
-
-pub fn median(arr: &[f32], size: usize) -> Vec<Option<f32>>
-// where
-//     T: Copy + Default + Add<Output = T> + Ord,
-{
-    let even = size % 2 == 0;
-    let median_index = size / 2;
-
-    if size < 3 {
-        panic!("Computing a median for a size lower than 3 is useless");
+    #[allow(unused)]
+    fn divide(&self, other: &[T]) -> Vec<T>
+    where
+        T: Div<Output = T> + Copy + Default,
+    {
+        self.match_size(other)
+            .transform(|(index, value, _)| *value / *other.get(index).unwrap())
     }
 
-    arr.par_iter()
-        .enumerate()
-        .map(|(index, _)| {
-            if index >= size - 1 {
-                let mut arr = arr[index - (size - 1)..index + 1]
-                    .iter()
-                    .map(|value| OrderedFloat(*value))
-                    .collect_vec();
+    fn match_size(&self, other: &[T]) -> &[T] {
+        let len = other.len();
+        if self.len() > len {
+            &self[..len]
+        } else {
+            self
+        }
+    }
 
-                arr.sort_unstable();
+    #[allow(unused)]
+    fn cumulate(&self) -> Vec<T>
+    where
+        T: Sum + Copy + Default + AddAssign,
+    {
+        let mut sum = T::default();
 
-                if even {
-                    Some(
-                        **arr.get(median_index).unwrap()
-                            + **arr.get(median_index - 1).unwrap() / 2.0,
-                    )
-                } else {
-                    Some(**arr.get(median_index).unwrap())
+        self.iter()
+            .map(|value| {
+                sum += *value;
+                sum
+            })
+            .collect_vec()
+    }
+
+    #[allow(unused)]
+    fn last_x_sum(&self, x: usize) -> Vec<T>
+    where
+        T: Sum + Copy + Default + AddAssign + SubAssign,
+    {
+        let mut sum = T::default();
+
+        self.iter()
+            .enumerate()
+            .map(|(index, value)| {
+                sum += *value;
+
+                if index >= x - 1 {
+                    let previous_index = index + 1 - x;
+
+                    sum -= *self.get(previous_index).unwrap()
                 }
-            } else {
-                None
-            }
+
+                sum
+            })
+            .collect_vec()
+    }
+
+    #[allow(unused)]
+    fn moving_average(&self, x: usize) -> Vec<f32>
+    where
+        T: Sum + Copy + Default + AddAssign + SubAssign + ToF32,
+    {
+        let mut sum = T::default();
+
+        self.iter()
+            .enumerate()
+            .map(|(index, value)| {
+                sum += *value;
+
+                if index >= x - 1 {
+                    sum -= *self.get(index + 1 - x).unwrap()
+                }
+
+                sum.to_f32() / x as f32
+            })
+            .collect_vec()
+    }
+
+    #[allow(unused)]
+    fn net_change(&self, offset: usize) -> Vec<T>
+    where
+        T: Copy + Default + Sub<Output = T>,
+    {
+        self.transform(|(index, value, arr)| {
+            let previous = {
+                if let Some(previous_index) = index.checked_sub(offset) {
+                    *arr.get(previous_index).unwrap()
+                } else {
+                    T::default()
+                }
+            };
+
+            *value - previous
         })
-        .collect::<Vec<_>>()
+    }
+
+    #[allow(unused)]
+    fn median(&self, size: usize) -> Vec<Option<T>>
+    where
+        T: FloatCore,
+    {
+        let even = size % 2 == 0;
+        let median_index = size / 2;
+
+        if size < 3 {
+            panic!("Computing a median for a size lower than 3 is useless");
+        }
+
+        self.iter()
+            .enumerate()
+            .map(|(index, _)| {
+                if index >= size - 1 {
+                    let mut arr = self[index - (size - 1)..index + 1]
+                        .iter()
+                        .map(|value| OrderedFloat(*value))
+                        .collect_vec();
+
+                    arr.sort_unstable();
+
+                    if even {
+                        Some(
+                            (**arr.get(median_index).unwrap()
+                                + **arr.get(median_index - 1).unwrap())
+                                / T::from(2.0).unwrap(),
+                        )
+                    } else {
+                        Some(**arr.get(median_index).unwrap())
+                    }
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
 }

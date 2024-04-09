@@ -3,9 +3,9 @@ use itertools::Itertools;
 use crate::{
     bitcoin::sats_to_btc,
     datasets::{
-        AnyDataset, AnyDatasetGroup, ExportData, GenericDataset, InputState, MinInitialState,
-        OutputState, PricePaidState, ProcessedBlockData, RealizedState, SubDataset, SupplyState,
-        UTXOState, UnrealizedState,
+        AnyDataset, AnyDatasetGroup, GenericDataset, InputState, MinInitialState, OutputState,
+        PricePaidState, ProcessedBlockData, RealizedState, SubDataset, SupplyState, UTXOState,
+        UnrealizedState,
     },
     parse::{AnyBiMap, AnyDateMap, AnyHeightMap, BlockData},
 };
@@ -245,19 +245,19 @@ impl AnyDataset for UTXODataset {
         &self.min_initial_state
     }
 
-    fn prepare(&self, export_data: &ExportData) {
-        self.subs
-            .to_vec()
-            .into_iter()
-            .for_each(|d| d.prepare(export_data))
-    }
+    // fn prepare(&self, export_data: &ExportData) {
+    //     self.subs
+    //         .to_vec()
+    //         .into_iter()
+    //         .for_each(|d| d.prepare(export_data))
+    // }
 
-    fn compute(&self, export_data: &ExportData) {
-        self.subs
-            .to_vec()
-            .into_iter()
-            .for_each(|d| d.compute(export_data))
-    }
+    // fn compute(&self, export_data: &ExportData) {
+    //     self.subs
+    //         .to_vec()
+    //         .into_iter()
+    //         .for_each(|d| d.compute(export_data))
+    // }
 
     fn to_any_inserted_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
         self.subs

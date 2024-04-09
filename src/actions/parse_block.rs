@@ -611,7 +611,7 @@ pub fn parse_block(
         date,
         date_price,
         fees: &fees,
-        first_date_height,
+        date_first_height: first_date_height,
         height,
         is_date_last_block,
         satblocks_destroyed,

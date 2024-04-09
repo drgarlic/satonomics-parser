@@ -4,7 +4,7 @@ use crate::{
     parse::{AnyBiMap, AnyHeightMap, BiMap},
 };
 
-use super::{ExportData, GenericDataset, MinInitialState, ProcessedBlockData};
+use super::{GenericDataset, MinInitialState, ProcessedBlockData};
 
 pub struct CoindaysDataset {
     min_initial_state: MinInitialState,
@@ -19,7 +19,7 @@ impl CoindaysDataset {
         let s = Self {
             min_initial_state: MinInitialState::default(),
 
-            destroyed: BiMap::new_on_disk_bin(&f("coindays_destroyed")),
+            destroyed: BiMap::new_bin(&f("coindays_destroyed")),
         };
 
         s.min_initial_state.compute_from_dataset(&s);
@@ -48,15 +48,15 @@ impl AnyDataset for CoindaysDataset {
         vec![&self.destroyed.height]
     }
 
-    fn compute(
-        &self,
-        &ExportData {
-            convert_sum_heights_to_date,
-            ..
-        }: &ExportData,
-    ) {
-        self.destroyed.compute_date(convert_sum_heights_to_date);
-    }
+    // fn compute(
+    //     &self,
+    //     &ExportData {
+    //         convert_sum_heights_to_date,
+    //         ..
+    //     }: &ExportData,
+    // ) {
+    // self.destroyed.compute_date(convert_sum_heights_to_date);
+    // }
 
     fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         vec![&self.destroyed]

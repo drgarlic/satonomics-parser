@@ -1,5 +1,5 @@
 use crate::{
-    datasets::{AnyDataset, ExportData, MinInitialState},
+    datasets::{AnyDataset, MinInitialState},
     parse::{AnyBiMap, AnyHeightMap, BiMap},
 };
 
@@ -16,7 +16,7 @@ impl MetadataDataset {
         let s = Self {
             min_initial_state: MinInitialState::default(),
 
-            address_count: BiMap::new_on_disk_bin(&f("address_count")),
+            address_count: BiMap::new_bin(&f("address_count")),
         };
 
         s.min_initial_state.compute_from_dataset(&s);
@@ -26,15 +26,15 @@ impl MetadataDataset {
 }
 
 impl AnyDataset for MetadataDataset {
-    fn compute(
-        &self,
-        &ExportData {
-            convert_last_height_to_date,
-            ..
-        }: &ExportData,
-    ) {
-        self.address_count.compute_date(convert_last_height_to_date);
-    }
+    // fn compute(
+    //     &self,
+    //     &ExportData {
+    //         convert_last_height_to_date,
+    //         ..
+    //     }: &ExportData,
+    // ) {
+    // self.address_count.compute_date(convert_last_height_to_date);
+    // }
 
     fn get_min_initial_state(&self) -> &MinInitialState {
         &self.min_initial_state

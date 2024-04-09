@@ -2,10 +2,7 @@ use chrono::NaiveDate;
 use itertools::Itertools;
 use rayon::prelude::*;
 
-use crate::{
-    datasets::ExportData,
-    parse::{AnyBiMap, AnyDateMap, AnyHeightMap, AnyMap},
-};
+use crate::parse::{AnyBiMap, AnyDateMap, AnyHeightMap, AnyMap};
 
 use super::MinInitialState;
 
@@ -86,7 +83,7 @@ pub trait AnyDataset {
         let bis = self
             .to_any_exported_bi_map_vec()
             .into_iter()
-            .flat_map(|d| vec![d.any_height(), d.any_date()]);
+            .flat_map(|d| d.as_any_map());
 
         heights.chain(dates.chain(bis)).collect_vec()
     }
@@ -96,19 +93,21 @@ pub trait AnyDataset {
         self.to_any_inserted_map_vec().is_empty()
     }
 
-    fn prepare(&self, _: &ExportData) {}
+    // fn prepare(&self, _: &ExportData) {}
 
-    fn import_tmp_data(&self) {
-        self.to_any_inserted_map_vec()
-            .into_par_iter()
-            .for_each(|map| map.import_tmp_data())
-    }
+    // fn compute(&self, _: &ExportData) {}
 
-    fn compute(&self, _: &ExportData) {}
-
-    fn export_then_clean(&self) -> color_eyre::Result<()> {
+    fn export(&self) -> color_eyre::Result<()> {
         self.to_any_exported_map_vec()
             .into_par_iter()
-            .try_for_each(|map| -> color_eyre::Result<()> { map.export_then_clean() })
+            .try_for_each(|map| -> color_eyre::Result<()> { map.export() })
+    }
+
+    fn clean(&self) {
+        self.to_any_exported_map_vec()
+            .into_par_iter()
+            .for_each(|map| {
+                map.clean();
+            })
     }
 }

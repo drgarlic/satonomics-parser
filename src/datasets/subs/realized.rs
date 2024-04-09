@@ -1,5 +1,5 @@
 use crate::{
-    datasets::{AnyDataset, ExportData, MinInitialState, ProcessedBlockData},
+    datasets::{AnyDataset, MinInitialState, ProcessedBlockData},
     parse::{AnyBiMap, AnyHeightMap, BiMap},
 };
 
@@ -18,8 +18,8 @@ impl RealizedSubDataset {
         let s = Self {
             min_initial_state: MinInitialState::default(),
 
-            realized_profit: BiMap::new_on_disk_bin(&f("realized_profit")),
-            realized_loss: BiMap::new_on_disk_bin(&f("realized_loss")),
+            realized_profit: BiMap::new_bin(&f("realized_profit")),
+            realized_loss: BiMap::new_bin(&f("realized_loss")),
         };
 
         s.min_initial_state.compute_from_dataset(&s);
@@ -43,17 +43,17 @@ impl RealizedSubDataset {
 }
 
 impl AnyDataset for RealizedSubDataset {
-    fn compute(
-        &self,
-        &ExportData {
-            convert_sum_heights_to_date,
-            ..
-        }: &ExportData,
-    ) {
-        self.realized_loss.compute_date(convert_sum_heights_to_date);
-        self.realized_profit
-            .compute_date(convert_sum_heights_to_date);
-    }
+    // fn compute(
+    //     &self,
+    //     &ExportData {
+    //         convert_sum_heights_to_date,
+    //         ..
+    //     }: &ExportData,
+    // ) {
+    // self.realized_loss.compute_date(convert_sum_heights_to_date);
+    // self.realized_profit
+    //     .compute_date(convert_sum_heights_to_date);
+    // }
 
     fn get_min_initial_state(&self) -> &MinInitialState {
         &self.min_initial_state

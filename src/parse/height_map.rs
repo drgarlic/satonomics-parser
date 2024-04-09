@@ -1,9 +1,11 @@
 use std::{
-    cmp::Ordering,
+    collections::BTreeMap,
     fmt::Debug,
-    fs::{self},
+    fs,
     iter::Sum,
-    ops::{Add, AddAssign, Div, Mul, Sub, SubAssign},
+    mem,
+    ops::{Add, AddAssign, DerefMut, Div, Mul, RangeInclusive, Sub, SubAssign},
+    path::{Path, PathBuf},
 };
 
 use itertools::Itertools;
@@ -12,32 +14,29 @@ use parking_lot::Mutex;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
-    bitcoin::NUMBER_OF_UNSAFE_BLOCKS,
+    bitcoin::{BLOCKS_PER_HAVLING_EPOCH, NUMBER_OF_UNSAFE_BLOCKS},
     io::{format_path, Serialization},
     utils::ToF32,
 };
 
-use super::{AnyMap, Storage};
+use super::AnyMap;
+
+const CHUNK_SIZE: usize = BLOCKS_PER_HAVLING_EPOCH / 8;
 
 pub struct HeightMap<T>
 where
     T: Clone + Default + Debug + savefile::Serialize + savefile::Deserialize,
 {
-    storage: Storage,
-
-    path: String,
+    path_all: String,
     path_last: Option<String>,
 
-    batch: Mutex<Vec<(usize, T)>>,
+    serialization: Serialization,
 
     initial_last_height: Option<usize>,
     initial_first_unsafe_height: Option<usize>,
 
-    pub inner: Mutex<Option<Vec<T>>>,
-
-    modified: Mutex<bool>,
-
-    serialization: Serialization,
+    imported: Mutex<BTreeMap<usize, BTreeMap<usize, T>>>,
+    to_insert: Mutex<BTreeMap<usize, BTreeMap<usize, T>>>,
 }
 
 impl<T> HeightMap<T>
@@ -52,49 +51,31 @@ where
         + savefile::ReprC,
 {
     #[allow(unused)]
-    pub fn new_on_disk_bin(path: &str) -> Self {
-        Self::new(path, Storage::Disk, Serialization::Binary, true)
+    pub fn new_bin(path: &str) -> Self {
+        Self::new(path, Serialization::Binary, true)
     }
 
     #[allow(unused)]
-    pub fn _new_on_disk_bin(path: &str, export_last: bool) -> Self {
-        Self::new(path, Storage::Disk, Serialization::Binary, export_last)
+    pub fn _new_bin(path: &str, export_last: bool) -> Self {
+        Self::new(path, Serialization::Binary, export_last)
     }
 
     #[allow(unused)]
-    pub fn new_in_memory_bin(path: &str) -> Self {
-        Self::new(path, Storage::Memory, Serialization::Binary, true)
+    pub fn new_json(path: &str) -> Self {
+        Self::new(path, Serialization::Json, true)
     }
 
     #[allow(unused)]
-    pub fn _new_in_memory_bin(path: &str, export_last: bool) -> Self {
-        Self::new(path, Storage::Memory, Serialization::Binary, export_last)
+    pub fn _new_json(path: &str, export_last: bool) -> Self {
+        Self::new(path, Serialization::Json, export_last)
     }
 
-    #[allow(unused)]
-    pub fn new_on_disk_json(path: &str) -> Self {
-        Self::new(path, Storage::Disk, Serialization::Json, true)
-    }
-
-    #[allow(unused)]
-    pub fn _new_on_disk_json(path: &str, export_last: bool) -> Self {
-        Self::new(path, Storage::Disk, Serialization::Json, export_last)
-    }
-
-    #[allow(unused)]
-    pub fn new_in_memory_json(path: &str) -> Self {
-        Self::new(path, Storage::Memory, Serialization::Json, true)
-    }
-
-    #[allow(unused)]
-    pub fn _new_in_memory_json(path: &str, export_last: bool) -> Self {
-        Self::new(path, Storage::Memory, Serialization::Json, export_last)
-    }
-
-    fn new(path: &str, storage: Storage, serialization: Serialization, export_last: bool) -> Self {
+    fn new(path: &str, serialization: Serialization, export_last: bool) -> Self {
         let path = format_path(path);
 
-        fs::create_dir_all(&path).unwrap();
+        let path_all = format!("{path}/height");
+
+        fs::create_dir_all(&path_all).unwrap();
 
         let path_last = {
             if export_last {
@@ -105,44 +86,55 @@ where
         };
 
         let mut s = Self {
-            storage: storage.to_owned(),
-            batch: Mutex::new(vec![]),
+            path_all,
+            path_last,
+
+            serialization,
+
             initial_first_unsafe_height: None,
             initial_last_height: None,
-            path: serialization.append_extension(&format!("{path}/height")),
-            path_last,
-            inner: Mutex::new(None),
-            modified: Mutex::new(false),
-            serialization,
+
+            to_insert: Mutex::new(BTreeMap::default()),
+            imported: Mutex::new(BTreeMap::default()),
         };
 
-        if Storage::Memory == storage {
-            s.import_to_inner();
-        }
+        s.import_last();
 
-        s.initial_last_height = s.get_last_height();
-        s.initial_first_unsafe_height = last_height_to_first_unsafe_height(s.initial_last_height);
+        s.initial_last_height = s
+            .imported
+            .lock()
+            .values()
+            .last()
+            .and_then(|d| d.keys().cloned().max());
+
+        s.initial_first_unsafe_height = s.initial_last_height.and_then(|last_height| {
+            let offset = NUMBER_OF_UNSAFE_BLOCKS - 1;
+            last_height.checked_sub(offset)
+        });
 
         s
     }
 
-    pub fn set_inner(&self, vec: Vec<T>) {
-        *self.modified.lock() = true;
+    fn height_to_chunk_name(height: usize) -> String {
+        let start = Self::height_to_chunk_start(height);
+        let end = start + CHUNK_SIZE;
 
-        self.inner.lock().replace(vec);
+        format!("{start}..{end}")
     }
 
-    fn import_to_inner(&self) {
-        self.set_inner(self.import());
+    fn height_to_chunk_start(height: usize) -> usize {
+        height / CHUNK_SIZE * CHUNK_SIZE
     }
 
     pub fn insert(&self, height: usize, value: T) {
-        *self.modified.lock() = true;
-
-        if self.inner.lock().is_some() {
-            self.insert_to_inner(height, value);
+        if !self.is_height_safe(height) {
+            self.to_insert
+                .lock()
+                .entry(Self::height_to_chunk_start(height))
+                .or_default()
+                .insert(height, value);
         } else {
-            self.batch.lock().push((height, value));
+            panic!("Shouldn't have called insert")
         }
     }
 
@@ -150,88 +142,215 @@ where
         self.insert(height, T::default())
     }
 
+    pub fn get(&self, height: &usize) -> Option<T> {
+        let chunk_start = Self::height_to_chunk_start(*height);
+
+        self.to_insert
+            .lock()
+            .get(&chunk_start)
+            .and_then(|tree| tree.get(height).cloned())
+            .or_else(|| {
+                self.import_chunk_if_needed(*height);
+
+                self.imported
+                    .lock()
+                    .get(&chunk_start)
+                    .and_then(|tree| tree.get(height))
+                    .cloned()
+            })
+    }
+
+    pub fn sum(&self, range: RangeInclusive<usize>) -> T
+    where
+        T: Sum,
+    {
+        range.flat_map(|height| self.get(&height)).sum::<T>()
+    }
+
     #[inline(always)]
     pub fn is_height_safe(&self, height: usize) -> bool {
         self.initial_first_unsafe_height.unwrap_or(0) > height
     }
 
-    fn import(&self) -> Vec<T> {
-        self.serialization.import(&self.path).unwrap_or_default()
+    fn read_dir(&self) -> BTreeMap<usize, PathBuf> {
+        fs::read_dir(&self.path_all)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .filter(|path| {
+                let extension = path.extension().unwrap().to_str().unwrap();
+
+                path.is_file() && extension == self.serialization.to_str()
+            })
+            .map(|path| {
+                (
+                    path.file_stem()
+                        .unwrap()
+                        .to_str()
+                        .unwrap()
+                        .split("..")
+                        .next()
+                        .unwrap()
+                        .parse::<usize>()
+                        .unwrap(),
+                    path,
+                )
+            })
+            .collect()
     }
 
-    fn get_last_height(&self) -> Option<usize>
-    where
-        T: Clone + Default + Debug + Serialize + DeserializeOwned,
-    {
-        let len = self
-            .inner
-            .lock()
-            .as_ref()
-            .map(|inner| inner.len())
-            .unwrap_or_else(|| self.import().len());
+    fn import_chunk_if_needed(&self, height: usize) {
+        let chunk_start = Self::height_to_chunk_start(height);
 
-        if len == 0 {
-            None
-        } else {
-            Some(len - 1)
+        if let Some(path) = self.read_dir().get(&chunk_start) {
+            let mut imported = self.imported.lock();
+
+            if imported.get(&chunk_start).is_none() {
+                if let Ok(map) = self._import(path) {
+                    imported.insert(chunk_start, map);
+                }
+            }
         }
+    }
+
+    fn import_last(&self) {
+        if let Some((chunk_start, path)) = self.read_dir().into_iter().last() {
+            if let Ok(map) = self._import(&path) {
+                self.imported.lock().insert(chunk_start, map);
+            }
+        }
+    }
+
+    fn _import(&self, path: &Path) -> color_eyre::Result<BTreeMap<usize, T>> {
+        let chunk_start = path
+            .file_stem()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .split("..")
+            .next()
+            .unwrap()
+            .parse::<usize>()
+            .unwrap();
+
+        Ok(self
+            .serialization
+            .import::<Vec<T>>(path.to_str().unwrap())?
+            .into_iter()
+            .enumerate()
+            .map(|(index, value)| (chunk_start + index, value))
+            .collect())
+    }
+}
+
+impl<T> AnyMap for HeightMap<T>
+where
+    T: Clone
+        + Default
+        + Debug
+        + Serialize
+        + DeserializeOwned
+        + savefile::Serialize
+        + savefile::Deserialize
+        + savefile::ReprC,
+{
+    // fn import_tmp_data(&self) {
+    //     // println!("import tmp {}", &self.path);
+
+    //     if !self.modified.lock().to_owned() {
+    //         return;
+    //     }
+
+    //     if self.storage == Storage::Disk {
+    //         if self.imported.lock().is_some() {
+    //             dbg!(&self.path);
+    //             panic!("Probably forgot to drop inner after an export");
+    //         }
+
+    //         self.import_to_inner();
+
+    //         self.to_insert.lock().drain(..).for_each(|(height, value)| {
+    //             self.insert_to_inner(height, value);
+    //         });
+    //     }
+    // }
+
+    fn path(&self) -> &str {
+        &self.path_all
+    }
+
+    fn t_name(&self) -> &str {
+        std::any::type_name::<T>()
+    }
+
+    fn reset(&mut self) -> color_eyre::Result<()> {
+        fs::remove_dir(&self.path_all)?;
+
+        self.initial_last_height = None;
+        self.initial_first_unsafe_height = None;
+
+        self.imported.lock().clear();
+        self.to_insert.lock().clear();
+
+        Ok(())
     }
 
     fn export(&self) -> color_eyre::Result<()> {
-        let mut modified = self.modified.lock();
+        let to_insert = mem::take(self.to_insert.lock().deref_mut());
 
-        if !*modified {
-            return Ok(());
+        match to_insert.iter().next() {
+            Some(first_map_to_insert) => {
+                let first_height_to_insert = first_map_to_insert.1.iter().next().unwrap().0;
+
+                if first_height_to_insert % CHUNK_SIZE != 0 {
+                    self.import_chunk_if_needed(*first_height_to_insert);
+                }
+            }
+            None => return Ok(()),
         }
 
-        *modified = false;
+        let mut imported = self.imported.lock();
 
-        let inner = self.inner.lock();
+        let len = imported.len();
 
-        if let Some(vec) = inner.as_ref() {
-            self._export(vec)
-        } else {
-            self._export(&self.import())
-        }
+        to_insert.into_iter().enumerate().try_for_each(
+            |(index, (chunk_start, map))| -> color_eyre::Result<()> {
+                let chunk_name = Self::height_to_chunk_name(chunk_start);
+
+                let to_export = imported.entry(chunk_start.to_owned()).or_default();
+
+                to_export.extend(map);
+
+                let path = self
+                    .serialization
+                    .append_extension(&format!("{}/{}", self.path_all, chunk_name));
+
+                self.serialization.export(&path, to_export)?;
+
+                if index == len - 1 {
+                    if let Some(path_last) = self.path_last.as_ref() {
+                        self.serialization
+                            .export(path_last, to_export.values().last().unwrap())?;
+                    }
+                }
+
+                Ok(())
+            },
+        )
     }
 
-    fn _export(&self, vec: &Vec<T>) -> color_eyre::Result<()> {
-        if let Some(path_last) = self.path_last.as_ref() {
-            self.serialization.export(path_last, vec.last().unwrap())?;
-        }
+    fn clean(&self) {
+        let mut imported = self.imported.lock();
 
-        self.serialization.export(&self.path, vec)
-    }
+        let len = imported.len();
 
-    fn clean_tmp_data(&self) {
-        if self.storage == Storage::Disk {
-            self.inner.lock().take();
-        }
-    }
+        let keys = imported.keys().cloned().collect_vec();
 
-    fn insert_to_inner(&self, height: usize, value: T) {
-        let mut inner = self.inner.lock();
-
-        let list = inner.as_mut().unwrap();
-
-        let len = list.len();
-
-        match height.cmp(&len) {
-            Ordering::Equal => {
-                list.push(value);
-            }
-            Ordering::Less => {
-                list[height] = value;
-            }
-            Ordering::Greater => {
-                panic!(
-                    "Out of bound push (current len = {}, pushing to = {}, path = {})",
-                    list.len(),
-                    height,
-                    self.path
-                );
-            }
-        }
+        keys.into_iter()
+            .enumerate()
+            .filter(|(index, _)| index + 1 < len)
+            .for_each(|(_, key)| {
+                imported.remove(&key);
+            });
     }
 }
 
@@ -239,8 +358,6 @@ pub trait AnyHeightMap: AnyMap {
     fn get_initial_first_unsafe_height(&self) -> Option<usize>;
 
     fn get_initial_last_height(&self) -> Option<usize>;
-
-    fn get_first_unsafe_height(&self) -> Option<usize>;
 
     fn as_any_map(&self) -> &(dyn AnyMap + Send + Sync);
 }
@@ -267,94 +384,9 @@ where
         self.initial_last_height
     }
 
-    fn get_first_unsafe_height(&self) -> Option<usize> {
-        last_height_to_first_unsafe_height(self.get_last_height())
-    }
-
     fn as_any_map(&self) -> &(dyn AnyMap + Send + Sync) {
         self
     }
-}
-
-impl<T> AnyMap for HeightMap<T>
-where
-    T: Clone
-        + Default
-        + Debug
-        + Serialize
-        + DeserializeOwned
-        + savefile::Serialize
-        + savefile::Deserialize
-        + savefile::ReprC,
-{
-    fn import_tmp_data(&self) {
-        // println!("import tmp {}", &self.path);
-
-        if !self.modified.lock().to_owned() {
-            return;
-        }
-
-        if self.storage == Storage::Disk {
-            if self.inner.lock().is_some() {
-                dbg!(&self.path);
-                panic!("Probably forgot to drop inner after an export");
-            }
-
-            self.import_to_inner();
-
-            self.batch.lock().drain(..).for_each(|(height, value)| {
-                self.insert_to_inner(height, value);
-            });
-        }
-    }
-
-    fn path(&self) -> &str {
-        &self.path
-    }
-
-    fn path_last(&self) -> Option<&String> {
-        self.path_last.as_ref()
-    }
-
-    fn t_name(&self) -> &str {
-        std::any::type_name::<T>()
-    }
-
-    fn reset(&mut self) -> color_eyre::Result<()> {
-        fs::remove_dir(&self.path)?;
-
-        self.batch.lock().clear();
-        self.initial_last_height = None;
-        self.initial_first_unsafe_height = None;
-
-        if let Some(vec) = self.inner.lock().as_mut() {
-            vec.clear()
-        }
-
-        *self.modified.lock() = false;
-
-        Ok(())
-    }
-
-    fn export_then_clean(&self) -> color_eyre::Result<()> {
-        self.export()?;
-
-        self.clean_tmp_data();
-
-        Ok(())
-    }
-}
-
-fn last_height_to_first_unsafe_height(last_height: Option<usize>) -> Option<usize> {
-    last_height.and_then(|last_height| {
-        let offset = NUMBER_OF_UNSAFE_BLOCKS - 1;
-
-        if last_height >= offset {
-            Some(last_height - offset)
-        } else {
-            None
-        }
-    })
 }
 
 impl<T> HeightMap<T>
@@ -368,14 +400,15 @@ where
         + savefile::Deserialize
         + savefile::ReprC,
 {
-    pub fn transform<F>(&self, transform: F) -> Vec<T>
-    where
-        T: Copy + Default,
-        F: Fn((usize, &T, &[T])) -> T,
-    {
-        Self::_transform(self.inner.lock().as_ref().unwrap(), transform)
-    }
+    // pub fn transform<F>(&self, transform: F) -> Vec<T>
+    // where
+    //     T: Copy + Default,
+    //     F: Fn((usize, &T, &[T])) -> T,
+    // {
+    //     Self::_transform(self.inner.lock().as_ref().unwrap(), transform)
+    // }
 
+    #[allow(unused)]
     pub fn _transform<F>(vec: &[T], transform: F) -> Vec<T>
     where
         T: Copy + Default,
@@ -387,17 +420,18 @@ where
             .collect_vec()
     }
 
-    #[allow(unused)]
-    pub fn add(&self, other: &Self) -> Vec<T>
-    where
-        T: Add<Output = T> + Copy + Default,
-    {
-        Self::_add(
-            self.inner.lock().as_ref().unwrap(),
-            other.inner.lock().as_ref().unwrap(),
-        )
-    }
+    // #[allow(unused)]
+    // pub fn add(&self, other: &Self) -> Vec<T>
+    // where
+    //     T: Add<Output = T> + Copy + Default,
+    // {
+    //     Self::_add(
+    //         self.inner.lock().as_ref().unwrap(),
+    //         other.inner.lock().as_ref().unwrap(),
+    //     )
+    // }
 
+    #[allow(unused)]
     pub fn _add(arr1: &[T], arr2: &[T]) -> Vec<T>
     where
         T: Add<Output = T> + Copy + Default,
@@ -407,16 +441,18 @@ where
         })
     }
 
-    pub fn subtract(&self, other: &Self) -> Vec<T>
-    where
-        T: Sub<Output = T> + Copy + Default,
-    {
-        Self::_subtract(
-            self.inner.lock().as_ref().unwrap(),
-            other.inner.lock().as_ref().unwrap(),
-        )
-    }
+    // #[allow(unused)]
+    // pub fn subtract(&self, other: &Self) -> Vec<T>
+    // where
+    //     T: Sub<Output = T> + Copy + Default,
+    // {
+    //     Self::_subtract(
+    //         self.inner.lock().as_ref().unwrap(),
+    //         other.inner.lock().as_ref().unwrap(),
+    //     )
+    // }
 
+    #[allow(unused)]
     pub fn _subtract(arr1: &[T], arr2: &[T]) -> Vec<T>
     where
         T: Sub<Output = T> + Copy + Default,
@@ -426,16 +462,18 @@ where
         })
     }
 
-    pub fn multiply(&self, other: &Self) -> Vec<T>
-    where
-        T: Mul<Output = T> + Copy + Default,
-    {
-        Self::_multiply(
-            self.inner.lock().as_ref().unwrap(),
-            other.inner.lock().as_ref().unwrap(),
-        )
-    }
+    // #[allow(unused)]
+    // pub fn multiply(&self, other: &Self) -> Vec<T>
+    // where
+    //     T: Mul<Output = T> + Copy + Default,
+    // {
+    //     Self::_multiply(
+    //         self.inner.lock().as_ref().unwrap(),
+    //         other.inner.lock().as_ref().unwrap(),
+    //     )
+    // }
 
+    #[allow(unused)]
     pub fn _multiply(arr1: &[T], arr2: &[T]) -> Vec<T>
     where
         T: Mul<Output = T> + Copy + Default,
@@ -445,16 +483,18 @@ where
         })
     }
 
-    pub fn divide(&self, other: &Self) -> Vec<T>
-    where
-        T: Div<Output = T> + Copy + Default,
-    {
-        Self::_divide(
-            self.inner.lock().as_ref().unwrap(),
-            other.inner.lock().as_ref().unwrap(),
-        )
-    }
+    // #[allow(unused)]
+    // pub fn divide(&self, other: &Self) -> Vec<T>
+    // where
+    //     T: Div<Output = T> + Copy + Default,
+    // {
+    //     Self::_divide(
+    //         self.inner.lock().as_ref().unwrap(),
+    //         other.inner.lock().as_ref().unwrap(),
+    //     )
+    // }
 
+    #[allow(unused)]
     pub fn _divide(arr1: &[T], arr2: &[T]) -> Vec<T>
     where
         T: Div<Output = T> + Copy + Default,
@@ -464,6 +504,7 @@ where
         })
     }
 
+    #[allow(unused)]
     fn slice_arr1<'a>(arr1: &'a [T], arr2: &'a [T]) -> &'a [T] {
         if arr1.len() > arr2.len() {
             &arr1[..arr2.len()]
@@ -472,13 +513,14 @@ where
         }
     }
 
-    pub fn cumulate(&self) -> Vec<T>
-    where
-        T: Sum + Copy + Default + AddAssign,
-    {
-        Self::_cumulate(self.inner.lock().as_ref().unwrap())
-    }
+    // pub fn cumulate(&self) -> Vec<T>
+    // where
+    //     T: Sum + Copy + Default + AddAssign,
+    // {
+    //     Self::_cumulate(self.inner.lock().as_ref().unwrap())
+    // }
 
+    #[allow(unused)]
     pub fn _cumulate(arr: &[T]) -> Vec<T>
     where
         T: Sum + Copy + Default + AddAssign,
@@ -493,13 +535,15 @@ where
             .collect_vec()
     }
 
-    pub fn last_x_sum(&self, x: usize) -> Vec<T>
-    where
-        T: Sum + Copy + Default + AddAssign + SubAssign,
-    {
-        Self::_last_x_sum(self.inner.lock().as_ref().unwrap(), x)
-    }
+    // #[allow(unused)]
+    // pub fn last_x_sum(&self, x: usize) -> Vec<T>
+    // where
+    //     T: Sum + Copy + Default + AddAssign + SubAssign,
+    // {
+    //     Self::_last_x_sum(self.inner.lock().as_ref().unwrap(), x)
+    // }
 
+    #[allow(unused)]
     pub fn _last_x_sum(arr: &[T], x: usize) -> Vec<T>
     where
         T: Sum + Copy + Default + AddAssign + SubAssign,
@@ -522,14 +566,15 @@ where
             .collect_vec()
     }
 
-    #[allow(unused)]
-    pub fn moving_average(&self, x: usize) -> Vec<f32>
-    where
-        T: Sum + Copy + Default + AddAssign + SubAssign + ToF32,
-    {
-        Self::_moving_average(self.inner.lock().as_ref().unwrap(), x)
-    }
+    // #[allow(unused)]
+    // pub fn moving_average(&self, x: usize) -> Vec<f32>
+    // where
+    //     T: Sum + Copy + Default + AddAssign + SubAssign + ToF32,
+    // {
+    //     Self::_moving_average(self.inner.lock().as_ref().unwrap(), x)
+    // }
 
+    #[allow(unused)]
     pub fn _moving_average(arr: &[T], x: usize) -> Vec<f32>
     where
         T: Sum + Copy + Default + AddAssign + SubAssign + ToF32,
@@ -550,13 +595,15 @@ where
             .collect_vec()
     }
 
-    pub fn net_change(&self, offset: usize) -> Vec<T>
-    where
-        T: Copy + Default + Sub<Output = T>,
-    {
-        Self::_net_change(self.inner.lock().as_ref().unwrap(), offset)
-    }
+    // #[allow(unused)]
+    // pub fn net_change(&self, offset: usize) -> Vec<T>
+    // where
+    //     T: Copy + Default + Sub<Output = T>,
+    // {
+    //     Self::_net_change(self.inner.lock().as_ref().unwrap(), offset)
+    // }
 
+    #[allow(unused)]
     pub fn _net_change(arr: &[T], offset: usize) -> Vec<T>
     where
         T: Copy + Default + Sub<Output = T>,
@@ -574,13 +621,15 @@ where
         })
     }
 
-    pub fn median(&self, size: usize) -> Vec<Option<T>>
-    where
-        T: FloatCore,
-    {
-        Self::_median(self.inner.lock().as_ref().unwrap(), size)
-    }
+    // #[allow(unused)]
+    // pub fn median(&self, size: usize) -> Vec<Option<T>>
+    // where
+    //     T: FloatCore,
+    // {
+    //     Self::_median(self.inner.lock().as_ref().unwrap(), size)
+    // }
 
+    #[allow(unused)]
     pub fn _median(arr: &[T], size: usize) -> Vec<Option<T>>
     where
         T: FloatCore,

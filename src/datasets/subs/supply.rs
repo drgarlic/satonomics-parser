@@ -1,6 +1,6 @@
 use crate::{
     bitcoin::sats_to_btc,
-    datasets::{AnyDataset, ExportData, MinInitialState, ProcessedBlockData},
+    datasets::{AnyDataset, MinInitialState, ProcessedBlockData},
     parse::{AnyBiMap, AnyHeightMap, BiMap},
 };
 
@@ -17,7 +17,7 @@ impl SupplySubDataset {
         let s = Self {
             min_initial_state: MinInitialState::default(),
 
-            total: BiMap::new_in_memory_bin(&f("supply")),
+            total: BiMap::new_bin(&f("supply")),
         };
 
         s.min_initial_state.compute_from_dataset(&s);
@@ -35,15 +35,15 @@ impl SupplySubDataset {
 }
 
 impl AnyDataset for SupplySubDataset {
-    fn prepare(
-        &self,
-        &ExportData {
-            convert_last_height_to_date,
-            ..
-        }: &ExportData,
-    ) {
-        self.total.compute_date(convert_last_height_to_date);
-    }
+    // fn prepare(
+    //     &self,
+    //     &ExportData {
+    //         convert_last_height_to_date,
+    //         ..
+    //     }: &ExportData,
+    // ) {
+    // self.total.compute_date(convert_last_height_to_date);
+    // }
 
     fn get_min_initial_state(&self) -> &MinInitialState {
         &self.min_initial_state

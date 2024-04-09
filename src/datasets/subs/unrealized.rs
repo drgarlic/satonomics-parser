@@ -21,9 +21,9 @@ impl UnrealizedSubDataset {
         let s = Self {
             min_initial_state: MinInitialState::default(),
 
-            supply_in_profit: BiMap::new_on_disk_bin(&f("supply_in_profit")),
-            unrealized_profit: BiMap::new_on_disk_bin(&f("unrealized_profit")),
-            unrealized_loss: BiMap::new_on_disk_bin(&f("unrealized_loss")),
+            supply_in_profit: BiMap::new_bin(&f("supply_in_profit")),
+            unrealized_profit: BiMap::new_bin(&f("unrealized_profit")),
+            unrealized_loss: BiMap::new_bin(&f("unrealized_loss")),
         };
 
         s.min_initial_state.compute_from_dataset(&s);

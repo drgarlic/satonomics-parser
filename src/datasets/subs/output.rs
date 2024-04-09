@@ -1,5 +1,5 @@
 use crate::{
-    datasets::{AnyDataset, ExportData, MinInitialState, ProcessedBlockData},
+    datasets::{AnyDataset, MinInitialState, ProcessedBlockData},
     parse::{AnyBiMap, AnyHeightMap, BiMap},
 };
 
@@ -17,8 +17,8 @@ impl OutputSubDataset {
         let s = Self {
             min_initial_state: MinInitialState::default(),
 
-            count: BiMap::new_on_disk_bin(&f("output_count")),
-            volume: BiMap::new_on_disk_bin(&f("output_volume")),
+            count: BiMap::new_bin(&f("output_count")),
+            volume: BiMap::new_bin(&f("output_volume")),
         };
 
         s.min_initial_state.compute_from_dataset(&s);
@@ -38,17 +38,17 @@ impl OutputSubDataset {
 }
 
 impl AnyDataset for OutputSubDataset {
-    fn compute(
-        &self,
-        &ExportData {
-            convert_last_height_to_date,
-            convert_sum_heights_to_date,
-            ..
-        }: &ExportData,
-    ) {
-        self.count.compute_date(convert_last_height_to_date);
-        self.volume.compute_date(convert_sum_heights_to_date);
-    }
+    // fn compute(
+    //     &self,
+    //     &ExportData {
+    //         convert_last_height_to_date,
+    //         convert_sum_heights_to_date,
+    //         ..
+    //     }: &ExportData,
+    // ) {
+    // self.count.compute_date(convert_last_height_to_date);
+    // self.volume.compute_date(convert_sum_heights_to_date);
+    // }
 
     fn get_min_initial_state(&self) -> &MinInitialState {
         &self.min_initial_state

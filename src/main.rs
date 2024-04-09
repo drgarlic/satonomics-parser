@@ -10,6 +10,8 @@ mod price;
 mod states;
 mod utils;
 
+use utils::start_deadlock_checker_thread;
+
 use crate::{
     actions::iter_blocks,
     bitcoin::{BitcoinDB, Daemon, BITCOIN_DATADIR_RAW_PATH},
@@ -17,6 +19,8 @@ use crate::{
 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
+
+    start_deadlock_checker_thread();
 
     loop {
         Daemon::stop();
@@ -44,3 +48,20 @@ fn main() -> color_eyre::Result<()> {
 
     // Ok(())
 }
+
+// let vec = Json::import::<Vec<f32>>("./price/close/height.json")?;
+
+// let chunk_size = BLOCKS_PER_HAVLING_EPOCH / 8;
+
+// vec.chunks(chunk_size)
+//     .enumerate()
+//     .for_each(|(index, chunk)| {
+//         let _ = Json::export(
+//             &format!(
+//                 "./price/close/height/{}..{}.json",
+//                 index * chunk_size,
+//                 (index + 1) * chunk_size
+//             ),
+//             &chunk,
+//         );
+//     });

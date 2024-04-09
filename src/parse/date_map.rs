@@ -3,10 +3,12 @@ use std::{
     fmt::Debug,
     fs,
     iter::Sum,
-    ops::{Add, AddAssign, Div, Mul, Sub, SubAssign},
+    mem,
+    ops::{Add, AddAssign, DerefMut, Div, Mul, Sub, SubAssign},
+    path::{Path, PathBuf},
 };
 
-use chrono::{Days, NaiveDate};
+use chrono::{Datelike, Days, NaiveDate};
 use itertools::Itertools;
 use ordered_float::{FloatCore, OrderedFloat};
 use parking_lot::Mutex;
@@ -17,7 +19,7 @@ use crate::{
     utils::ToF32,
 };
 
-use super::{AnyMap, Storage, WNaiveDate};
+use super::{AnyMap, WNaiveDate};
 
 const NUMBER_OF_UNSAFE_DATES: usize = 2;
 
@@ -27,25 +29,19 @@ pub enum HeightToDateConverter<'a> {
         first_height: &'a DateMap<usize>,
         last_height: &'a DateMap<usize>,
     },
-    // Manual,
 }
 
 pub struct DateMap<T> {
-    storage: Storage,
-
-    batch: Mutex<Vec<(NaiveDate, T)>>,
-
-    path: String,
+    path_all: String,
     path_last: Option<String>,
+
+    serialization: Serialization,
 
     initial_last_date: Option<NaiveDate>,
     initial_first_unsafe_date: Option<NaiveDate>,
 
-    pub inner: Mutex<Option<BTreeMap<WNaiveDate, T>>>,
-
-    modified: Mutex<bool>,
-
-    serialization: Serialization,
+    imported: Mutex<BTreeMap<usize, BTreeMap<WNaiveDate, T>>>,
+    to_insert: Mutex<BTreeMap<usize, BTreeMap<WNaiveDate, T>>>,
 }
 
 impl<T> DateMap<T>
@@ -60,49 +56,31 @@ where
         + savefile::Deserialize,
 {
     #[allow(unused)]
-    pub fn new_on_disk_bin(path: &str) -> Self {
-        Self::new(path, Storage::Disk, Serialization::Binary, true)
+    pub fn new_bin(path: &str) -> Self {
+        Self::new(path, Serialization::Binary, true)
     }
 
     #[allow(unused)]
-    pub fn _new_on_disk_bin(path: &str, export_last: bool) -> Self {
-        Self::new(path, Storage::Disk, Serialization::Binary, export_last)
+    pub fn _new_bin(path: &str, export_last: bool) -> Self {
+        Self::new(path, Serialization::Binary, export_last)
     }
 
     #[allow(unused)]
-    pub fn new_in_memory_bin(path: &str) -> Self {
-        Self::new(path, Storage::Memory, Serialization::Binary, true)
+    pub fn new_json(path: &str) -> Self {
+        Self::new(path, Serialization::Json, true)
     }
 
     #[allow(unused)]
-    pub fn _new_in_memory_bin(path: &str, export_last: bool) -> Self {
-        Self::new(path, Storage::Memory, Serialization::Binary, export_last)
+    pub fn _new_json(path: &str, export_last: bool) -> Self {
+        Self::new(path, Serialization::Json, export_last)
     }
 
-    #[allow(unused)]
-    pub fn new_on_disk_json(path: &str) -> Self {
-        Self::new(path, Storage::Disk, Serialization::Json, true)
-    }
-
-    #[allow(unused)]
-    pub fn _new_on_disk_json(path: &str, export_last: bool) -> Self {
-        Self::new(path, Storage::Disk, Serialization::Json, export_last)
-    }
-
-    #[allow(unused)]
-    pub fn new_in_memory_json(path: &str) -> Self {
-        Self::new(path, Storage::Memory, Serialization::Json, true)
-    }
-
-    #[allow(unused)]
-    pub fn _new_in_memory_json(path: &str, export_last: bool) -> Self {
-        Self::new(path, Storage::Memory, Serialization::Json, export_last)
-    }
-
-    fn new(path: &str, storage: Storage, serialization: Serialization, export_last: bool) -> Self {
+    fn new(path: &str, serialization: Serialization, export_last: bool) -> Self {
         let path = format_path(path);
 
-        fs::create_dir_all(&path).unwrap();
+        let path_all = format!("{path}/date");
+
+        fs::create_dir_all(&path_all).unwrap();
 
         let path_last = {
             if export_last {
@@ -113,46 +91,98 @@ where
         };
 
         let mut s = Self {
-            storage,
-            batch: Mutex::new(vec![]),
+            path_all,
+            path_last,
+
+            serialization,
+
             initial_last_date: None,
             initial_first_unsafe_date: None,
-            path: serialization.append_extension(&format!("{path}/date")),
-            path_last,
-            inner: Mutex::new(None),
-            modified: Mutex::new(false),
-            serialization,
+
+            to_insert: Mutex::new(BTreeMap::default()),
+            imported: Mutex::new(BTreeMap::default()),
         };
 
-        if storage == Storage::Memory {
-            s.inner.lock().replace(s.import());
-        }
+        s.import_last();
 
-        s.initial_last_date = s.get_last_date();
-        s.initial_first_unsafe_date = last_date_to_first_unsafe_date(s.initial_last_date);
+        s.initial_last_date = s
+            .imported
+            .lock()
+            .values()
+            .last()
+            .and_then(|d| d.keys().map(|date| **date).max());
+
+        s.initial_first_unsafe_date = s.initial_last_date.and_then(|last_date| {
+            let offset = NUMBER_OF_UNSAFE_DATES - 1;
+            last_date.checked_sub_days(Days::new(offset as u64))
+        });
 
         s
     }
 
     pub fn insert(&self, date: NaiveDate, value: T) {
         if !self.is_date_safe(date) {
-            *self.modified.lock() = true;
-
-            if let Some(map) = self.inner.lock().as_mut() {
-                map.insert(WNaiveDate::wrap(date), value);
-            } else {
-                self.batch.lock().push((date, value));
-            }
+            self.to_insert
+                .lock()
+                .entry(date.year() as usize)
+                .or_default()
+                .insert(WNaiveDate::wrap(date), value);
+        } else {
+            panic!("Shouldn't have called insert")
         }
     }
 
-    fn insert_to_inner(&self, date: NaiveDate, value: T) {
-        self.inner
-            .lock()
-            .as_mut()
-            .unwrap()
-            .insert(WNaiveDate::wrap(date), value);
+    #[allow(unused)]
+    pub fn insert_default(&self, date: NaiveDate) {
+        self.insert(date, T::default())
     }
+
+    pub fn get(&self, date: &WNaiveDate) -> Option<T> {
+        let year = date.year() as usize;
+
+        self.to_insert
+            .lock()
+            .get(&year)
+            .and_then(|tree| tree.get(date).cloned())
+            .or_else(|| {
+                self.import_year_if_needed(year);
+
+                self.imported
+                    .lock()
+                    .get(&year)
+                    .and_then(|tree| tree.get(date))
+                    .cloned()
+            })
+    }
+
+    // pub fn get_range(&self, first_date: usize, last_date: usize) -> Vec<Option<T>> {
+    //     let to_insert = self.to_insert.lock();
+    //     let imported = &mut None;
+
+    //     (first_height..=last_height)
+    //         .map(|height| {
+    //             let chunk_name = Self::height_to_chunk_name(height);
+
+    //             to_insert
+    //                 .get(&chunk_name)
+    //                 .and_then(|tree| tree.get(&height).cloned())
+    //                 .or_else(|| {
+    //                     self.import_chunk_if_needed(&chunk_name);
+
+    //                     if imported.is_none() {
+    //                         imported.as_mut().replace(&mut self.imported.lock());
+    //                     }
+
+    //                     imported
+    //                         .as_mut()
+    //                         .unwrap()
+    //                         .get(&chunk_name)
+    //                         .and_then(|tree| tree.get(&height))
+    //                         .cloned()
+    //                 })
+    //         })
+    //         .collect_vec()
+    // }
 
     #[inline(always)]
     pub fn is_date_safe(&self, date: NaiveDate) -> bool {
@@ -162,105 +192,231 @@ where
             })
     }
 
-    pub fn set_inner(&self, map: BTreeMap<WNaiveDate, T>) {
-        *self.modified.lock() = true;
+    fn read_dir(&self) -> BTreeMap<usize, PathBuf> {
+        fs::read_dir(&self.path_all)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .filter(|path| {
+                let file_stem = path.file_stem().unwrap().to_str().unwrap();
+                let extension = path.extension().unwrap().to_str().unwrap();
 
-        self.inner.lock().replace(map);
+                path.is_file()
+                    && file_stem.len() == 4
+                    && file_stem.starts_with("20")
+                    && extension == self.serialization.to_str()
+            })
+            .map(|path| {
+                let year = path
+                    .file_stem()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .parse::<usize>()
+                    .unwrap();
+
+                (year, path)
+            })
+            .collect()
     }
 
-    fn import_to_inner(&self) {
-        self.set_inner(self.import());
-    }
+    // fn import_all(&self) -> BTreeMap<WNaiveDate, T> {
+    //     self.read_dir()
+    //         .into_values()
+    //         .map(|path| {
+    //             self.serialization
+    //                 .import::<BTreeMap<WNaiveDate, T>>(path.to_str().unwrap())
+    //                 .unwrap()
+    //         })
+    //         .reduce(|mut a, mut b| {
+    //             a.extend(b);
+    //             a
+    //         })
+    //         .unwrap_or_default()
+    // }
 
-    fn import(&self) -> BTreeMap<WNaiveDate, T> {
-        self.serialization.import(&self.path).unwrap_or_default()
-    }
+    fn import_year_if_needed(&self, year: usize) {
+        if let Some(path) = self.read_dir().get(&year) {
+            let mut imported = self.imported.lock();
 
-    fn get_first_unsafe_date(&self) -> Option<NaiveDate> {
-        last_date_to_first_unsafe_date(self.get_last_date())
-    }
-
-    fn get_last_date(&self) -> Option<NaiveDate> {
-        if let Some(inner) = self.inner.lock().as_ref() {
-            inner.keys().map(|date| **date).max()
-        } else {
-            self.import().keys().map(|date| **date).max()
+            if imported.get(&year).is_none() {
+                if let Ok(map) = self._import(path) {
+                    imported.insert(year, map);
+                }
+            }
         }
     }
 
-    pub fn compute_from_height_map(&self, map: &[T], converter: &HeightToDateConverter) {
-        self.set_inner({
-            match converter {
-                HeightToDateConverter::Last(last_height) => {
-                    let last_height = last_height.inner.lock();
-
-                    last_height
-                        .as_ref()
-                        .unwrap()
-                        .iter()
-                        .map(|(date, height)| {
-                            let v = map.get(*height).unwrap().clone();
-
-                            (*date, v)
-                        })
-                        .collect()
-                }
-                HeightToDateConverter::Sum {
-                    first_height,
-                    last_height,
-                } => {
-                    let last_height = last_height.inner.lock();
-
-                    let first_height = first_height.inner.lock();
-
-                    first_height
-                        .as_ref()
-                        .unwrap()
-                        .iter()
-                        .map(|(date, height)| {
-                            let v = map
-                                [*height..last_height.as_ref().unwrap().get(date).unwrap() + 1]
-                                .iter()
-                                .cloned()
-                                .sum::<T>();
-
-                            (*date, v)
-                        })
-                        .collect()
-                }
+    fn import_last(&self) {
+        if let Some((year, path)) = self.read_dir().into_iter().last() {
+            if let Ok(map) = self._import(&path) {
+                self.imported.lock().insert(year, map);
             }
-        });
+        }
+    }
+
+    fn _import(&self, path: &Path) -> color_eyre::Result<BTreeMap<WNaiveDate, T>> {
+        self.serialization
+            .import::<BTreeMap<WNaiveDate, T>>(path.to_str().unwrap())
+    }
+
+    // pub fn compute_from_height_map(&self, map: &[T], converter: &HeightToDateConverter) {
+    //     self.set_inner({
+    //         match converter {
+    //             HeightToDateConverter::Last(last_height) => {
+    //                 let last_height = last_height.imported.lock();
+
+    //                 last_height
+    //                     .as_ref()
+    //                     .unwrap()
+    //                     .iter()
+    //                     .map(|(date, height)| {
+    //                         let v = map.get(*height).unwrap().clone();
+
+    //                         (*date, v)
+    //                     })
+    //                     .collect()
+    //             }
+    //             HeightToDateConverter::Sum {
+    //                 first_height,
+    //                 last_height,
+    //             } => {
+    //                 let last_height = last_height.imported.lock();
+
+    //                 let first_height = first_height.imported.lock();
+
+    //                 first_height
+    //                     .as_ref()
+    //                     .unwrap()
+    //                     .iter()
+    //                     .map(|(date, height)| {
+    //                         let v = map
+    //                             [*height..last_height.as_ref().unwrap().get(date).unwrap() + 1]
+    //                             .iter()
+    //                             .cloned()
+    //                             .sum::<T>();
+
+    //                         (*date, v)
+    //                     })
+    //                     .collect()
+    //             }
+    //         }
+    //     });
+    // }
+}
+
+impl<T> AnyMap for DateMap<T>
+where
+    T: Clone
+        + Default
+        + Debug
+        + Serialize
+        + DeserializeOwned
+        + Sum
+        + savefile::Serialize
+        + savefile::Deserialize,
+{
+    //     fn import_tmp_data(&self) {
+    //         // println!("import tmp {}", &self.path);
+
+    //         if !self.modified.lock().to_owned() {
+    //             return;
+    //         }
+
+    //         if self.storage == Storage::Disk {
+    //             if self.imported.lock().is_some() {
+    //                 dbg!(&self.path);
+    //                 panic!("Probably forgot to drop inner after an export");
+    //             }
+
+    //             self.import_to_inner();
+
+    //             self.to_insert.lock().drain(..).for_each(|(date, value)| {
+    //                 self.insert_to_inner(date, value);
+    //             });
+    //         }
+    //     }
+
+    fn path(&self) -> &str {
+        &self.path_all
+    }
+
+    fn t_name(&self) -> &str {
+        std::any::type_name::<T>()
+    }
+
+    fn reset(&mut self) -> color_eyre::Result<()> {
+        fs::remove_dir(&self.path_all)?;
+
+        self.initial_last_date = None;
+        self.initial_first_unsafe_date = None;
+
+        self.imported.lock().clear();
+        self.to_insert.lock().clear();
+
+        Ok(())
     }
 
     fn export(&self) -> color_eyre::Result<()> {
-        if !self.modified.lock().to_owned() {
-            return Ok(());
+        let to_insert = mem::take(self.to_insert.lock().deref_mut());
+
+        match to_insert.iter().next() {
+            Some(first_map_to_insert) => {
+                let first_date_to_insert = **first_map_to_insert.1.iter().next().unwrap().0;
+
+                let day = first_date_to_insert.day();
+                let month = first_date_to_insert.month();
+                let year = first_date_to_insert.year() as usize;
+
+                let is_first_of_year = month == 1 && (day == 1 || (day == 3 && year == 2009));
+
+                if !is_first_of_year {
+                    self.import_year_if_needed(year)
+                }
+            }
+            None => return Ok(()),
         }
 
-        *self.modified.lock() = false;
+        let mut imported = self.imported.lock();
 
-        let inner = self.inner.lock();
+        let len = imported.len();
 
-        if let Some(map) = inner.as_ref() {
-            self._export(map)
-        } else {
-            self._export(&self.import())
-        }
+        to_insert.into_iter().enumerate().try_for_each(
+            |(index, (year, map))| -> color_eyre::Result<()> {
+                let to_export = imported.entry(year).or_default();
+
+                to_export.extend(map);
+
+                let path = self
+                    .serialization
+                    .append_extension(&format!("{}/{}", self.path_all, year));
+
+                self.serialization.export(&path, to_export)?;
+
+                if index == len - 1 {
+                    if let Some(path_last) = self.path_last.as_ref() {
+                        self.serialization
+                            .export(path_last, to_export.values().last().unwrap())?;
+                    }
+                }
+
+                Ok(())
+            },
+        )
     }
 
-    fn _export(&self, map: &BTreeMap<WNaiveDate, T>) -> color_eyre::Result<()> {
-        if let Some(path_last) = self.path_last.as_ref() {
-            self.serialization
-                .export(path_last, map.values().last().unwrap())?;
-        }
+    fn clean(&self) {
+        let mut imported = self.imported.lock();
 
-        self.serialization.export(&self.path, map)
-    }
+        let len = imported.len();
 
-    fn clean_tmp_data(&self) {
-        if self.storage == Storage::Disk {
-            self.inner.lock().take();
-        }
+        let keys = imported.keys().cloned().collect_vec();
+
+        keys.into_iter()
+            .enumerate()
+            .filter(|(index, _)| index + 1 < len)
+            .for_each(|(_, key)| {
+                imported.remove(&key);
+            });
     }
 }
 
@@ -268,10 +424,6 @@ pub trait AnyDateMap: AnyMap {
     fn get_initial_first_unsafe_date(&self) -> Option<NaiveDate>;
 
     fn get_initial_last_date(&self) -> Option<NaiveDate>;
-
-    fn get_last_date(&self) -> Option<NaiveDate>;
-
-    fn get_first_unsafe_date(&self) -> Option<NaiveDate>;
 
     fn as_any_map(&self) -> &(dyn AnyMap + Send + Sync);
 }
@@ -290,16 +442,6 @@ where
         + savefile::Deserialize,
 {
     #[inline(always)]
-    fn get_last_date(&self) -> Option<NaiveDate> {
-        self.get_last_date()
-    }
-
-    #[inline(always)]
-    fn get_first_unsafe_date(&self) -> Option<NaiveDate> {
-        self.get_first_unsafe_date()
-    }
-
-    #[inline(always)]
     fn get_initial_first_unsafe_date(&self) -> Option<NaiveDate> {
         self.initial_first_unsafe_date
     }
@@ -314,83 +456,6 @@ where
     }
 }
 
-impl<T> AnyMap for DateMap<T>
-where
-    T: Clone
-        + Default
-        + Debug
-        + Serialize
-        + DeserializeOwned
-        + Sum
-        + savefile::Serialize
-        + savefile::Deserialize,
-{
-    fn import_tmp_data(&self) {
-        // println!("import tmp {}", &self.path);
-
-        if !self.modified.lock().to_owned() {
-            return;
-        }
-
-        if self.storage == Storage::Disk {
-            if self.inner.lock().is_some() {
-                dbg!(&self.path);
-                panic!("Probably forgot to drop inner after an export");
-            }
-
-            self.import_to_inner();
-
-            self.batch.lock().drain(..).for_each(|(date, value)| {
-                self.insert_to_inner(date, value);
-            });
-        }
-    }
-
-    fn path(&self) -> &str {
-        &self.path
-    }
-
-    fn path_last(&self) -> Option<&String> {
-        self.path_last.as_ref()
-    }
-
-    fn t_name(&self) -> &str {
-        std::any::type_name::<T>()
-    }
-
-    fn reset(&mut self) -> color_eyre::Result<()> {
-        fs::remove_dir(&self.path)?;
-
-        self.batch.lock().clear();
-        self.initial_last_date = None;
-        self.initial_first_unsafe_date = None;
-
-        if let Some(vec) = self.inner.lock().as_mut() {
-            vec.clear()
-        }
-
-        *self.modified.lock() = false;
-
-        Ok(())
-    }
-
-    fn export_then_clean(&self) -> color_eyre::Result<()> {
-        self.export()?;
-
-        self.clean_tmp_data();
-
-        Ok(())
-    }
-}
-
-fn last_date_to_first_unsafe_date(last_date: Option<NaiveDate>) -> Option<NaiveDate> {
-    last_date.and_then(|last_date| {
-        let offset = NUMBER_OF_UNSAFE_DATES - 1;
-
-        last_date.checked_sub_days(Days::new(offset as u64))
-    })
-}
-
 impl<T> DateMap<T>
 where
     T: Clone
@@ -402,15 +467,16 @@ where
         + savefile::Serialize
         + savefile::Deserialize,
 {
-    #[allow(unused)]
-    pub fn transform<F>(&self, transform: F) -> BTreeMap<WNaiveDate, T>
-    where
-        T: Copy + Default,
-        F: Fn((&WNaiveDate, &T, &BTreeMap<WNaiveDate, T>, usize)) -> T,
-    {
-        Self::_transform(self.inner.lock().as_ref().unwrap(), transform)
-    }
+    // #[allow(unused)]
+    // pub fn transform<F>(&self, transform: F) -> BTreeMap<WNaiveDate, T>
+    // where
+    //     T: Copy + Default,
+    //     F: Fn((&WNaiveDate, &T, &BTreeMap<WNaiveDate, T>, usize)) -> T,
+    // {
+    //     Self::_transform(self.imported.lock().as_ref().unwrap(), transform)
+    // }
 
+    #[allow(unused)]
     pub fn _transform<F>(map: &BTreeMap<WNaiveDate, T>, transform: F) -> BTreeMap<WNaiveDate, T>
     where
         T: Copy + Default,
@@ -422,16 +488,16 @@ where
             .collect()
     }
 
-    #[allow(unused)]
-    pub fn add(&self, other: &Self) -> BTreeMap<WNaiveDate, T>
-    where
-        T: Add<Output = T> + Copy + Default,
-    {
-        Self::_add(
-            self.inner.lock().as_ref().unwrap(),
-            other.inner.lock().as_ref().unwrap(),
-        )
-    }
+    // #[allow(unused)]
+    // pub fn add(&self, other: &Self) -> BTreeMap<WNaiveDate, T>
+    // where
+    //     T: Add<Output = T> + Copy + Default,
+    // {
+    //     Self::_add(
+    //         self.imported.lock().as_ref().unwrap(),
+    //         other.imported.lock().as_ref().unwrap(),
+    //     )
+    // }
 
     pub fn _add(
         map1: &BTreeMap<WNaiveDate, T>,
@@ -447,17 +513,18 @@ where
         })
     }
 
-    #[allow(unused)]
-    pub fn subtract(&self, other: &Self) -> BTreeMap<WNaiveDate, T>
-    where
-        T: Sub<Output = T> + Copy + Default,
-    {
-        Self::_subtract(
-            self.inner.lock().as_ref().unwrap(),
-            other.inner.lock().as_ref().unwrap(),
-        )
-    }
+    // #[allow(unused)]
+    // pub fn subtract(&self, other: &Self) -> BTreeMap<WNaiveDate, T>
+    // where
+    //     T: Sub<Output = T> + Copy + Default,
+    // {
+    //     Self::_subtract(
+    //         self.imported.lock().as_ref().unwrap(),
+    //         other.imported.lock().as_ref().unwrap(),
+    //     )
+    // }
 
+    #[allow(unused)]
     pub fn _subtract(
         map1: &BTreeMap<WNaiveDate, T>,
         map2: &BTreeMap<WNaiveDate, T>,
@@ -476,17 +543,18 @@ where
         })
     }
 
-    #[allow(unused)]
-    pub fn multiply(&self, other: &Self) -> BTreeMap<WNaiveDate, T>
-    where
-        T: Mul<Output = T> + Copy + Default,
-    {
-        Self::_multiply(
-            self.inner.lock().as_ref().unwrap(),
-            other.inner.lock().as_ref().unwrap(),
-        )
-    }
+    // #[allow(unused)]
+    // pub fn multiply(&self, other: &Self) -> BTreeMap<WNaiveDate, T>
+    // where
+    //     T: Mul<Output = T> + Copy + Default,
+    // {
+    //     Self::_multiply(
+    //         self.imported.lock().as_ref().unwrap(),
+    //         other.imported.lock().as_ref().unwrap(),
+    //     )
+    // }
 
+    #[allow(unused)]
     pub fn _multiply(
         map1: &BTreeMap<WNaiveDate, T>,
         map2: &BTreeMap<WNaiveDate, T>,
@@ -501,17 +569,18 @@ where
         })
     }
 
-    #[allow(unused)]
-    pub fn divide(&self, other: &Self) -> BTreeMap<WNaiveDate, T>
-    where
-        T: Div<Output = T> + Copy + Default,
-    {
-        Self::_divide(
-            self.inner.lock().as_ref().unwrap(),
-            other.inner.lock().as_ref().unwrap(),
-        )
-    }
+    // #[allow(unused)]
+    // pub fn divide(&self, other: &Self) -> BTreeMap<WNaiveDate, T>
+    // where
+    //     T: Div<Output = T> + Copy + Default,
+    // {
+    //     Self::_divide(
+    //         self.imported.lock().as_ref().unwrap(),
+    //         other.imported.lock().as_ref().unwrap(),
+    //     )
+    // }
 
+    #[allow(unused)]
     pub fn _divide(
         map1: &BTreeMap<WNaiveDate, T>,
         map2: &BTreeMap<WNaiveDate, T>,
@@ -526,14 +595,15 @@ where
         })
     }
 
-    #[allow(unused)]
-    pub fn cumulate(&self) -> BTreeMap<WNaiveDate, T>
-    where
-        T: Sum + Copy + Default + AddAssign,
-    {
-        Self::_cumulate(self.inner.lock().as_ref().unwrap())
-    }
+    // #[allow(unused)]
+    // pub fn cumulate(&self) -> BTreeMap<WNaiveDate, T>
+    // where
+    //     T: Sum + Copy + Default + AddAssign,
+    // {
+    //     Self::_cumulate(self.imported.lock().as_ref().unwrap())
+    // }
 
+    #[allow(unused)]
     pub fn _cumulate(map: &BTreeMap<WNaiveDate, T>) -> BTreeMap<WNaiveDate, T>
     where
         T: Sum + Copy + Default + AddAssign,
@@ -548,14 +618,15 @@ where
             .collect()
     }
 
-    #[allow(unused)]
-    pub fn last_x_sum(&self, x: usize) -> BTreeMap<WNaiveDate, T>
-    where
-        T: Sum + Copy + Default + AddAssign + SubAssign,
-    {
-        Self::_last_x_sum(self.inner.lock().as_ref().unwrap(), x)
-    }
+    // #[allow(unused)]
+    // pub fn last_x_sum(&self, x: usize) -> BTreeMap<WNaiveDate, T>
+    // where
+    //     T: Sum + Copy + Default + AddAssign + SubAssign,
+    // {
+    //     Self::_last_x_sum(self.imported.lock().as_ref().unwrap(), x)
+    // }
 
+    #[allow(unused)]
     pub fn _last_x_sum(map: &BTreeMap<WNaiveDate, T>, x: usize) -> BTreeMap<WNaiveDate, T>
     where
         T: Sum + Copy + Default + AddAssign + SubAssign,
@@ -578,14 +649,15 @@ where
             .collect()
     }
 
-    #[allow(unused)]
-    pub fn simple_moving_average(&self, x: usize) -> BTreeMap<WNaiveDate, f32>
-    where
-        T: Sum + Copy + Default + AddAssign + SubAssign + ToF32,
-    {
-        Self::_simple_moving_average(self.inner.lock().as_ref().unwrap(), x)
-    }
+    // #[allow(unused)]
+    // pub fn simple_moving_average(&self, x: usize) -> BTreeMap<WNaiveDate, f32>
+    // where
+    //     T: Sum + Copy + Default + AddAssign + SubAssign + ToF32,
+    // {
+    //     Self::_simple_moving_average(self.imported.lock().as_ref().unwrap(), x)
+    // }
 
+    #[allow(unused)]
     pub fn _simple_moving_average(
         map: &BTreeMap<WNaiveDate, T>,
         x: usize,
@@ -609,14 +681,15 @@ where
             .collect()
     }
 
-    #[allow(unused)]
-    pub fn net_change(&self, offset: usize) -> BTreeMap<WNaiveDate, T>
-    where
-        T: Copy + Default + Sub<Output = T>,
-    {
-        Self::_net_change(self.inner.lock().as_ref().unwrap(), offset)
-    }
+    // #[allow(unused)]
+    // pub fn net_change(&self, offset: usize) -> BTreeMap<WNaiveDate, T>
+    // where
+    //     T: Copy + Default + Sub<Output = T>,
+    // {
+    //     Self::_net_change(self.imported.lock().as_ref().unwrap(), offset)
+    // }
 
+    #[allow(unused)]
     pub fn _net_change(map: &BTreeMap<WNaiveDate, T>, offset: usize) -> BTreeMap<WNaiveDate, T>
     where
         T: Copy + Default + Sub<Output = T>,
@@ -634,14 +707,15 @@ where
         })
     }
 
-    #[allow(unused)]
-    pub fn median(&self, size: usize) -> BTreeMap<WNaiveDate, Option<T>>
-    where
-        T: FloatCore,
-    {
-        Self::_median(self.inner.lock().as_ref().unwrap(), size)
-    }
+    // #[allow(unused)]
+    // pub fn median(&self, size: usize) -> BTreeMap<WNaiveDate, Option<T>>
+    // where
+    //     T: FloatCore,
+    // {
+    //     Self::_median(self.imported.lock().as_ref().unwrap(), size)
+    // }
 
+    #[allow(unused)]
     pub fn _median(map: &BTreeMap<WNaiveDate, T>, size: usize) -> BTreeMap<WNaiveDate, Option<T>>
     where
         T: FloatCore,

@@ -26,7 +26,7 @@ impl DateDataset {
 
             kraken_daily: None,
 
-            closes: DateMap::new_in_memory_json(&format!("{parent_path}/{name}")),
+            closes: DateMap::new_json(&format!("{parent_path}/{name}")),
         };
 
         s.min_initial_state.compute_from_dataset(&s);
@@ -36,15 +36,7 @@ impl DateDataset {
 
     pub fn get(&mut self, date: NaiveDate) -> color_eyre::Result<f32> {
         if self.closes.is_date_safe(date) {
-            Ok(self
-                .closes
-                .inner
-                .lock()
-                .as_ref()
-                .unwrap()
-                .get(&WNaiveDate::wrap(date))
-                .unwrap()
-                .to_owned())
+            Ok(self.closes.get(&WNaiveDate::wrap(date)).unwrap().to_owned())
         } else {
             let price = self.get_from_daily_kraken(&date.to_string())?;
 

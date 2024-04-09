@@ -20,8 +20,8 @@ impl BlockMetadataDataset {
         let s = Self {
             min_initial_state: MinInitialState::default(),
 
-            date: HeightMap::new_on_disk_bin(&f("date")),
-            timestamp: HeightMap::new_on_disk_bin(&f("timestamp")),
+            date: HeightMap::new_bin(&f("date")),
+            timestamp: HeightMap::new_bin(&f("timestamp")),
         };
 
         s.min_initial_state.compute_from_dataset(&s);

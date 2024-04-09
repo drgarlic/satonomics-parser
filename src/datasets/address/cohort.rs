@@ -4,8 +4,8 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use crate::{
     datasets::{
-        AnyDataset, AnyDatasetGroup, ExportData, GenericDataset, MinInitialState,
-        ProcessedBlockData, SubDataset,
+        AnyDataset, AnyDatasetGroup, GenericDataset, MinInitialState, ProcessedBlockData,
+        SubDataset,
     },
     parse::{AnyBiMap, AnyDateMap, AnyHeightMap, RawAddressSplit},
     states::LiquiditySplitProcessedAddressState,
@@ -405,17 +405,17 @@ impl GenericDataset for CohortDataset {
 }
 
 impl AnyDataset for CohortDataset {
-    fn prepare(&self, export_data: &ExportData) {
-        self.to_vec()
-            .into_par_iter()
-            .for_each(|d| d.prepare(export_data));
-    }
+    // fn prepare(&self, export_data: &ExportData) {
+    //     self.to_vec()
+    //         .into_par_iter()
+    //         .for_each(|d| d.prepare(export_data));
+    // }
 
-    fn compute(&self, export_data: &ExportData) {
-        self.to_vec()
-            .into_par_iter()
-            .for_each(|d| d.compute(export_data));
-    }
+    // fn compute(&self, export_data: &ExportData) {
+    //     self.to_vec()
+    //         .into_par_iter()
+    //         .for_each(|d| d.compute(export_data));
+    // }
 
     fn to_any_inserted_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
         self.to_vec()

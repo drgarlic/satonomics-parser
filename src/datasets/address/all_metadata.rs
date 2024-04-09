@@ -1,5 +1,5 @@
 use crate::{
-    datasets::{AnyDataset, ExportData, GenericDataset, MinInitialState, ProcessedBlockData},
+    datasets::{AnyDataset, GenericDataset, MinInitialState, ProcessedBlockData},
     parse::{AnyBiMap, AnyHeightMap, BiMap},
 };
 
@@ -17,8 +17,8 @@ impl AllAddressesMetadataDataset {
         let s = Self {
             min_initial_state: MinInitialState::default(),
 
-            total_addresses_created: BiMap::new_on_disk_bin(&f("total_addresses_created")),
-            total_empty_addresses: BiMap::new_on_disk_bin(&f("total_empty_addresses")),
+            total_addresses_created: BiMap::new_bin(&f("total_addresses_created")),
+            total_empty_addresses: BiMap::new_bin(&f("total_empty_addresses")),
         };
 
         s.min_initial_state.compute_from_dataset(&s);
@@ -45,18 +45,18 @@ impl GenericDataset for AllAddressesMetadataDataset {
 }
 
 impl AnyDataset for AllAddressesMetadataDataset {
-    fn compute(
-        &self,
-        &ExportData {
-            convert_last_height_to_date,
-            ..
-        }: &ExportData,
-    ) {
-        self.total_addresses_created
-            .compute_date(convert_last_height_to_date);
-        self.total_empty_addresses
-            .compute_date(convert_last_height_to_date);
-    }
+    // fn compute(
+    //     &self,
+    //     &ExportData {
+    //         convert_last_height_to_date,
+    //         ..
+    //     }: &ExportData,
+    // ) {
+    // self.total_addresses_created
+    //     .compute_date(convert_last_height_to_date);
+    // self.total_empty_addresses
+    //     .compute_date(convert_last_height_to_date);
+    // }
 
     fn get_min_initial_state(&self) -> &MinInitialState {
         &self.min_initial_state

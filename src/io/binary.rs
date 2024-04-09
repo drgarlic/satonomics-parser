@@ -4,7 +4,7 @@ pub struct Binary;
 
 // NOTES:
 // bincode 2.0: it was very consistent in terms of timing until it wasn't at around ~800 000 blocks processed with times between 100s and 3000s, might want to try again later
-// savefile: less consistent maybe even slower but good enough for now (as of ~350 000)
+// savefile: less consistent maybe even slower but good enough for now (as of height ~350 000)
 // rkyv: need to try but having an archived mirror of all serialized struct seems annoying
 
 impl Binary {

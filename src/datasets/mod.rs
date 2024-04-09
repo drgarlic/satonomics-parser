@@ -59,7 +59,7 @@ pub struct ProcessedBlockData<'a> {
     pub date: NaiveDate,
     pub date_price: f32,
     pub fees: &'a Vec<u64>,
-    pub first_date_height: usize,
+    pub date_first_height: usize,
     pub height: usize,
     pub is_date_last_block: bool,
     pub satblocks_destroyed: u64,
@@ -74,18 +74,18 @@ pub struct ProcessedBlockData<'a> {
     pub transaction_count: usize,
 }
 
-pub struct ExportData<'a> {
-    pub annualized_transaction_volume: &'a BiMap<f32>,
-    pub circulating_supply: &'a BiMap<f32>,
-    pub convert_last_height_to_date: &'a HeightToDateConverter<'a>,
-    pub convert_sum_heights_to_date: &'a HeightToDateConverter<'a>,
-    pub yearly_inflation_rate: &'a BiMap<f32>,
-    pub height_price: &'a HeightMap<f32>,
-    pub date_price: &'a DateMap<f32>,
-    pub realized_cap: &'a BiMap<f32>,
-    pub realized_price: &'a BiMap<f32>,
-    pub subsidy_in_dollars: &'a BiMap<f32>,
-}
+// pub struct ExportData<'a> {
+//     pub annualized_transaction_volume: &'a BiMap<f32>,
+//     pub circulating_supply: &'a BiMap<f32>,
+//     pub convert_last_height_to_date: &'a HeightToDateConverter<'a>,
+//     pub convert_sum_heights_to_date: &'a HeightToDateConverter<'a>,
+//     pub yearly_inflation_rate: &'a BiMap<f32>,
+//     pub height_price: &'a HeightMap<f32>,
+//     pub date_price: &'a DateMap<f32>,
+//     pub realized_cap: &'a BiMap<f32>,
+//     pub realized_price: &'a BiMap<f32>,
+//     pub subsidy_in_dollars: &'a BiMap<f32>,
+// }
 
 pub struct AllDatasets {
     min_initial_state: MinInitialState,
@@ -150,19 +150,12 @@ impl AllDatasets {
     pub fn export_path_to_type(&self) -> color_eyre::Result<()> {
         let path_to_type: BTreeMap<&str, &str> = self
             .to_generic_dataset_vec()
-            .iter()
+            .into_iter()
             .flat_map(|dataset| {
                 dataset
                     .to_any_exported_map_vec()
                     .into_iter()
-                    .flat_map(|map| map.exported_paths_with_t_name())
-                    .chain(
-                        dataset
-                            .to_any_exported_map_vec()
-                            .into_iter()
-                            .flat_map(|map| map.exported_paths_with_t_name()),
-                    )
-                    .collect_vec()
+                    .map(|map| map.exported_path_with_t_name())
             })
             .collect();
 
@@ -187,49 +180,49 @@ impl AllDatasets {
         height_and_date: Option<(usize, NaiveDate)>,
         compute: bool,
     ) -> color_eyre::Result<()> {
-        let export_data = ExportData {
-            // They all need to be:
-            // - Be stored memory
-            // - Either inserted or computed in the prepare function
-            annualized_transaction_volume: &self.transaction.annualized_volume,
-            circulating_supply: &self.address.all.all.supply.total,
-            yearly_inflation_rate: &self.mining.yearly_inflation_rate,
-            height_price: &self.price.height.closes,
-            date_price: &self.price.date.closes,
-            realized_cap: &self.address.all.all.price_paid.realized_cap,
-            realized_price: &self.address.all.all.price_paid.realized_price,
-            subsidy_in_dollars: &self.mining.subsidy_in_dollars,
+        // let export_data = ExportData {
+        //     // They all need to be:
+        //     // - Be stored memory
+        //     // - Either inserted or computed in the prepare function
+        //     annualized_transaction_volume: &self.transaction.annualized_volume,
+        //     circulating_supply: &self.address.all.all.supply.total,
+        //     yearly_inflation_rate: &self.mining.yearly_inflation_rate,
+        //     height_price: &self.price.height.closes,
+        //     date_price: &self.price.date.closes,
+        //     realized_cap: &self.address.all.all.price_paid.realized_cap,
+        //     realized_price: &self.address.all.all.price_paid.realized_price,
+        //     subsidy_in_dollars: &self.mining.subsidy_in_dollars,
 
-            convert_last_height_to_date: &HeightToDateConverter::Last(
-                &self.date_metadata.first_height,
-            ),
-            convert_sum_heights_to_date: &HeightToDateConverter::Sum {
-                first_height: &self.date_metadata.first_height,
-                last_height: &self.date_metadata.last_height,
-            },
-        };
+        //     convert_last_height_to_date: &HeightToDateConverter::Last(
+        //         &self.date_metadata.first_height,
+        //     ),
+        //     convert_sum_heights_to_date: &HeightToDateConverter::Sum {
+        //         first_height: &self.date_metadata.first_height,
+        //         last_height: &self.date_metadata.last_height,
+        //     },
+        // };
 
         let vec = self.to_generic_dataset_vec();
 
-        vec.iter().for_each(|dataset| dataset.prepare(&export_data));
+        // vec.iter().for_each(|dataset| dataset.prepare(&export_data));
 
-        vec.into_par_iter()
-            .filter(|dataset| {
-                if let Some((height, date)) = height_and_date {
-                    dataset.should_insert(height, date)
-                } else {
-                    true
-                }
-            })
+        vec.par_iter()
+            // .filter(|dataset| {
+            //     if let Some((height, date)) = height_and_date {
+            //         dataset.should_insert(height, date)
+            //     } else {
+            //         true
+            //     }
+            // })
             .try_for_each(|dataset| -> color_eyre::Result<()> {
-                dataset.import_tmp_data();
+                // if compute {
+                //     dataset.compute(&export_data);
+                // }
 
-                if compute {
-                    dataset.compute(&export_data);
-                }
-
-                dataset.export_then_clean()
+                dataset.export()
             })?;
+
+        vec.par_iter().for_each(|dataset| dataset.clean());
 
         Ok(())
     }
