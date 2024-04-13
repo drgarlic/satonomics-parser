@@ -2,6 +2,7 @@ use std::{collections::BTreeMap, thread};
 
 use chrono::NaiveDate;
 use itertools::Itertools;
+use rayon::prelude::*;
 
 mod _traits;
 mod address;
@@ -16,16 +17,15 @@ mod transaction;
 mod utxo;
 
 pub use _traits::*;
-use address::*;
-use block_metadata::*;
-use coindays::*;
-use cointime::*;
-use date_metadata::*;
-use mining::*;
-use price::*;
-use rayon::prelude::*;
+pub use address::*;
+pub use block_metadata::*;
+pub use coindays::*;
+pub use cointime::*;
+pub use date_metadata::*;
+pub use mining::*;
+pub use price::*;
 pub use subs::*;
-use transaction::*;
+pub use transaction::*;
 pub use utxo::*;
 
 use crate::{
@@ -119,26 +119,38 @@ impl AllDatasets {
 
             let block_metadata_handle = scope.spawn(|| BlockMetadataDataset::import(path));
 
-            let utxo_handle = scope.spawn(|| UTXODatasets::import(path));
-
             let transaction_handle = scope.spawn(|| TransactionDataset::import(path));
 
             let address = AddressDatasets::import(path)?;
 
-            let price_handle = PriceDatasets::import()?;
+            let utxo = UTXODatasets::import(path)?;
+
+            let price = PriceDatasets::import()?;
+
+            let block_metadata = block_metadata_handle.join().unwrap()?;
+
+            let cointime = cointime_handle.join().unwrap()?;
+
+            let coindays = coindays_handle.join().unwrap()?;
+
+            let date_metadata = date_metadata_handle.join().unwrap()?;
+
+            let mining = mining_handle.join().unwrap()?;
+
+            let transaction = transaction_handle.join().unwrap()?;
 
             let mut s = Self {
                 min_initial_state: MinInitialState::default(),
 
                 address,
-                block_metadata: block_metadata_handle.join().unwrap()?,
-                cointime: cointime_handle.join().unwrap()?,
-                coindays: coindays_handle.join().unwrap()?,
-                date_metadata: date_metadata_handle.join().unwrap()?,
-                price: price_handle,
-                mining: mining_handle.join().unwrap()?,
-                utxo: utxo_handle.join().unwrap()?,
-                transaction: transaction_handle.join().unwrap()?,
+                block_metadata,
+                cointime,
+                coindays,
+                date_metadata,
+                price,
+                mining,
+                transaction,
+                utxo,
             };
 
             s.min_initial_state
