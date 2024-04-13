@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, mem, thread};
 use rayon::prelude::*;
 
 use crate::parse::{
-    Database, RawAddress, SizedDatabase, U8x19, U8x31, UnsizedDatabase as _UnsizedDatabase,
+    Address, Database, SizedDatabase, U8x19, U8x31, UnsizedDatabase as _UnsizedDatabase,
 };
 
 use super::{AnyDatabaseGroup, Metadata};
@@ -24,7 +24,9 @@ type UnknownDatabase = U32Database;
 type EmptyDatabase = U32Database;
 type MultisigDatabase = UnsizedDatabase;
 
-pub struct RawAddressToAddressIndex {
+pub struct AddressToAddressIndex {
+    pub metadata: Metadata,
+
     p2pk: BTreeMap<u16, P2PKDatabase>,
     p2pkh: BTreeMap<u16, P2PKHDatabase>,
     p2sh: BTreeMap<u16, P2SHDatabase>,
@@ -34,52 +36,51 @@ pub struct RawAddressToAddressIndex {
     unknown: Option<UnknownDatabase>,
     empty: Option<EmptyDatabase>,
     multisig: Option<MultisigDatabase>,
-    pub metadata: Metadata,
 }
 
-impl RawAddressToAddressIndex {
+impl AddressToAddressIndex {
     #[allow(unused)]
-    pub fn safe_get(&mut self, raw_address: &RawAddress) -> Option<&Value> {
-        match raw_address {
-            RawAddress::Empty(key) => self.open_empty().get(key),
-            RawAddress::Unknown(key) => self.open_unknown().get(key),
-            RawAddress::MultiSig(key) => self.open_multisig().get(key),
-            RawAddress::P2PK((prefix, rest)) => self.open_p2pk(*prefix).get(rest),
-            RawAddress::P2PKH((prefix, rest)) => self.open_p2pkh(*prefix).get(rest),
-            RawAddress::P2SH((prefix, rest)) => self.open_p2sh(*prefix).get(rest),
-            RawAddress::P2WPKH((prefix, rest)) => self.open_p2wpkh(*prefix).get(rest),
-            RawAddress::P2WSH((prefix, rest)) => self.open_p2wsh(*prefix).get(rest),
-            RawAddress::P2TR((prefix, rest)) => self.open_p2tr(*prefix).get(rest),
+    pub fn safe_get(&mut self, address: &Address) -> Option<&Value> {
+        match address {
+            Address::Empty(key) => self.open_empty().get(key),
+            Address::Unknown(key) => self.open_unknown().get(key),
+            Address::MultiSig(key) => self.open_multisig().get(key),
+            Address::P2PK((prefix, rest)) => self.open_p2pk(*prefix).get(rest),
+            Address::P2PKH((prefix, rest)) => self.open_p2pkh(*prefix).get(rest),
+            Address::P2SH((prefix, rest)) => self.open_p2sh(*prefix).get(rest),
+            Address::P2WPKH((prefix, rest)) => self.open_p2wpkh(*prefix).get(rest),
+            Address::P2WSH((prefix, rest)) => self.open_p2wsh(*prefix).get(rest),
+            Address::P2TR((prefix, rest)) => self.open_p2tr(*prefix).get(rest),
         }
     }
 
-    pub fn open_db(&mut self, raw_address: &RawAddress) {
-        match raw_address {
-            RawAddress::Empty(_) => {
+    pub fn open_db(&mut self, address: &Address) {
+        match address {
+            Address::Empty(_) => {
                 self.open_empty();
             }
-            RawAddress::Unknown(_) => {
+            Address::Unknown(_) => {
                 self.open_unknown();
             }
-            RawAddress::MultiSig(_) => {
+            Address::MultiSig(_) => {
                 self.open_multisig();
             }
-            RawAddress::P2PK((prefix, _)) => {
+            Address::P2PK((prefix, _)) => {
                 self.open_p2pk(*prefix);
             }
-            RawAddress::P2PKH((prefix, _)) => {
+            Address::P2PKH((prefix, _)) => {
                 self.open_p2pkh(*prefix);
             }
-            RawAddress::P2SH((prefix, _)) => {
+            Address::P2SH((prefix, _)) => {
                 self.open_p2sh(*prefix);
             }
-            RawAddress::P2WPKH((prefix, _)) => {
+            Address::P2WPKH((prefix, _)) => {
                 self.open_p2wpkh(*prefix);
             }
-            RawAddress::P2WSH((prefix, _)) => {
+            Address::P2WSH((prefix, _)) => {
                 self.open_p2wsh(*prefix);
             }
-            RawAddress::P2TR((prefix, _)) => {
+            Address::P2TR((prefix, _)) => {
                 self.open_p2tr(*prefix);
             }
         }
@@ -87,47 +88,45 @@ impl RawAddressToAddressIndex {
 
     /// Doesn't check if the database is open contrary to `safe_get` which does and opens if needed.
     /// Though it makes it easy to use with rayon
-    pub fn unsafe_get(&self, raw_address: &RawAddress) -> Option<&Value> {
-        match raw_address {
-            RawAddress::Empty(key) => self.empty.as_ref().unwrap().get(key),
-            RawAddress::Unknown(key) => self.unknown.as_ref().unwrap().get(key),
-            RawAddress::MultiSig(key) => self.multisig.as_ref().unwrap().get(key),
-            RawAddress::P2PK((prefix, key)) => self.p2pk.get(prefix).unwrap().get(key),
-            RawAddress::P2PKH((prefix, key)) => self.p2pkh.get(prefix).unwrap().get(key),
-            RawAddress::P2SH((prefix, key)) => self.p2sh.get(prefix).unwrap().get(key),
-            RawAddress::P2WPKH((prefix, key)) => self.p2wpkh.get(prefix).unwrap().get(key),
-            RawAddress::P2WSH((prefix, key)) => self.p2wsh.get(prefix).unwrap().get(key),
-            RawAddress::P2TR((prefix, key)) => self.p2tr.get(prefix).unwrap().get(key),
+    pub fn unsafe_get(&self, address: &Address) -> Option<&Value> {
+        match address {
+            Address::Empty(key) => self.empty.as_ref().unwrap().get(key),
+            Address::Unknown(key) => self.unknown.as_ref().unwrap().get(key),
+            Address::MultiSig(key) => self.multisig.as_ref().unwrap().get(key),
+            Address::P2PK((prefix, key)) => self.p2pk.get(prefix).unwrap().get(key),
+            Address::P2PKH((prefix, key)) => self.p2pkh.get(prefix).unwrap().get(key),
+            Address::P2SH((prefix, key)) => self.p2sh.get(prefix).unwrap().get(key),
+            Address::P2WPKH((prefix, key)) => self.p2wpkh.get(prefix).unwrap().get(key),
+            Address::P2WSH((prefix, key)) => self.p2wsh.get(prefix).unwrap().get(key),
+            Address::P2TR((prefix, key)) => self.p2tr.get(prefix).unwrap().get(key),
         }
     }
 
-    pub fn unsafe_get_from_puts(&self, raw_address: &RawAddress) -> Option<&Value> {
-        match raw_address {
-            RawAddress::Empty(key) => self.empty.as_ref().unwrap().get_from_puts(key),
-            RawAddress::Unknown(key) => self.unknown.as_ref().unwrap().get_from_puts(key),
-            RawAddress::MultiSig(key) => self.multisig.as_ref().unwrap().get_from_puts(key),
-            RawAddress::P2PK((prefix, key)) => self.p2pk.get(prefix).unwrap().get_from_puts(key),
-            RawAddress::P2PKH((prefix, key)) => self.p2pkh.get(prefix).unwrap().get_from_puts(key),
-            RawAddress::P2SH((prefix, key)) => self.p2sh.get(prefix).unwrap().get_from_puts(key),
-            RawAddress::P2WPKH((prefix, key)) => {
-                self.p2wpkh.get(prefix).unwrap().get_from_puts(key)
-            }
-            RawAddress::P2WSH((prefix, key)) => self.p2wsh.get(prefix).unwrap().get_from_puts(key),
-            RawAddress::P2TR((prefix, key)) => self.p2tr.get(prefix).unwrap().get_from_puts(key),
+    pub fn unsafe_get_from_puts(&self, address: &Address) -> Option<&Value> {
+        match address {
+            Address::Empty(key) => self.empty.as_ref().unwrap().get_from_puts(key),
+            Address::Unknown(key) => self.unknown.as_ref().unwrap().get_from_puts(key),
+            Address::MultiSig(key) => self.multisig.as_ref().unwrap().get_from_puts(key),
+            Address::P2PK((prefix, key)) => self.p2pk.get(prefix).unwrap().get_from_puts(key),
+            Address::P2PKH((prefix, key)) => self.p2pkh.get(prefix).unwrap().get_from_puts(key),
+            Address::P2SH((prefix, key)) => self.p2sh.get(prefix).unwrap().get_from_puts(key),
+            Address::P2WPKH((prefix, key)) => self.p2wpkh.get(prefix).unwrap().get_from_puts(key),
+            Address::P2WSH((prefix, key)) => self.p2wsh.get(prefix).unwrap().get_from_puts(key),
+            Address::P2TR((prefix, key)) => self.p2tr.get(prefix).unwrap().get_from_puts(key),
         }
     }
 
-    pub fn insert(&mut self, raw_address: RawAddress, value: Value) -> Option<Value> {
-        match raw_address {
-            RawAddress::Empty(key) => self.open_empty().insert(key, value),
-            RawAddress::Unknown(key) => self.open_unknown().insert(key, value),
-            RawAddress::MultiSig(key) => self.open_multisig().insert(key, value),
-            RawAddress::P2PK((prefix, rest)) => self.open_p2pk(prefix).insert(rest, value),
-            RawAddress::P2PKH((prefix, rest)) => self.open_p2pkh(prefix).insert(rest, value),
-            RawAddress::P2SH((prefix, rest)) => self.open_p2sh(prefix).insert(rest, value),
-            RawAddress::P2WPKH((prefix, rest)) => self.open_p2wpkh(prefix).insert(rest, value),
-            RawAddress::P2WSH((prefix, rest)) => self.open_p2wsh(prefix).insert(rest, value),
-            RawAddress::P2TR((prefix, rest)) => self.open_p2tr(prefix).insert(rest, value),
+    pub fn insert(&mut self, address: Address, value: Value) -> Option<Value> {
+        match address {
+            Address::Empty(key) => self.open_empty().insert(key, value),
+            Address::Unknown(key) => self.open_unknown().insert(key, value),
+            Address::MultiSig(key) => self.open_multisig().insert(key, value),
+            Address::P2PK((prefix, rest)) => self.open_p2pk(prefix).insert(rest, value),
+            Address::P2PKH((prefix, rest)) => self.open_p2pkh(prefix).insert(rest, value),
+            Address::P2SH((prefix, rest)) => self.open_p2sh(prefix).insert(rest, value),
+            Address::P2WPKH((prefix, rest)) => self.open_p2wpkh(prefix).insert(rest, value),
+            Address::P2WSH((prefix, rest)) => self.open_p2wsh(prefix).insert(rest, value),
+            Address::P2TR((prefix, rest)) => self.open_p2tr(prefix).insert(rest, value),
         }
     }
 
@@ -214,7 +213,7 @@ impl RawAddressToAddressIndex {
     }
 }
 
-impl AnyDatabaseGroup for RawAddressToAddressIndex {
+impl AnyDatabaseGroup for AddressToAddressIndex {
     fn import() -> Self {
         Self {
             p2pk: BTreeMap::default(),
@@ -278,6 +277,6 @@ impl AnyDatabaseGroup for RawAddressToAddressIndex {
     }
 
     fn folder<'a>() -> &'a str {
-        "raw_address_to_address_index"
+        "address_to_address_index"
     }
 }

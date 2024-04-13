@@ -5,14 +5,15 @@ use derive_deref::{Deref, DerefMut};
 use crate::{
     parse::{AddressData, AddressRealizedData},
     states::AddressIndexToAddressData,
+    utils::convert_price_to_significant_cents,
 };
 
-use super::{LiquiditySplitProcessedAddressState, SplitByCohort, SplitOneShotStates};
+use super::{AddressCohortDurableStates, AddressCohortsOneShotStates, SplitByAddressCohort};
 
 #[derive(Default, Deref, DerefMut)]
-pub struct SplitVariousAddressStates(SplitByCohort<LiquiditySplitProcessedAddressState>);
+pub struct AddressCohortsDurableStates(SplitByAddressCohort<AddressCohortDurableStates>);
 
-impl SplitVariousAddressStates {
+impl AddressCohortsDurableStates {
     pub fn init(address_index_to_address_data: &AddressIndexToAddressData) -> Self {
         let mut s = Self::default();
 
@@ -32,11 +33,60 @@ impl SplitVariousAddressStates {
         self.increment(current_address_data);
     }
 
+    /// Should always increment using current address data state
+    fn increment(&mut self, address_data: &AddressData) {
+        self._crement(address_data, true)
+    }
+
+    /// Should always decrement using initial address data state
+    fn decrement(&mut self, address_data: &AddressData) {
+        self._crement(address_data, false)
+    }
+
+    fn _crement(&mut self, address_data: &AddressData, increment: bool) {
+        let amount = address_data.amount;
+        let utxo_count = address_data.outputs_len as usize;
+
+        // No need to either insert or remove if 0
+        if amount == 0 {
+            return;
+        }
+
+        let mean_price_paid_in_cents =
+            convert_price_to_significant_cents(address_data.mean_price_paid);
+
+        let liquidity_classification = address_data.compute_liquidity_classification();
+
+        let split_sat_amount_amount = liquidity_classification.split(amount as f32);
+        let split_utxo_count = liquidity_classification.split(utxo_count as f32);
+
+        self.0
+            .iterate(address_data, |state: &mut AddressCohortDurableStates| {
+                if increment {
+                    state.increment(
+                        amount,
+                        utxo_count,
+                        mean_price_paid_in_cents,
+                        &split_sat_amount_amount,
+                        &split_utxo_count,
+                    );
+                } else {
+                    state.decrement(
+                        amount,
+                        utxo_count,
+                        mean_price_paid_in_cents,
+                        &split_sat_amount_amount,
+                        &split_utxo_count,
+                    )
+                }
+            });
+    }
+
     pub fn compute_one_shot_states(
         &mut self,
         block_price: f32,
         date_price: Option<f32>,
-    ) -> SplitOneShotStates {
+    ) -> AddressCohortsOneShotStates {
         thread::scope(|scope| {
             let all_handle =
                 scope.spawn(|| self.all.compute_one_shot_states(block_price, date_price));
@@ -77,7 +127,7 @@ impl SplitVariousAddressStates {
             let p2tr_handle =
                 scope.spawn(|| self.p2tr.compute_one_shot_states(block_price, date_price));
 
-            SplitOneShotStates(SplitByCohort {
+            AddressCohortsOneShotStates(SplitByAddressCohort {
                 all: all_handle.join().unwrap(),
 
                 plankton: plankton_handle.join().unwrap(),
@@ -97,64 +147,5 @@ impl SplitVariousAddressStates {
                 p2tr: p2tr_handle.join().unwrap(),
             })
         })
-    }
-
-    /// Should always increment using current address data state
-    fn increment(&mut self, address_data: &AddressData) {
-        self._crement(address_data, true)
-    }
-
-    /// Should always decrement using initial address data state
-    fn decrement(&mut self, address_data: &AddressData) {
-        self._crement(address_data, false)
-    }
-
-    fn _crement(&mut self, address_data: &AddressData, increment: bool) {
-        let amount = address_data.amount;
-        let utxo_count = address_data.outputs_len as usize;
-
-        // No need to either insert or remove if 0
-        if amount == 0 {
-            return;
-        }
-
-        // Rounded after the {significant_digits} to have the smallest btree possible
-        let mut mean_price_paid_in_cents = (address_data.mean_price_paid * 100.0) as u64;
-        let ilog10 = mean_price_paid_in_cents.checked_ilog10().unwrap_or(0) as i32;
-        let significant_digits = 4;
-        if ilog10 >= significant_digits {
-            let log_diff = ilog10 - significant_digits + 1;
-            let pow = 10.0_f64.powi(log_diff);
-            mean_price_paid_in_cents =
-                ((mean_price_paid_in_cents as f64 / pow).round() * pow) as u64;
-        }
-
-        let liquidity_classification = address_data.compute_liquidity_classification();
-
-        let split_sat_amount_amount = liquidity_classification.split(amount as f32);
-        let split_utxo_count = liquidity_classification.split(utxo_count as f32);
-
-        self.0.iterate(
-            address_data,
-            |state: &mut LiquiditySplitProcessedAddressState| {
-                if increment {
-                    state.increment(
-                        amount,
-                        utxo_count,
-                        mean_price_paid_in_cents,
-                        &split_sat_amount_amount,
-                        &split_utxo_count,
-                    );
-                } else {
-                    state.decrement(
-                        amount,
-                        utxo_count,
-                        mean_price_paid_in_cents,
-                        &split_sat_amount_amount,
-                        &split_utxo_count,
-                    )
-                }
-            },
-        );
     }
 }

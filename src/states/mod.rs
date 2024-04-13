@@ -2,20 +2,18 @@ use std::thread;
 
 mod _trait;
 mod address_index_to_address_data;
+mod cohorts_states;
 mod counters;
 mod date_data_vec;
-mod price_to_block_path;
-mod processed_split_states;
 mod tx_index_to_tx_data;
 mod txout_index_to_address_index;
 mod txout_index_to_sats;
 
 pub use _trait::*;
 use address_index_to_address_data::*;
+pub use cohorts_states::*;
 use counters::*;
 use date_data_vec::*;
-use price_to_block_path::*;
-pub use processed_split_states::*;
 use tx_index_to_tx_data::*;
 use txout_index_to_address_index::*;
 use txout_index_to_sats::*;
@@ -23,10 +21,10 @@ use txout_index_to_sats::*;
 #[derive(Default)]
 pub struct States {
     pub address_index_to_address_data: AddressIndexToAddressData,
-    pub price_to_block_path: PriceToBlockPathVec,
     pub counters: Counters,
     pub date_data_vec: DateDataVec,
-    pub split_address: SplitVariousAddressStates,
+    pub address_cohorts_durable_states: AddressCohortsDurableStates,
+    pub utxo_cohorts_durable_states: UTXOCohortsDurableStates,
     pub tx_index_to_tx_data: TxIndexToTxData,
     pub txout_index_to_address_index: TxoutIndexToAddressIndex,
     pub txout_index_to_sats: TxoutIndexToSats,
@@ -56,19 +54,20 @@ impl States {
 
         let address_index_to_address_data = address_index_to_address_data_handle.join().unwrap()?;
 
-        let split_address = SplitVariousAddressStates::init(&address_index_to_address_data);
+        let address_cohorts_durable_states =
+            AddressCohortsDurableStates::init(&address_index_to_address_data);
 
-        let price_to_block_path_vec = PriceToBlockPathVec::build(&date_data_vec);
+        let utxo_cohorts_durable_states = UTXOCohortsDurableStates::init(&date_data_vec);
 
         Ok(Self {
+            address_cohorts_durable_states,
             address_index_to_address_data,
             counters,
             date_data_vec,
-            price_to_block_path: price_to_block_path_vec,
-            split_address,
             tx_index_to_tx_data,
             txout_index_to_address_index,
             txout_index_to_sats,
+            utxo_cohorts_durable_states,
         })
     }
 
@@ -82,9 +81,7 @@ impl States {
         let _ = self.txout_index_to_address_index.reset();
         let _ = self.txout_index_to_sats.reset();
 
-        self.price_to_block_path.clear();
-
-        self.split_address = SplitVariousAddressStates::default();
+        self.address_cohorts_durable_states = AddressCohortsDurableStates::default();
     }
 
     pub fn export(&self) -> color_eyre::Result<()> {

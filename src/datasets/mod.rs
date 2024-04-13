@@ -26,18 +26,17 @@ use price::*;
 use rayon::prelude::*;
 pub use subs::*;
 use transaction::*;
-use utxo::*;
+pub use utxo::*;
 
 use crate::{
     actions::{ReceivedData, SpentData},
     databases::Databases,
     io::Json,
-    parse::{
-        AddressData, AddressRealizedData, BiMap, BlockPath, DateMap, HeightMap,
-        HeightToDateConverter,
-    },
+    parse::{AddressData, AddressRealizedData, BlockPath},
     states::{
-        SplitInputStates, SplitOneShotStates, SplitOutputStates, SplitRealizedStates, States,
+        AddressCohortsInputStates, AddressCohortsOneShotStates, AddressCohortsOutputStates,
+        AddressCohortsRealizedStates, States, UTXOCohortsOneShotStates, UTXOCohortsReceivedStates,
+        UTXOCohortsSentStates,
     },
 };
 
@@ -49,6 +48,10 @@ pub struct ProcessedDateData {
 }
 
 pub struct ProcessedBlockData<'a> {
+    pub address_cohorts_input_states: &'a Option<AddressCohortsInputStates>,
+    pub address_cohorts_one_shot_states: &'a Option<AddressCohortsOneShotStates>,
+    pub address_cohorts_output_states: &'a Option<AddressCohortsOutputStates>,
+    pub address_cohorts_realized_states: &'a Option<AddressCohortsRealizedStates>,
     pub address_index_to_address_realized_data: &'a BTreeMap<u32, AddressRealizedData>,
     pub address_index_to_removed_address_data: &'a BTreeMap<u32, AddressData>,
     pub block_path_to_received_data: &'a BTreeMap<BlockPath, ReceivedData>,
@@ -57,21 +60,20 @@ pub struct ProcessedBlockData<'a> {
     pub coinbase: u64,
     pub databases: &'a Databases,
     pub date: NaiveDate,
+    pub date_first_height: usize,
     pub date_price: f32,
     pub fees: &'a Vec<u64>,
-    pub date_first_height: usize,
     pub height: usize,
     pub is_date_last_block: bool,
     pub satblocks_destroyed: u64,
     pub satdays_destroyed: u64,
     pub sats_sent: u64,
-    pub split_input_states: &'a Option<SplitInputStates>,
-    pub split_one_shot_states: &'a Option<SplitOneShotStates>,
-    pub split_output_states: &'a Option<SplitOutputStates>,
-    pub split_realized_states: &'a Option<SplitRealizedStates>,
     pub states: &'a States,
     pub timestamp: u32,
     pub transaction_count: usize,
+    pub utxo_cohorts_one_shot_states: &'a UTXOCohortsOneShotStates,
+    pub utxo_cohorts_received_states: &'a UTXOCohortsReceivedStates,
+    pub utxo_cohorts_sent_states: &'a UTXOCohortsSentStates,
 }
 
 // pub struct ExportData<'a> {

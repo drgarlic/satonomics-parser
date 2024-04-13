@@ -1,10 +1,10 @@
 use sanakirja::{direct_repr, Storable, UnsizedStorable};
 
-use super::{AddressData, RawAddressType};
+use super::{AddressData, AddressType};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Default)]
 pub struct EmptyAddressData {
-    pub address_type: RawAddressType,
+    pub address_type: AddressType,
     pub transfered: u64,
 }
 direct_repr!(EmptyAddressData);

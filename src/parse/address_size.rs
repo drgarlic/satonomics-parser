@@ -1,7 +1,7 @@
 // use super::AddressData;
 
 #[derive(PartialEq, PartialOrd, Ord, Eq, Debug)]
-pub enum RawAddressSize {
+pub enum AddressSize {
     Empty,
     Plankton,
     Shrimp,
@@ -13,7 +13,7 @@ pub enum RawAddressSize {
     Megalodon,
 }
 
-impl RawAddressSize {
+impl AddressSize {
     pub fn from_amount(amount: u64) -> Self {
         match amount {
             0 => Self::Empty,
@@ -27,21 +27,4 @@ impl RawAddressSize {
             10_000_000_000_000..=u64::MAX => Self::Megalodon,
         }
     }
-
-    // pub fn from_address(address_data: &AddressData) -> Self {
-    //     Self::from_amount(address_data.amount)
-    // }
-
-    // pub fn to_name(&self) -> &str {
-    //     match &self {
-    //         Self::Plankton => "plankton",
-    //         Self::Shrimp => "shrimp",
-    //         Self::Crab => "crab",
-    //         Self::Fish => "fish",
-    //         Self::Shark => "shark",
-    //         Self::Whale => "whale",
-    //         Self::Humpback => "humpback",
-    //         Self::Megalodon => "megalodon",
-    //     }
-    // }
 }

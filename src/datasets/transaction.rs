@@ -53,12 +53,12 @@ impl GenericDataset for TransactionDataset {
         self.count.height.insert(height, transaction_count);
         self.volume.height.insert(height, sats_to_btc(sats_sent));
 
-        // self.annualized_volume.height.insert(
-        //     height,
-        //     height
-        //         .checked_sub(ONE_YEAR_IN_BLOCK_TIME)
-        //         .map(|from| self.volume.height.sum(from..=height)),
-        // );
+        self.annualized_volume.height.insert(
+            height,
+            height
+                .checked_sub(ONE_YEAR_IN_BLOCK_TIME)
+                .map(|from| self.volume.height.sum(from..=height)),
+        );
 
         // self.velocity.set_height(
         //     self.annualized_volume
@@ -68,13 +68,13 @@ impl GenericDataset for TransactionDataset {
         //     .set_height(self.volume.height.last_x_sum(ONE_YEAR_IN_BLOCK_TIME));
 
         if is_date_last_block {
-            // self.count
-            //     .date
-            //     .insert(date, self.count.height.sum(date_first_height..=height));
+            self.count
+                .date
+                .insert(date, self.count.height.sum(date_first_height..=height));
 
-            // self.volume
-            //     .date
-            //     .insert(date, self.volume.height.sum(date_first_height..=height));
+            self.volume
+                .date
+                .insert(date, self.volume.height.sum(date_first_height..=height));
 
             // first_height: &self.date_metadata.first_height,
             //         last_height: &self.date_metadata.last_height,

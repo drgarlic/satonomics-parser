@@ -4,7 +4,7 @@ mod cohort_metadata;
 
 use std::thread;
 
-use crate::parse::{RawAddressSize, RawAddressSplit, RawAddressType};
+use crate::parse::{AddressSize, AddressSplit, AddressType};
 
 use self::{all_metadata::AllAddressesMetadataDataset, cohort::CohortDataset};
 
@@ -38,62 +38,62 @@ impl AddressDatasets {
     pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
         thread::scope(|scope| {
             let all_handle =
-                scope.spawn(|| CohortDataset::import(parent_path, None, RawAddressSplit::All));
+                scope.spawn(|| CohortDataset::import(parent_path, None, AddressSplit::All));
 
             let plankton_handle = scope.spawn(|| {
                 CohortDataset::import(
                     parent_path,
                     Some("plankton"),
-                    RawAddressSplit::Size(RawAddressSize::Plankton),
+                    AddressSplit::Size(AddressSize::Plankton),
                 )
             });
             let shrimp_handle = scope.spawn(|| {
                 CohortDataset::import(
                     parent_path,
                     Some("shrimp"),
-                    RawAddressSplit::Size(RawAddressSize::Shrimp),
+                    AddressSplit::Size(AddressSize::Shrimp),
                 )
             });
             let crab_handle = scope.spawn(|| {
                 CohortDataset::import(
                     parent_path,
                     Some("crab"),
-                    RawAddressSplit::Size(RawAddressSize::Crab),
+                    AddressSplit::Size(AddressSize::Crab),
                 )
             });
             let fish_handle = scope.spawn(|| {
                 CohortDataset::import(
                     parent_path,
                     Some("fish"),
-                    RawAddressSplit::Size(RawAddressSize::Fish),
+                    AddressSplit::Size(AddressSize::Fish),
                 )
             });
             let shark_handle = scope.spawn(|| {
                 CohortDataset::import(
                     parent_path,
                     Some("shark"),
-                    RawAddressSplit::Size(RawAddressSize::Shark),
+                    AddressSplit::Size(AddressSize::Shark),
                 )
             });
             let whale_handle = scope.spawn(|| {
                 CohortDataset::import(
                     parent_path,
                     Some("whale"),
-                    RawAddressSplit::Size(RawAddressSize::Whale),
+                    AddressSplit::Size(AddressSize::Whale),
                 )
             });
             let humpback_handle = scope.spawn(|| {
                 CohortDataset::import(
                     parent_path,
                     Some("humpback"),
-                    RawAddressSplit::Size(RawAddressSize::Humpback),
+                    AddressSplit::Size(AddressSize::Humpback),
                 )
             });
             let megalodon_handle = scope.spawn(|| {
                 CohortDataset::import(
                     parent_path,
                     Some("megalodon"),
-                    RawAddressSplit::Size(RawAddressSize::Megalodon),
+                    AddressSplit::Size(AddressSize::Megalodon),
                 )
             });
 
@@ -101,42 +101,42 @@ impl AddressDatasets {
                 CohortDataset::import(
                     parent_path,
                     Some("p2pk"),
-                    RawAddressSplit::Type(RawAddressType::P2PK),
+                    AddressSplit::Type(AddressType::P2PK),
                 )
             });
             let p2pkh_handle = scope.spawn(|| {
                 CohortDataset::import(
                     parent_path,
                     Some("p2pkh"),
-                    RawAddressSplit::Type(RawAddressType::P2PKH),
+                    AddressSplit::Type(AddressType::P2PKH),
                 )
             });
             let p2sh_handle = scope.spawn(|| {
                 CohortDataset::import(
                     parent_path,
                     Some("p2sh"),
-                    RawAddressSplit::Type(RawAddressType::P2SH),
+                    AddressSplit::Type(AddressType::P2SH),
                 )
             });
             let p2wpkh_handle = scope.spawn(|| {
                 CohortDataset::import(
                     parent_path,
                     Some("p2wpkh"),
-                    RawAddressSplit::Type(RawAddressType::P2WPKH),
+                    AddressSplit::Type(AddressType::P2WPKH),
                 )
             });
             let p2wsh_handle = scope.spawn(|| {
                 CohortDataset::import(
                     parent_path,
                     Some("p2wsh"),
-                    RawAddressSplit::Type(RawAddressType::P2WSH),
+                    AddressSplit::Type(AddressType::P2WSH),
                 )
             });
 
             let p2tr = CohortDataset::import(
                 parent_path,
                 Some("p2tr"),
-                RawAddressSplit::Type(RawAddressType::P2TR),
+                AddressSplit::Type(AddressType::P2TR),
             )?;
 
             let s = Self {

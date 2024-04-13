@@ -1,16 +1,16 @@
 use derive_deref::{Deref, DerefMut};
 
 use crate::{
-    datasets::RealizedState,
     parse::{AddressRealizedData, LiquidityClassification, SplitByLiquidity},
+    states::RealizedState,
 };
 
-use super::SplitByCohort;
+use super::SplitByAddressCohort;
 
 #[derive(Deref, DerefMut, Default)]
-pub struct SplitRealizedStates(SplitByCohort<SplitByLiquidity<RealizedState>>);
+pub struct AddressCohortsRealizedStates(SplitByAddressCohort<SplitByLiquidity<RealizedState>>);
 
-impl SplitRealizedStates {
+impl AddressCohortsRealizedStates {
     pub fn iterate_realized(
         &mut self,
         realized_data: &AddressRealizedData,

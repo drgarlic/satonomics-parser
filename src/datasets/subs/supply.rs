@@ -2,6 +2,7 @@ use crate::{
     bitcoin::sats_to_btc,
     datasets::{AnyDataset, MinInitialState, ProcessedBlockData},
     parse::{AnyBiMap, AnyHeightMap, BiMap},
+    states::SupplyState,
 };
 
 pub struct SupplySubDataset {
@@ -55,24 +56,5 @@ impl AnyDataset for SupplySubDataset {
 
     fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         vec![&self.total]
-    }
-}
-
-// ---
-// STATE
-// ---
-
-#[derive(Debug, Default)]
-pub struct SupplyState {
-    pub supply: u64,
-}
-
-impl SupplyState {
-    pub fn increment(&mut self, amount: u64) {
-        self.supply += amount;
-    }
-
-    pub fn decrement(&mut self, amount: u64) {
-        self.supply -= amount;
     }
 }

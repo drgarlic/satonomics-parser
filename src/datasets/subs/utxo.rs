@@ -1,6 +1,7 @@
 use crate::{
     datasets::{AnyDataset, MinInitialState, ProcessedBlockData},
     parse::{AnyBiMap, AnyHeightMap, BiMap},
+    states::UTXOState,
 };
 
 pub struct UTXOSubDataset {
@@ -54,24 +55,5 @@ impl AnyDataset for UTXOSubDataset {
 
     fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         vec![&self.count]
-    }
-}
-
-// ---
-// STATE
-// ---
-
-#[derive(Debug, Default)]
-pub struct UTXOState {
-    pub count: usize,
-}
-
-impl UTXOState {
-    pub fn increment(&mut self, utxo_count: usize) {
-        self.count += utxo_count;
-    }
-
-    pub fn decrement(&mut self, utxo_count: usize) {
-        self.count -= utxo_count;
     }
 }

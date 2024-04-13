@@ -10,7 +10,7 @@ use std::{
 
 use itertools::Itertools;
 use ordered_float::{FloatCore, OrderedFloat};
-use parking_lot::Mutex;
+use parking_lot::RwLock;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
@@ -35,8 +35,8 @@ where
     initial_last_height: Option<usize>,
     initial_first_unsafe_height: Option<usize>,
 
-    imported: Mutex<BTreeMap<usize, BTreeMap<usize, T>>>,
-    to_insert: Mutex<BTreeMap<usize, BTreeMap<usize, T>>>,
+    imported: RwLock<BTreeMap<usize, BTreeMap<usize, T>>>,
+    to_insert: RwLock<BTreeMap<usize, BTreeMap<usize, T>>>,
 }
 
 impl<T> HeightMap<T>
@@ -94,15 +94,15 @@ where
             initial_first_unsafe_height: None,
             initial_last_height: None,
 
-            to_insert: Mutex::new(BTreeMap::default()),
-            imported: Mutex::new(BTreeMap::default()),
+            to_insert: RwLock::new(BTreeMap::default()),
+            imported: RwLock::new(BTreeMap::default()),
         };
 
         s.import_last();
 
         s.initial_last_height = s
             .imported
-            .lock()
+            .read()
             .values()
             .last()
             .and_then(|d| d.keys().cloned().max());
@@ -129,7 +129,7 @@ where
     pub fn insert(&self, height: usize, value: T) {
         if !self.is_height_safe(height) {
             self.to_insert
-                .lock()
+                .write()
                 .entry(Self::height_to_chunk_start(height))
                 .or_default()
                 .insert(height, value);
@@ -146,14 +146,14 @@ where
         let chunk_start = Self::height_to_chunk_start(*height);
 
         self.to_insert
-            .lock()
+            .read()
             .get(&chunk_start)
             .and_then(|tree| tree.get(height).cloned())
             .or_else(|| {
                 self.import_chunk_if_needed(*height);
 
                 self.imported
-                    .lock()
+                    .read()
                     .get(&chunk_start)
                     .and_then(|tree| tree.get(height))
                     .cloned()
@@ -202,11 +202,9 @@ where
         let chunk_start = Self::height_to_chunk_start(height);
 
         if let Some(path) = self.read_dir().get(&chunk_start) {
-            let mut imported = self.imported.lock();
-
-            if imported.get(&chunk_start).is_none() {
+            if self.imported.read().get(&chunk_start).is_none() {
                 if let Ok(map) = self._import(path) {
-                    imported.insert(chunk_start, map);
+                    self.imported.write().insert(chunk_start, map);
                 }
             }
         }
@@ -215,7 +213,7 @@ where
     fn import_last(&self) {
         if let Some((chunk_start, path)) = self.read_dir().into_iter().last() {
             if let Ok(map) = self._import(&path) {
-                self.imported.lock().insert(chunk_start, map);
+                self.imported.write().insert(chunk_start, map);
             }
         }
     }
@@ -256,19 +254,19 @@ where
     // fn import_tmp_data(&self) {
     //     // println!("import tmp {}", &self.path);
 
-    //     if !self.modified.lock().to_owned() {
+    //     if !self.modified.read().to_owned() {
     //         return;
     //     }
 
     //     if self.storage == Storage::Disk {
-    //         if self.imported.lock().is_some() {
+    //         if self.imported.read().is_some() {
     //             dbg!(&self.path);
     //             panic!("Probably forgot to drop inner after an export");
     //         }
 
     //         self.import_to_inner();
 
-    //         self.to_insert.lock().drain(..).for_each(|(height, value)| {
+    //         self.to_insert.read().drain(..).for_each(|(height, value)| {
     //             self.insert_to_inner(height, value);
     //         });
     //     }
@@ -288,14 +286,14 @@ where
         self.initial_last_height = None;
         self.initial_first_unsafe_height = None;
 
-        self.imported.lock().clear();
-        self.to_insert.lock().clear();
+        self.imported.write().clear();
+        self.to_insert.write().clear();
 
         Ok(())
     }
 
     fn export(&self) -> color_eyre::Result<()> {
-        let to_insert = mem::take(self.to_insert.lock().deref_mut());
+        let to_insert = mem::take(self.to_insert.write().deref_mut());
 
         match to_insert.iter().next() {
             Some(first_map_to_insert) => {
@@ -308,7 +306,7 @@ where
             None => return Ok(()),
         }
 
-        let mut imported = self.imported.lock();
+        let mut imported = self.imported.write();
 
         let len = imported.len();
 
@@ -339,7 +337,7 @@ where
     }
 
     fn clean(&self) {
-        let mut imported = self.imported.lock();
+        let mut imported = self.imported.write();
 
         let len = imported.len();
 
@@ -372,7 +370,8 @@ where
         + Send
         + savefile::Serialize
         + savefile::Deserialize
-        + savefile::ReprC,
+        + savefile::ReprC
+        + Sync,
 {
     #[inline(always)]
     fn get_initial_first_unsafe_height(&self) -> Option<usize> {
@@ -405,7 +404,7 @@ where
     //     T: Copy + Default,
     //     F: Fn((usize, &T, &[T])) -> T,
     // {
-    //     Self::_transform(self.inner.lock().as_ref().unwrap(), transform)
+    //     Self::_transform(self.inner.read().as_ref().unwrap(), transform)
     // }
 
     #[allow(unused)]
@@ -426,8 +425,8 @@ where
     //     T: Add<Output = T> + Copy + Default,
     // {
     //     Self::_add(
-    //         self.inner.lock().as_ref().unwrap(),
-    //         other.inner.lock().as_ref().unwrap(),
+    //         self.inner.read().as_ref().unwrap(),
+    //         other.inner.read().as_ref().unwrap(),
     //     )
     // }
 
@@ -447,8 +446,8 @@ where
     //     T: Sub<Output = T> + Copy + Default,
     // {
     //     Self::_subtract(
-    //         self.inner.lock().as_ref().unwrap(),
-    //         other.inner.lock().as_ref().unwrap(),
+    //         self.inner.read().as_ref().unwrap(),
+    //         other.inner.read().as_ref().unwrap(),
     //     )
     // }
 
@@ -468,8 +467,8 @@ where
     //     T: Mul<Output = T> + Copy + Default,
     // {
     //     Self::_multiply(
-    //         self.inner.lock().as_ref().unwrap(),
-    //         other.inner.lock().as_ref().unwrap(),
+    //         self.inner.read().as_ref().unwrap(),
+    //         other.inner.read().as_ref().unwrap(),
     //     )
     // }
 
@@ -489,8 +488,8 @@ where
     //     T: Div<Output = T> + Copy + Default,
     // {
     //     Self::_divide(
-    //         self.inner.lock().as_ref().unwrap(),
-    //         other.inner.lock().as_ref().unwrap(),
+    //         self.inner.read().as_ref().unwrap(),
+    //         other.inner.read().as_ref().unwrap(),
     //     )
     // }
 
@@ -517,7 +516,7 @@ where
     // where
     //     T: Sum + Copy + Default + AddAssign,
     // {
-    //     Self::_cumulate(self.inner.lock().as_ref().unwrap())
+    //     Self::_cumulate(self.inner.read().as_ref().unwrap())
     // }
 
     #[allow(unused)]
@@ -540,7 +539,7 @@ where
     // where
     //     T: Sum + Copy + Default + AddAssign + SubAssign,
     // {
-    //     Self::_last_x_sum(self.inner.lock().as_ref().unwrap(), x)
+    //     Self::_last_x_sum(self.inner.read().as_ref().unwrap(), x)
     // }
 
     #[allow(unused)]
@@ -571,7 +570,7 @@ where
     // where
     //     T: Sum + Copy + Default + AddAssign + SubAssign + ToF32,
     // {
-    //     Self::_moving_average(self.inner.lock().as_ref().unwrap(), x)
+    //     Self::_moving_average(self.inner.read().as_ref().unwrap(), x)
     // }
 
     #[allow(unused)]
@@ -600,7 +599,7 @@ where
     // where
     //     T: Copy + Default + Sub<Output = T>,
     // {
-    //     Self::_net_change(self.inner.lock().as_ref().unwrap(), offset)
+    //     Self::_net_change(self.inner.read().as_ref().unwrap(), offset)
     // }
 
     #[allow(unused)]
@@ -626,7 +625,7 @@ where
     // where
     //     T: FloatCore,
     // {
-    //     Self::_median(self.inner.lock().as_ref().unwrap(), size)
+    //     Self::_median(self.inner.read().as_ref().unwrap(), size)
     // }
 
     #[allow(unused)]

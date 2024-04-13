@@ -1,6 +1,7 @@
 use crate::{
     datasets::{AnyDataset, MinInitialState, ProcessedBlockData},
     parse::{AnyBiMap, AnyHeightMap, BiMap},
+    states::RealizedState,
 };
 
 /// TODO: Fix fees not taken into account ?
@@ -65,22 +66,5 @@ impl AnyDataset for RealizedSubDataset {
 
     fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         vec![&self.realized_loss, &self.realized_profit]
-    }
-}
-
-// ---
-// STATE
-// ---
-
-#[derive(Debug, Default)]
-pub struct RealizedState {
-    pub realized_profit: f32,
-    pub realized_loss: f32,
-}
-
-impl RealizedState {
-    pub fn iterate(&mut self, realized_profit: f32, realized_loss: f32) {
-        self.realized_profit += realized_profit;
-        self.realized_loss += realized_loss;
     }
 }

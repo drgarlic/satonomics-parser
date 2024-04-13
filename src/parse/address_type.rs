@@ -2,7 +2,7 @@ use savefile_derive::Savefile;
 
 // https://unchained.com/blog/bitcoin-address-types-compared/
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default, Savefile)]
-pub enum RawAddressType {
+pub enum AddressType {
     Empty,
     #[default]
     Unknown,

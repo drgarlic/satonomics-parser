@@ -1,16 +1,17 @@
 use std::thread;
 
-use crate::parse::{LiquiditySplitResult, SplitByLiquidity};
-
-use super::{OneShotStates, ProcessedAddressesState};
+use crate::{
+    parse::{LiquiditySplitResult, SplitByLiquidity},
+    states::{DurableStates, OneShotStates},
+};
 
 #[derive(Default)]
-pub struct LiquiditySplitProcessedAddressState {
+pub struct AddressCohortDurableStates {
     pub address_count: usize,
-    pub split: SplitByLiquidity<ProcessedAddressesState>,
+    pub split: SplitByLiquidity<DurableStates>,
 }
 
-impl LiquiditySplitProcessedAddressState {
+impl AddressCohortDurableStates {
     pub fn increment(
         &mut self,
         amount: u64,

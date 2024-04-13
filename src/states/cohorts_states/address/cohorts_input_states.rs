@@ -1,28 +1,28 @@
 use derive_deref::{Deref, DerefMut};
 
 use crate::{
-    datasets::OutputState,
     parse::{AddressRealizedData, LiquidityClassification, SplitByLiquidity},
+    states::InputState,
 };
 
-use super::SplitByCohort;
+use super::SplitByAddressCohort;
 
 #[derive(Deref, DerefMut, Default)]
-pub struct SplitOutputStates(SplitByCohort<SplitByLiquidity<OutputState>>);
+pub struct AddressCohortsInputStates(SplitByAddressCohort<SplitByLiquidity<InputState>>);
 
-impl SplitOutputStates {
-    pub fn iterate_output(
+impl AddressCohortsInputStates {
+    pub fn iterate_input(
         &mut self,
         realized_data: &AddressRealizedData,
         liquidity_classification: &LiquidityClassification,
     ) {
-        let count = realized_data.utxos_created as f32;
-        let volume = realized_data.received as f32;
+        let count = realized_data.utxos_destroyed as f32;
+        let volume = realized_data.sent as f32;
 
         let split_count = liquidity_classification.split(count);
         let split_volume = liquidity_classification.split(volume);
 
-        let iterate = move |state: &mut SplitByLiquidity<OutputState>| {
+        let iterate = move |state: &mut SplitByLiquidity<InputState>| {
             state.all.iterate(count, volume);
 
             state

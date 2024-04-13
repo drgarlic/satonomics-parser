@@ -1,6 +1,7 @@
 use crate::{
     datasets::{AnyDataset, MinInitialState, ProcessedBlockData},
     parse::{AnyBiMap, AnyHeightMap, BiMap},
+    states::OutputState,
 };
 
 pub struct OutputSubDataset {
@@ -60,22 +61,5 @@ impl AnyDataset for OutputSubDataset {
 
     fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         vec![&self.count, &self.volume]
-    }
-}
-
-// ---
-// STATE
-// ---
-
-#[derive(Debug, Default)]
-pub struct OutputState {
-    pub count: f32,
-    pub volume: f32,
-}
-
-impl OutputState {
-    pub fn iterate(&mut self, count: f32, volume: f32) {
-        self.count += count;
-        self.volume += volume;
     }
 }

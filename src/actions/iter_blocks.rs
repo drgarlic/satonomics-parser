@@ -92,13 +92,9 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
                             .map(|date_data| *date_data.date < current_block_date)
                             .unwrap_or(true)
                         {
-                            let index = states.date_data_vec.len() as u16;
-
-                            states.date_data_vec.push(DateData::new(
-                                index,
-                                current_block_date,
-                                vec![],
-                            ));
+                            states
+                                .date_data_vec
+                                .push(DateData::new(current_block_date, vec![]));
                         }
 
                         println!(

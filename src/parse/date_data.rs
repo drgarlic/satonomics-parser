@@ -1,4 +1,4 @@
-use chrono::{Datelike, NaiveDate};
+use chrono::NaiveDate;
 use savefile_derive::Savefile;
 
 use super::{BlockData, WNaiveDate};
@@ -6,23 +6,14 @@ use super::{BlockData, WNaiveDate};
 #[derive(Savefile, Debug)]
 pub struct DateData {
     pub date: WNaiveDate,
-    pub index: u16,
-    pub year: u16,
     pub blocks: Vec<BlockData>,
 }
 
 impl DateData {
-    pub fn new(index: u16, date: NaiveDate, blocks: Vec<BlockData>) -> Self {
+    pub fn new(date: NaiveDate, blocks: Vec<BlockData>) -> Self {
         Self {
-            index,
             date: WNaiveDate::wrap(date),
-            year: date.year() as u16,
             blocks,
         }
-    }
-
-    #[inline(always)]
-    pub fn reverse_index(&self, len: u16) -> u16 {
-        len - 1 - self.index
     }
 }

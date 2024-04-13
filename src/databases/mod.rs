@@ -1,20 +1,20 @@
 mod _trait;
 mod address_index_to_empty_address_data;
+mod address_to_address_index;
 mod metadata;
-mod raw_address_to_address_index;
 mod txid_to_tx_index;
 
 use std::thread;
 
 use _trait::*;
 pub use address_index_to_empty_address_data::*;
+pub use address_to_address_index::*;
 use metadata::*;
-pub use raw_address_to_address_index::*;
 pub use txid_to_tx_index::*;
 
 pub struct Databases {
     pub address_index_to_empty_address_data: AddressIndexToEmptyAddressData,
-    pub raw_address_to_address_index: RawAddressToAddressIndex,
+    pub address_to_address_index: AddressToAddressIndex,
     pub txid_to_tx_index: TxidToTxIndex,
 }
 
@@ -22,13 +22,13 @@ impl Databases {
     pub fn import() -> Self {
         let address_index_to_empty_address_data = AddressIndexToEmptyAddressData::import();
 
-        let raw_address_to_address_index = RawAddressToAddressIndex::import();
+        let address_to_address_index = AddressToAddressIndex::import();
 
         let txid_to_tx_index = TxidToTxIndex::import();
 
         Self {
             address_index_to_empty_address_data,
-            raw_address_to_address_index,
+            address_to_address_index,
             txid_to_tx_index,
         }
     }
@@ -39,12 +39,12 @@ impl Databases {
 
         thread::scope(|s| {
             s.spawn(|| self.address_index_to_empty_address_data.export());
-            s.spawn(|| self.raw_address_to_address_index.export());
+            s.spawn(|| self.address_to_address_index.export());
             s.spawn(|| self.txid_to_tx_index.export());
         });
 
         // self.address_index_to_empty_address_data.export()?;
-        // self.raw_address_to_address_index.export()?;
+        // self.address_to_address_index.export()?;
         // self.txid_to_tx_index.export()?;
 
         Ok(())
@@ -53,7 +53,7 @@ impl Databases {
     pub fn reset(&mut self, include_addresses: bool) {
         if include_addresses {
             let _ = self.address_index_to_empty_address_data.reset();
-            let _ = self.raw_address_to_address_index.reset();
+            let _ = self.address_to_address_index.reset();
         }
 
         let _ = self.txid_to_tx_index.reset();

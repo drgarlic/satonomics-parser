@@ -11,7 +11,7 @@ use std::{
 use chrono::{Datelike, Days, NaiveDate};
 use itertools::Itertools;
 use ordered_float::{FloatCore, OrderedFloat};
-use parking_lot::Mutex;
+use parking_lot::RwLock;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
@@ -40,8 +40,8 @@ pub struct DateMap<T> {
     initial_last_date: Option<NaiveDate>,
     initial_first_unsafe_date: Option<NaiveDate>,
 
-    imported: Mutex<BTreeMap<usize, BTreeMap<WNaiveDate, T>>>,
-    to_insert: Mutex<BTreeMap<usize, BTreeMap<WNaiveDate, T>>>,
+    imported: RwLock<BTreeMap<usize, BTreeMap<WNaiveDate, T>>>,
+    to_insert: RwLock<BTreeMap<usize, BTreeMap<WNaiveDate, T>>>,
 }
 
 impl<T> DateMap<T>
@@ -99,15 +99,15 @@ where
             initial_last_date: None,
             initial_first_unsafe_date: None,
 
-            to_insert: Mutex::new(BTreeMap::default()),
-            imported: Mutex::new(BTreeMap::default()),
+            to_insert: RwLock::new(BTreeMap::default()),
+            imported: RwLock::new(BTreeMap::default()),
         };
 
         s.import_last();
 
         s.initial_last_date = s
             .imported
-            .lock()
+            .read()
             .values()
             .last()
             .and_then(|d| d.keys().map(|date| **date).max());
@@ -123,7 +123,7 @@ where
     pub fn insert(&self, date: NaiveDate, value: T) {
         if !self.is_date_safe(date) {
             self.to_insert
-                .lock()
+                .write()
                 .entry(date.year() as usize)
                 .or_default()
                 .insert(WNaiveDate::wrap(date), value);
@@ -141,14 +141,14 @@ where
         let year = date.year() as usize;
 
         self.to_insert
-            .lock()
+            .read()
             .get(&year)
             .and_then(|tree| tree.get(date).cloned())
             .or_else(|| {
                 self.import_year_if_needed(year);
 
                 self.imported
-                    .lock()
+                    .read()
                     .get(&year)
                     .and_then(|tree| tree.get(date))
                     .cloned()
@@ -236,11 +236,9 @@ where
 
     fn import_year_if_needed(&self, year: usize) {
         if let Some(path) = self.read_dir().get(&year) {
-            let mut imported = self.imported.lock();
-
-            if imported.get(&year).is_none() {
+            if self.imported.read().get(&year).is_none() {
                 if let Ok(map) = self._import(path) {
-                    imported.insert(year, map);
+                    self.imported.write().insert(year, map);
                 }
             }
         }
@@ -249,7 +247,7 @@ where
     fn import_last(&self) {
         if let Some((year, path)) = self.read_dir().into_iter().last() {
             if let Ok(map) = self._import(&path) {
-                self.imported.lock().insert(year, map);
+                self.imported.write().insert(year, map);
             }
         }
     }
@@ -350,14 +348,14 @@ where
         self.initial_last_date = None;
         self.initial_first_unsafe_date = None;
 
-        self.imported.lock().clear();
-        self.to_insert.lock().clear();
+        self.imported.write().clear();
+        self.to_insert.write().clear();
 
         Ok(())
     }
 
     fn export(&self) -> color_eyre::Result<()> {
-        let to_insert = mem::take(self.to_insert.lock().deref_mut());
+        let to_insert = mem::take(self.to_insert.write().deref_mut());
 
         match to_insert.iter().next() {
             Some(first_map_to_insert) => {
@@ -376,7 +374,7 @@ where
             None => return Ok(()),
         }
 
-        let mut imported = self.imported.lock();
+        let mut imported = self.imported.write();
 
         let len = imported.len();
 
@@ -405,7 +403,7 @@ where
     }
 
     fn clean(&self) {
-        let mut imported = self.imported.lock();
+        let mut imported = self.imported.write();
 
         let len = imported.len();
 

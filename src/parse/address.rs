@@ -7,10 +7,10 @@ use crate::{
     parse::{U8x19, U8x31, SANAKIRJA_MAX_KEY_SIZE},
 };
 
-use super::{Counter, RawAddressType};
+use super::{AddressType, Counter};
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Ord, Eq)]
-pub enum RawAddress {
+pub enum Address {
     // https://mempool.space/tx/7bd54def72825008b4ca0f4aeff13e6be2c5fe0f23430629a9d484a1ac2a29b8
     Empty(u32),
     Unknown(u32),
@@ -24,18 +24,18 @@ pub enum RawAddress {
     P2TR((u16, U8x31)),
 }
 
-impl RawAddress {
-    pub fn to_type(&self) -> RawAddressType {
+impl Address {
+    pub fn to_type(&self) -> AddressType {
         match self {
-            Self::Empty(_) => RawAddressType::Empty,
-            Self::Unknown(_) => RawAddressType::Unknown,
-            Self::MultiSig(_) => RawAddressType::MultiSig,
-            Self::P2PK(_) => RawAddressType::P2PK,
-            Self::P2PKH(_) => RawAddressType::P2PKH,
-            Self::P2SH(_) => RawAddressType::P2SH,
-            Self::P2WPKH(_) => RawAddressType::P2WPKH,
-            Self::P2WSH(_) => RawAddressType::P2WSH,
-            Self::P2TR(_) => RawAddressType::P2TR,
+            Self::Empty(_) => AddressType::Empty,
+            Self::Unknown(_) => AddressType::Unknown,
+            Self::MultiSig(_) => AddressType::MultiSig,
+            Self::P2PK(_) => AddressType::P2PK,
+            Self::P2PKH(_) => AddressType::P2PKH,
+            Self::P2SH(_) => AddressType::P2SH,
+            Self::P2WPKH(_) => AddressType::P2WPKH,
+            Self::P2WSH(_) => AddressType::P2WSH,
+            Self::P2TR(_) => AddressType::P2TR,
         }
     }
 
@@ -110,7 +110,7 @@ impl RawAddress {
         }
     }
 
-    fn new_unknown(unknown_addresses: &mut Counter) -> RawAddress {
+    fn new_unknown(unknown_addresses: &mut Counter) -> Address {
         let index = unknown_addresses.inner();
         unknown_addresses.increment();
         Self::Unknown(index)

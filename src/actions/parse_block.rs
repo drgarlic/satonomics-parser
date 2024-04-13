@@ -7,20 +7,20 @@ use std::{
 use bitcoin::Block;
 use chrono::NaiveDate;
 use itertools::Itertools;
-use ordered_float::OrderedFloat;
 use rayon::prelude::*;
 
 use crate::{
     bitcoin::BitcoinDB,
-    databases::{
-        AddressIndexToEmptyAddressData, Databases, RawAddressToAddressIndex, TxidToTxIndex,
-    },
+    databases::{AddressIndexToEmptyAddressData, AddressToAddressIndex, Databases, TxidToTxIndex},
     datasets::{AllDatasets, AnyDatasets, ProcessedBlockData},
     parse::{
-        AddressData, AddressRealizedData, BlockData, BlockPath, Counter, EmptyAddressData,
-        PartialTxoutData, RawAddress, TxData, TxoutIndex,
+        Address, AddressData, AddressRealizedData, BlockData, BlockPath, Counter, EmptyAddressData,
+        PartialTxoutData, TxData, TxoutIndex,
     },
-    states::{SplitInputStates, SplitOutputStates, SplitRealizedStates, States},
+    states::{
+        AddressCohortsInputStates, AddressCohortsOutputStates, AddressCohortsRealizedStates,
+        States, UTXOCohortsOneShotStates, UTXOCohortsReceivedStates, UTXOCohortsSentStates,
+    },
 };
 
 pub struct ParseData<'a> {
@@ -108,13 +108,7 @@ pub fn parse_block(
         .last_mut()
         .unwrap()
         .blocks
-        .push(BlockData::new(height as u32, block_price));
-
-    states
-        .price_to_block_path
-        .entry(OrderedFloat(block_price))
-        .or_default()
-        .push(block_path.to_owned());
+        .push(BlockData::new(height as u32, block_price, timestamp));
 
     let mut block_path_to_spent_data: BTreeMap<BlockPath, SpentData> = BTreeMap::new();
     let mut block_path_to_received_data: BTreeMap<BlockPath, ReceivedData> = BTreeMap::new();
@@ -149,7 +143,7 @@ pub fn parse_block(
                 compute_addresses,
                 &mut states.counters.unknown_addresses,
                 &mut states.counters.empty_addresses,
-                &mut databases.raw_address_to_address_index,
+                &mut databases.address_to_address_index,
             );
 
             let empty_address_index_to_empty_address_data =
@@ -221,7 +215,7 @@ pub fn parse_block(
                 let txout_index = TxoutIndex::new(tx_index, vout as u16);
 
                 let PartialTxoutData {
-                    raw_address,
+                    address,
                     address_index_opt,
                     sats,
                 } = partial_txout_data;
@@ -232,13 +226,13 @@ pub fn parse_block(
                 states.txout_index_to_sats.insert(txout_index, sats);
 
                 if compute_addresses {
-                    let raw_address = raw_address.unwrap();
+                    let address = address.unwrap();
 
                     let (address_data, address_index) = {
                         if let Some(address_index) = address_index_opt.or_else(|| {
                             databases
-                                .raw_address_to_address_index
-                                .unsafe_get_from_puts(&raw_address)
+                                .address_to_address_index
+                                .unsafe_get_from_puts(&address)
                                 .cloned()
                         }) {
                             if let Some(address_data) =
@@ -290,17 +284,17 @@ pub fn parse_block(
                             }
                         } else {
                             let addresses_counters =
-                                &mut databases.raw_address_to_address_index.metadata.len;
+                                &mut databases.address_to_address_index.metadata.len;
 
                             let address_index = addresses_counters.inner();
 
                             addresses_counters.increment();
 
-                            let address_type = raw_address.to_type();
+                            let address_type = address.to_type();
 
                             if let Some(previous) = databases
-                                .raw_address_to_address_index
-                                .insert(raw_address, address_index)
+                                .address_to_address_index
+                                .insert(address, address_index)
                             {
                                 dbg!(previous);
                                 panic!("address #{address_index} shouldn't be present during put");
@@ -541,66 +535,122 @@ pub fn parse_block(
         ControlFlow::Continue(())
     });
 
-    let mut split_realized_states = None;
-    let mut split_one_shot_states = None;
-    let mut split_input_states = None;
-    let mut split_output_states = None;
+    let mut utxo_cohorts_sent_states = UTXOCohortsSentStates::default();
+    let mut utxo_cohorts_one_shot_states = UTXOCohortsOneShotStates::default();
+    let mut utxo_cohorts_received_states = UTXOCohortsReceivedStates::default();
 
-    if compute_addresses {
-        split_realized_states.replace(SplitRealizedStates::default());
-        split_input_states.replace(SplitInputStates::default());
-        split_output_states.replace(SplitOutputStates::default());
+    let mut address_cohorts_input_states = None;
+    let mut address_cohorts_one_shot_states = None;
+    let mut address_cohorts_output_states = None;
+    let mut address_cohorts_realized_states = None;
 
-        let processed_addresses_split_states = &mut states.split_address;
+    thread::scope(|scope| {
+        scope.spawn(|| {
+            if let Some(last_date_data) = states.date_data_vec.last() {
+                let last_block_data = last_date_data.blocks.last().unwrap();
+                let previous_last_block_data = states
+                    .date_data_vec
+                    .iter()
+                    .flat_map(|date_data| &date_data.blocks)
+                    .rev()
+                    .nth(1);
 
-        address_index_to_address_realized_data.iter().for_each(
-            |(address_index, address_realized_data)| {
-                let current_address_data = states
-                    .address_index_to_address_data
-                    .get(address_index)
-                    .unwrap_or_else(|| {
-                        address_index_to_removed_address_data
+                states.date_data_vec.iter().for_each(|date_data| {
+                    date_data.blocks.iter().for_each(|block_data| {
+                        states.utxo_cohorts_durable_states.iterate(
+                            block_data,
+                            last_block_data,
+                            previous_last_block_data,
+                        );
+                    })
+                });
+            }
+
+            utxo_cohorts_one_shot_states =
+                states.utxo_cohorts_durable_states.compute_one_shot_states(
+                    block_price,
+                    if is_date_last_block {
+                        Some(date_price)
+                    } else {
+                        None
+                    },
+                );
+
+            utxo_cohorts_received_states
+                .compute(&states.date_data_vec, &block_path_to_received_data);
+
+            utxo_cohorts_sent_states.compute(
+                &states.date_data_vec,
+                &block_path_to_spent_data,
+                block_price,
+            );
+        });
+
+        if compute_addresses {
+            scope.spawn(|| {
+                address_cohorts_realized_states.replace(AddressCohortsRealizedStates::default());
+                address_cohorts_input_states.replace(AddressCohortsInputStates::default());
+                address_cohorts_output_states.replace(AddressCohortsOutputStates::default());
+
+                address_index_to_address_realized_data.iter().for_each(
+                    |(address_index, address_realized_data)| {
+                        let current_address_data = states
+                            .address_index_to_address_data
                             .get(address_index)
+                            .unwrap_or_else(|| {
+                                address_index_to_removed_address_data
+                                    .get(address_index)
+                                    .unwrap()
+                            });
+
+                        states
+                            .address_cohorts_durable_states
+                            .iterate(address_realized_data, current_address_data);
+
+                        // Realized == previous amount
+                        // If a whale sent all its sats to another address at a loss, it's the whale that realized the loss not the empty adress
+                        let liquidity_classification = address_realized_data
+                            .initial_address_data
+                            .compute_liquidity_classification();
+
+                        address_cohorts_realized_states
+                            .as_mut()
                             .unwrap()
-                    });
+                            .iterate_realized(address_realized_data, &liquidity_classification);
 
-                processed_addresses_split_states
-                    .iterate(address_realized_data, current_address_data);
+                        address_cohorts_input_states
+                            .as_mut()
+                            .unwrap()
+                            .iterate_input(address_realized_data, &liquidity_classification);
 
-                // Realized == previous amount
-                // If a whale sent all its sats to another address at a loss, it's the whale that realized the loss not the empty adress
-                let liquidity_classification = address_realized_data
-                    .initial_address_data
-                    .compute_liquidity_classification();
+                        address_cohorts_output_states
+                            .as_mut()
+                            .unwrap()
+                            .iterate_output(address_realized_data, &liquidity_classification);
+                    },
+                );
 
-                split_realized_states
-                    .as_mut()
-                    .unwrap()
-                    .iterate_realized(address_realized_data, &liquidity_classification);
-
-                split_input_states
-                    .as_mut()
-                    .unwrap()
-                    .iterate_input(address_realized_data, &liquidity_classification);
-
-                split_output_states
-                    .as_mut()
-                    .unwrap()
-                    .iterate_output(address_realized_data, &liquidity_classification);
-            },
-        );
-
-        split_one_shot_states.replace(processed_addresses_split_states.compute_one_shot_states(
-            block_price,
-            if is_date_last_block {
-                Some(date_price)
-            } else {
-                None
-            },
-        ));
-    }
+                address_cohorts_one_shot_states.replace(
+                    states
+                        .address_cohorts_durable_states
+                        .compute_one_shot_states(
+                            block_price,
+                            if is_date_last_block {
+                                Some(date_price)
+                            } else {
+                                None
+                            },
+                        ),
+                );
+            });
+        }
+    });
 
     datasets.insert_block_data(ProcessedBlockData {
+        address_cohorts_input_states: &address_cohorts_input_states,
+        address_cohorts_one_shot_states: &address_cohorts_one_shot_states,
+        address_cohorts_output_states: &address_cohorts_output_states,
+        address_cohorts_realized_states: &address_cohorts_realized_states,
         address_index_to_address_realized_data: &address_index_to_address_realized_data,
         address_index_to_removed_address_data: &address_index_to_removed_address_data,
         block_path_to_received_data: &block_path_to_received_data,
@@ -609,21 +659,20 @@ pub fn parse_block(
         coinbase,
         databases,
         date,
+        date_first_height: first_date_height,
         date_price,
         fees: &fees,
-        date_first_height: first_date_height,
         height,
         is_date_last_block,
         satblocks_destroyed,
         satdays_destroyed,
         sats_sent,
-        split_input_states: &split_input_states,
-        split_output_states: &split_output_states,
-        split_one_shot_states: &split_one_shot_states,
-        split_realized_states: &split_realized_states,
         states,
         timestamp,
         transaction_count,
+        utxo_cohorts_one_shot_states: &utxo_cohorts_one_shot_states,
+        utxo_cohorts_received_states: &utxo_cohorts_received_states,
+        utxo_cohorts_sent_states: &utxo_cohorts_sent_states,
     });
 }
 
@@ -638,7 +687,7 @@ fn parse_txouts(
     compute_addresses: bool,
     unknown_addresses: &mut Counter,
     empty_addresses: &mut Counter,
-    raw_address_to_address_index: &mut RawAddressToAddressIndex,
+    address_to_address_index: &mut AddressToAddressIndex,
 ) -> TxoutsParsingResults {
     let mut provably_unspendable = 0;
     let mut op_returns = 0;
@@ -672,27 +721,27 @@ fn parse_txouts(
                 return None;
             }
 
-            let raw_address_opt = {
+            let address_opt = {
                 if compute_addresses {
-                    let raw_address = RawAddress::from(txout, unknown_addresses, empty_addresses);
+                    let address = Address::from(txout, unknown_addresses, empty_addresses);
 
-                    raw_address_to_address_index.open_db(&raw_address);
+                    address_to_address_index.open_db(&address);
 
-                    Some(raw_address)
+                    Some(address)
                 } else {
                     None
                 }
             };
 
-            Some(PartialTxoutData::new(raw_address_opt, value, None))
+            Some(PartialTxoutData::new(address_opt, value, None))
         })
         .collect_vec();
 
     if compute_addresses {
         partial_txout_data_vec.par_iter_mut().for_each(|opt| {
             if let Some(partial_tx_out_data) = opt {
-                partial_tx_out_data.address_index_opt = raw_address_to_address_index
-                    .unsafe_get(partial_tx_out_data.raw_address.as_ref().unwrap())
+                partial_tx_out_data.address_index_opt = address_to_address_index
+                    .unsafe_get(partial_tx_out_data.address.as_ref().unwrap())
                     .cloned();
             }
         });

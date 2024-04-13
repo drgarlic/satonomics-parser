@@ -2,14 +2,14 @@ use std::collections::BTreeMap;
 
 use derive_deref::{Deref, DerefMut};
 
-use crate::{bitcoin::sats_to_btc, datasets::UnrealizedState};
+use crate::bitcoin::sats_to_btc;
 
-use super::OneShotStates;
+use super::{OneShotStates, UnrealizedState};
 
 #[derive(Deref, DerefMut, Default, Debug)]
-pub struct MeanPricePaidInCentsToAmount(BTreeMap<u64, u64>);
+pub struct PriceInCentsToAmount(BTreeMap<u64, u64>);
 
-impl MeanPricePaidInCentsToAmount {
+impl PriceInCentsToAmount {
     pub fn increment(&mut self, mean_price_paid_in_cents: u64, amount: u64) {
         *self.entry(mean_price_paid_in_cents).or_default() += amount;
     }

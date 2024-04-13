@@ -35,7 +35,7 @@ impl GenericDataset for AllAddressesMetadataDataset {
 
         self.total_addresses_created
             .height
-            .insert(height, *databases.raw_address_to_address_index.metadata.len);
+            .insert(height, *databases.address_to_address_index.metadata.len);
 
         self.total_empty_addresses.height.insert(
             height,

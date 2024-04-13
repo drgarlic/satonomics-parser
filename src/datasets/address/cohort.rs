@@ -1,14 +1,13 @@
 use chrono::NaiveDate;
 use itertools::Itertools;
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use crate::{
     datasets::{
         AnyDataset, AnyDatasetGroup, GenericDataset, MinInitialState, ProcessedBlockData,
         SubDataset,
     },
-    parse::{AnyBiMap, AnyDateMap, AnyHeightMap, RawAddressSplit},
-    states::LiquiditySplitProcessedAddressState,
+    parse::{AddressSplit, AnyBiMap, AnyDateMap, AnyHeightMap},
+    states::AddressCohortDurableStates,
 };
 
 use super::cohort_metadata::MetadataDataset;
@@ -16,7 +15,7 @@ use super::cohort_metadata::MetadataDataset;
 pub struct CohortDataset {
     min_initial_state: MinInitialState,
 
-    split: RawAddressSplit,
+    split: AddressSplit,
 
     metadata: MetadataDataset,
 
@@ -30,7 +29,7 @@ impl CohortDataset {
     pub fn import(
         parent_path: &str,
         name: Option<&str>,
-        split: RawAddressSplit,
+        split: AddressSplit,
     ) -> color_eyre::Result<Self> {
         let folder_path = {
             if let Some(name) = name {
@@ -117,7 +116,7 @@ impl CohortDataset {
 
     fn insert_realized_data(&self, processed_block_data: &ProcessedBlockData) {
         let split_realized_state = processed_block_data
-            .split_realized_states
+            .address_cohorts_realized_states
             .as_ref()
             .unwrap()
             .get_state(&self.split)
@@ -151,7 +150,7 @@ impl CohortDataset {
         }: &ProcessedBlockData,
     ) {
         let address_count = states
-            .split_address
+            .address_cohorts_durable_states
             .get_state(&self.split)
             .unwrap()
             .address_count;
@@ -169,7 +168,7 @@ impl CohortDataset {
     fn insert_supply_data(
         &self,
         processed_block_data: &ProcessedBlockData,
-        liquidity_split_state: &LiquiditySplitProcessedAddressState,
+        liquidity_split_state: &AddressCohortDurableStates,
     ) {
         self.all.supply.insert(
             processed_block_data,
@@ -195,7 +194,7 @@ impl CohortDataset {
     fn insert_utxo_data(
         &self,
         processed_block_data: &ProcessedBlockData,
-        liquidity_split_state: &LiquiditySplitProcessedAddressState,
+        liquidity_split_state: &AddressCohortDurableStates,
     ) {
         self.all.utxo.insert(
             processed_block_data,
@@ -220,7 +219,7 @@ impl CohortDataset {
 
     fn insert_unrealized_data(&self, processed_block_data: &ProcessedBlockData) {
         let states = processed_block_data
-            .split_one_shot_states
+            .address_cohorts_one_shot_states
             .as_ref()
             .unwrap()
             .get_state(&self.split)
@@ -253,7 +252,7 @@ impl CohortDataset {
 
     fn insert_price_paid_data(&self, processed_block_data: &ProcessedBlockData) {
         let states = processed_block_data
-            .split_one_shot_states
+            .address_cohorts_one_shot_states
             .as_ref()
             .unwrap()
             .get_state(&self.split)
@@ -262,31 +261,51 @@ impl CohortDataset {
         self.all.price_paid.insert(
             processed_block_data,
             &states.all.price_paid_state,
-            &self.all.supply.total,
+            self.all
+                .supply
+                .total
+                .height
+                .get(&processed_block_data.height)
+                .unwrap(),
         );
 
         self.illiquid.price_paid.insert(
             processed_block_data,
             &states.illiquid.price_paid_state,
-            &self.illiquid.supply.total,
+            self.illiquid
+                .supply
+                .total
+                .height
+                .get(&processed_block_data.height)
+                .unwrap(),
         );
 
         self.liquid.price_paid.insert(
             processed_block_data,
             &states.liquid.price_paid_state,
-            &self.liquid.supply.total,
+            self.liquid
+                .supply
+                .total
+                .height
+                .get(&processed_block_data.height)
+                .unwrap(),
         );
 
         self.highly_liquid.price_paid.insert(
             processed_block_data,
             &states.highly_liquid.price_paid_state,
-            &self.highly_liquid.supply.total,
+            self.highly_liquid
+                .supply
+                .total
+                .height
+                .get(&processed_block_data.height)
+                .unwrap(),
         );
     }
 
     fn insert_input_data(&self, processed_block_data: &ProcessedBlockData) {
         let state = processed_block_data
-            .split_input_states
+            .address_cohorts_input_states
             .as_ref()
             .unwrap()
             .get_state(&self.split)
@@ -306,7 +325,7 @@ impl CohortDataset {
 
     fn insert_output_data(&self, processed_block_data: &ProcessedBlockData) {
         let state = processed_block_data
-            .split_output_states
+            .address_cohorts_output_states
             .as_ref()
             .unwrap()
             .get_state(&self.split)
@@ -353,7 +372,7 @@ impl GenericDataset for CohortDataset {
 
         let liquidity_split_processed_address_state = processed_block_data
             .states
-            .split_address
+            .address_cohorts_durable_states
             .get_state(&self.split);
 
         if liquidity_split_processed_address_state.is_none() {
