@@ -18,14 +18,15 @@ impl PriceDatasets {
     pub fn import() -> color_eyre::Result<Self> {
         let path = "./price";
 
-        let s = Self {
+        let mut s = Self {
             min_initial_state: MinInitialState::default(),
 
             date: DateDataset::import(path)?,
             height: HeightDataset::import(path)?,
         };
 
-        s.min_initial_state.compute_from_datasets(&s);
+        s.min_initial_state
+            .eat(MinInitialState::compute_from_datasets(&s));
 
         Ok(s)
     }

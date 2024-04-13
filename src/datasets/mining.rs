@@ -28,7 +28,7 @@ impl MiningDataset {
     pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
         let f = |s: &str| format!("{parent_path}/{s}");
 
-        let s = Self {
+        let mut s = Self {
             min_initial_state: MinInitialState::default(),
 
             blocks_mined: DateMap::new_bin(&f("blocks_mined")),
@@ -48,7 +48,8 @@ impl MiningDataset {
             blocks_mined_1m_sma: DateMap::new_bin(&f("blocks_mined_1m_sma")),
         };
 
-        s.min_initial_state.compute_from_dataset(&s);
+        s.min_initial_state
+            .eat(MinInitialState::compute_from_dataset(&s));
 
         Ok(s)
     }

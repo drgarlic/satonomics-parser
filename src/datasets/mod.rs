@@ -127,7 +127,7 @@ impl AllDatasets {
 
             let price_handle = PriceDatasets::import()?;
 
-            let s = Self {
+            let mut s = Self {
                 min_initial_state: MinInitialState::default(),
 
                 address,
@@ -141,7 +141,8 @@ impl AllDatasets {
                 transaction: transaction_handle.join().unwrap()?,
             };
 
-            s.min_initial_state.compute_from_datasets(&s);
+            s.min_initial_state
+                .eat(MinInitialState::compute_from_datasets(&s));
 
             s.export_path_to_type()?;
 

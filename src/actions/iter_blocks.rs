@@ -26,7 +26,6 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
         .address
         .get_min_initial_state()
         .first_unsafe_date
-        .lock()
         .as_ref()
         .cloned();
 
@@ -34,7 +33,6 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
         .address
         .get_min_initial_state()
         .first_unsafe_height
-        .lock()
         .as_ref()
         .cloned();
 

@@ -51,7 +51,7 @@ pub enum UTXOCohortId {
 }
 
 impl UTXOCohortId {
-    pub fn str(&self) -> &str {
+    pub fn name(&self) -> &str {
         match self {
             UTXOCohortId::UpTo1d => "up_to_1d",
             UTXOCohortId::UpTo1w => "up_to_1w",

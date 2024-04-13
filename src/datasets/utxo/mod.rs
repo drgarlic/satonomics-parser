@@ -115,7 +115,7 @@ impl UTXODatasets {
 
             let lth = UTXODataset::import(parent_path, UTXOCohortId::LongTermHolders)?;
 
-            let s = Self {
+            let mut s = Self {
                 min_initial_state: MinInitialState::default(),
 
                 cohorts: SplitByUTXOCohort {
@@ -170,7 +170,8 @@ impl UTXODatasets {
                 },
             };
 
-            s.min_initial_state.compute_from_datasets(&s);
+            s.min_initial_state
+                .eat(MinInitialState::compute_from_datasets(&s));
 
             Ok(s)
         })

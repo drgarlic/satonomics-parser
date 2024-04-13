@@ -19,7 +19,6 @@ pub trait AnyDataset {
             && self
                 .get_min_initial_state()
                 .first_unsafe_height
-                .lock()
                 .unwrap_or(0)
                 <= height
     }
@@ -30,7 +29,6 @@ pub trait AnyDataset {
             && self
                 .get_min_initial_state()
                 .first_unsafe_date
-                .lock()
                 .map_or(true, |min_initial_first_unsafe_date| {
                     min_initial_first_unsafe_date <= date
                 })

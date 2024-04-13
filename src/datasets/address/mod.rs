@@ -139,7 +139,7 @@ impl AddressDatasets {
                 AddressSplit::Type(AddressType::P2TR),
             )?;
 
-            let s = Self {
+            let mut s = Self {
                 min_initial_state: MinInitialState::default(),
 
                 metadata: AllAddressesMetadataDataset::import(parent_path)?,
@@ -163,7 +163,8 @@ impl AddressDatasets {
                 p2tr,
             };
 
-            s.min_initial_state.compute_from_datasets(&s);
+            s.min_initial_state
+                .eat(MinInitialState::compute_from_datasets(&s));
 
             Ok(s)
         })

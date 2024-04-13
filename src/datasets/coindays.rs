@@ -16,13 +16,14 @@ impl CoindaysDataset {
     pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
         let f = |s: &str| format!("{parent_path}/{s}");
 
-        let s = Self {
+        let mut s = Self {
             min_initial_state: MinInitialState::default(),
 
             destroyed: BiMap::new_bin(&f("coindays_destroyed")),
         };
 
-        s.min_initial_state.compute_from_dataset(&s);
+        s.min_initial_state
+            .eat(MinInitialState::compute_from_dataset(&s));
 
         Ok(s)
     }

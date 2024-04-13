@@ -47,7 +47,7 @@ impl CohortDataset {
             }
         };
 
-        let s = Self {
+        let mut s = Self {
             min_initial_state: MinInitialState::default(),
 
             split,
@@ -59,7 +59,8 @@ impl CohortDataset {
             highly_liquid: SubDataset::import(&f("highly_liquid"))?,
         };
 
-        s.min_initial_state.compute_from_dataset(&s);
+        s.min_initial_state
+            .eat(MinInitialState::compute_from_dataset(&s));
 
         Ok(s)
     }

@@ -16,14 +16,15 @@ impl DateMetadataDataset {
     pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
         let f = |s: &str| format!("{parent_path}/{s}");
 
-        let s = Self {
+        let mut s = Self {
             min_initial_state: MinInitialState::default(),
 
             first_height: DateMap::new_bin(&f("first_height")),
             last_height: DateMap::new_bin(&f("last_height")),
         };
 
-        s.min_initial_state.compute_from_dataset(&s);
+        s.min_initial_state
+            .eat(MinInitialState::compute_from_dataset(&s));
 
         Ok(s)
     }

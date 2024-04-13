@@ -1,27 +1,32 @@
 use chrono::NaiveDate;
-use parking_lot::Mutex;
 
 use super::{AnyDataset, AnyDatasets};
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct MinInitialState {
-    pub first_unsafe_date: Mutex<Option<NaiveDate>>,
-    pub first_unsafe_height: Mutex<Option<usize>>,
-    pub last_date: Mutex<Option<NaiveDate>>,
-    pub last_height: Mutex<Option<usize>>,
+    pub first_unsafe_date: Option<NaiveDate>,
+    pub first_unsafe_height: Option<usize>,
+    pub last_date: Option<NaiveDate>,
+    pub last_height: Option<usize>,
 }
 
 impl MinInitialState {
-    pub fn compute_from_datasets(&self, datasets: &dyn AnyDatasets) {
-        *self.first_unsafe_date.lock() =
-            Self::compute_min_initial_first_unsafe_date_from_datasets(datasets);
+    pub fn eat(&mut self, other: Self) {
+        self.first_unsafe_date = other.first_unsafe_date;
+        self.first_unsafe_height = other.first_unsafe_height;
+        self.last_date = other.last_date;
+        self.last_height = other.last_height;
+    }
 
-        *self.first_unsafe_height.lock() =
-            Self::compute_min_initial_first_unsafe_height_from_datasets(datasets);
-
-        *self.last_date.lock() = Self::compute_min_initial_last_date_from_datasets(datasets);
-
-        *self.last_height.lock() = Self::compute_min_initial_last_height_from_datasets(datasets);
+    pub fn compute_from_datasets(datasets: &dyn AnyDatasets) -> Self {
+        Self {
+            first_unsafe_date: Self::compute_min_initial_first_unsafe_date_from_datasets(datasets),
+            first_unsafe_height: Self::compute_min_initial_first_unsafe_height_from_datasets(
+                datasets,
+            ),
+            last_date: Self::compute_min_initial_last_date_from_datasets(datasets),
+            last_height: Self::compute_min_initial_last_height_from_datasets(datasets),
+        }
     }
 
     fn compute_min_initial_last_date_from_datasets(
@@ -31,14 +36,7 @@ impl MinInitialState {
             .to_generic_dataset_vec()
             .iter()
             .filter(|dataset| !dataset.to_any_inserted_date_map_vec().is_empty())
-            .map(|dataset| {
-                dataset
-                    .get_min_initial_state()
-                    .last_date
-                    .lock()
-                    .as_ref()
-                    .cloned()
-            })
+            .map(|dataset| dataset.get_min_initial_state().last_date.as_ref().cloned())
             .min()
             .and_then(|opt| opt)
     }
@@ -52,7 +50,6 @@ impl MinInitialState {
                 dataset
                     .get_min_initial_state()
                     .last_height
-                    .lock()
                     .as_ref()
                     .cloned()
             })
@@ -71,7 +68,6 @@ impl MinInitialState {
                 dataset
                     .get_min_initial_state()
                     .first_unsafe_date
-                    .lock()
                     .as_ref()
                     .cloned()
             })
@@ -90,7 +86,6 @@ impl MinInitialState {
                 dataset
                     .get_min_initial_state()
                     .first_unsafe_height
-                    .lock()
                     .as_ref()
                     .cloned()
             })
@@ -98,16 +93,15 @@ impl MinInitialState {
             .and_then(|opt| opt)
     }
 
-    pub fn compute_from_dataset(&self, dataset: &dyn AnyDataset) {
-        *self.first_unsafe_date.lock() =
-            Self::compute_min_initial_first_unsafe_date_from_dataset(dataset);
-
-        *self.first_unsafe_height.lock() =
-            Self::compute_min_initial_first_unsafe_height_from_dataset(dataset);
-
-        *self.last_date.lock() = Self::compute_min_initial_last_date_from_dataset(dataset);
-
-        *self.last_height.lock() = Self::compute_min_initial_last_height_from_dataset(dataset);
+    pub fn compute_from_dataset(dataset: &dyn AnyDataset) -> Self {
+        Self {
+            first_unsafe_date: Self::compute_min_initial_first_unsafe_date_from_dataset(dataset),
+            first_unsafe_height: Self::compute_min_initial_first_unsafe_height_from_dataset(
+                dataset,
+            ),
+            last_date: Self::compute_min_initial_last_date_from_dataset(dataset),
+            last_height: Self::compute_min_initial_last_height_from_dataset(dataset),
+        }
     }
 
     fn compute_min_initial_last_date_from_dataset(dataset: &dyn AnyDataset) -> Option<NaiveDate> {

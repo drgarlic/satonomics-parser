@@ -23,7 +23,7 @@ impl HeightDataset {
     pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
         let name = "close";
 
-        let s = Self {
+        let mut s = Self {
             min_initial_state: MinInitialState::default(),
 
             binance_1mn: None,
@@ -33,7 +33,8 @@ impl HeightDataset {
             closes: HeightMap::new_json(&format!("{parent_path}/{name}")),
         };
 
-        s.min_initial_state.compute_from_dataset(&s);
+        s.min_initial_state
+            .eat(MinInitialState::compute_from_dataset(&s));
 
         Ok(s)
     }

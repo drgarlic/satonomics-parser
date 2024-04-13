@@ -19,17 +19,18 @@ pub struct UTXODataset {
 
 impl UTXODataset {
     pub fn import(parent_path: &str, id: UTXOCohortId) -> color_eyre::Result<Self> {
-        let name = id.str();
+        let name = id.name();
 
         let folder_path = format!("{parent_path}/{name}");
 
-        let s = Self {
+        let mut s = Self {
             min_initial_state: MinInitialState::default(),
             id,
             subs: SubDataset::import(&folder_path)?,
         };
 
-        s.min_initial_state.compute_from_dataset(&s);
+        s.min_initial_state
+            .eat(MinInitialState::compute_from_dataset(&s));
 
         Ok(s)
     }

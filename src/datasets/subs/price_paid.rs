@@ -37,7 +37,7 @@ impl PricePaidSubDataset {
     pub fn import(parent_path: &str) -> color_eyre::Result<Self> {
         let f = |s: &str| format!("{parent_path}/{s}");
 
-        let s = Self {
+        let mut s = Self {
             min_initial_state: MinInitialState::default(),
 
             realized_cap: BiMap::new_bin(&f("realized_cap")),
@@ -64,7 +64,8 @@ impl PricePaidSubDataset {
             pp_05p: BiMap::new_bin(&f("05p_price_paid")),
         };
 
-        s.min_initial_state.compute_from_dataset(&s);
+        s.min_initial_state
+            .eat(MinInitialState::compute_from_dataset(&s));
 
         Ok(s)
     }
