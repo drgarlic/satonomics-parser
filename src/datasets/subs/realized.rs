@@ -24,14 +24,20 @@ impl RealizedSubDataset {
         };
 
         s.min_initial_state
-            .eat(MinInitialState::compute_from_dataset(&s));
+            .consume(MinInitialState::compute_from_dataset(&s));
 
         Ok(s)
     }
 
     pub fn insert(
         &self,
-        &ProcessedBlockData { height, .. }: &ProcessedBlockData,
+        &ProcessedBlockData {
+            height,
+            date,
+            is_date_last_block,
+            date_blocks_range,
+            ..
+        }: &ProcessedBlockData,
         height_state: &RealizedState,
     ) {
         self.realized_profit
@@ -41,31 +47,27 @@ impl RealizedSubDataset {
         self.realized_loss
             .height
             .insert(height, height_state.realized_loss);
+
+        if is_date_last_block {
+            self.realized_profit
+                .date_insert_sum_range(date, date_blocks_range);
+
+            self.realized_loss
+                .date_insert_sum_range(date, date_blocks_range);
+        }
     }
 }
 
 impl AnyDataset for RealizedSubDataset {
-    // fn compute(
-    //     &self,
-    //     &ExportData {
-    //         convert_sum_heights_to_date,
-    //         ..
-    //     }: &ExportData,
-    // ) {
-    // self.realized_loss.compute_date(convert_sum_heights_to_date);
-    // self.realized_profit
-    //     .compute_date(convert_sum_heights_to_date);
-    // }
-
     fn get_min_initial_state(&self) -> &MinInitialState {
         &self.min_initial_state
     }
 
-    fn to_any_inserted_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
+    fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
         vec![&self.realized_loss.height, &self.realized_profit.height]
     }
 
-    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
+    fn to_any_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         vec![&self.realized_loss, &self.realized_profit]
     }
 }

@@ -1,12 +1,12 @@
 use crate::{
-    datasets::{AnyDataset, MinInitialState},
-    parse::{AnyBiMap, AnyHeightMap, BiMap},
+    datasets::{AnyDataset, MinInitialState, ProcessedBlockData},
+    parse::{AnyBiMap, BiMap},
 };
 
 pub struct MetadataDataset {
     min_initial_state: MinInitialState,
 
-    pub address_count: BiMap<usize>,
+    address_count: BiMap<usize>,
 }
 
 impl MetadataDataset {
@@ -20,32 +20,35 @@ impl MetadataDataset {
         };
 
         s.min_initial_state
-            .eat(MinInitialState::compute_from_dataset(&s));
+            .consume(MinInitialState::compute_from_dataset(&s));
 
         Ok(s)
+    }
+
+    pub fn insert(
+        &self,
+        &ProcessedBlockData {
+            height,
+            date,
+            is_date_last_block,
+            ..
+        }: &ProcessedBlockData,
+        address_count: usize,
+    ) {
+        self.address_count.height.insert(height, address_count);
+
+        if is_date_last_block {
+            self.address_count.date.insert(date, address_count);
+        }
     }
 }
 
 impl AnyDataset for MetadataDataset {
-    // fn compute(
-    //     &self,
-    //     &ExportData {
-    //         convert_last_height_to_date,
-    //         ..
-    //     }: &ExportData,
-    // ) {
-    // self.address_count.compute_date(convert_last_height_to_date);
-    // }
-
     fn get_min_initial_state(&self) -> &MinInitialState {
         &self.min_initial_state
     }
 
-    fn to_any_inserted_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
-        vec![&self.address_count.height]
-    }
-
-    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
+    fn to_any_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         vec![&self.address_count]
     }
 }

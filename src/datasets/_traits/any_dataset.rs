@@ -34,78 +34,79 @@ pub trait AnyDataset {
                 })
     }
 
-    fn to_any_inserted_map_vec(&self) -> Vec<&(dyn AnyMap + Send + Sync)> {
-        // fn to_any_inserted_map_vec(&self) -> impl Iterator<Item = &(dyn AnyMap + Send + Sync)> {
-        self.to_any_inserted_height_map_vec()
-            .into_iter()
-            .map(|map| map.as_any_map())
-            .chain(
-                self.to_any_inserted_date_map_vec()
-                    .into_iter()
-                    .map(|map| map.as_any_map()),
-            )
-            .collect_vec()
-    }
-
-    fn to_any_inserted_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
-        vec![]
-    }
-
-    fn to_any_inserted_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
-        vec![]
-    }
-
-    fn to_any_exported_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
-        vec![]
-    }
-
-    fn to_any_exported_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
-        vec![]
-    }
-
-    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
-        vec![]
-    }
-
-    fn to_any_exported_map_vec(&self) -> Vec<&(dyn AnyMap + Send + Sync)> {
+    fn to_any_map_vec(&self) -> Vec<&(dyn AnyMap + Send + Sync)> {
         let heights = self
-            .to_any_exported_height_map_vec()
+            .to_any_height_map_vec()
             .into_iter()
             .map(|d| d.as_any_map());
 
         let dates = self
-            .to_any_exported_date_map_vec()
+            .to_any_date_map_vec()
             .into_iter()
             .map(|d| d.as_any_map());
 
         let bis = self
-            .to_any_exported_bi_map_vec()
+            .to_any_bi_map_vec()
             .into_iter()
             .flat_map(|d| d.as_any_map());
 
-        heights.chain(dates.chain(bis)).collect_vec()
+        heights.chain(dates).chain(bis).collect_vec()
+    }
+
+    fn to_any_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
+        vec![]
+    }
+
+    fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
+        vec![]
+    }
+
+    fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
+        vec![]
+    }
+
+    fn to_any_inserted_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
+        let mut vec = self.to_any_height_map_vec();
+
+        vec.append(
+            &mut self
+                .to_any_bi_map_vec()
+                .iter()
+                .map(|bi| bi.get_height())
+                .collect_vec(),
+        );
+
+        vec
+    }
+
+    fn to_any_inserted_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
+        let mut vec = self.to_any_date_map_vec();
+
+        vec.append(
+            &mut self
+                .to_any_bi_map_vec()
+                .iter()
+                .map(|bi| bi.get_date())
+                .collect_vec(),
+        );
+
+        vec
     }
 
     #[inline(always)]
     fn is_empty(&self) -> bool {
-        self.to_any_inserted_map_vec().is_empty()
+        self.to_any_map_vec().is_empty()
     }
 
-    // fn prepare(&self, _: &ExportData) {}
-
-    // fn compute(&self, _: &ExportData) {}
-
     fn export(&self) -> color_eyre::Result<()> {
-        self.to_any_exported_map_vec()
+        self.to_any_map_vec()
             .into_par_iter()
             .try_for_each(|map| -> color_eyre::Result<()> { map.export() })
     }
 
     fn clean(&self) {
-        self.to_any_exported_map_vec()
-            .into_par_iter()
-            .for_each(|map| {
-                map.clean();
-            })
+        self.to_any_map_vec().into_par_iter().for_each(|map| {
+            map.clean();
+        })
     }
 }

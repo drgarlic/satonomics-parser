@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, thread};
+use std::{collections::BTreeMap, ops::RangeInclusive, thread};
 
 use chrono::NaiveDate;
 use itertools::Itertools;
@@ -29,23 +29,15 @@ pub use transaction::*;
 pub use utxo::*;
 
 use crate::{
-    actions::{ReceivedData, SpentData},
     databases::Databases,
     io::Json,
-    parse::{AddressData, AddressRealizedData, BlockPath},
+    parse::{AddressData, AddressRealizedData},
     states::{
         AddressCohortsInputStates, AddressCohortsOneShotStates, AddressCohortsOutputStates,
         AddressCohortsRealizedStates, States, UTXOCohortsOneShotStates, UTXOCohortsReceivedStates,
         UTXOCohortsSentStates,
     },
 };
-
-pub struct ProcessedDateData {
-    pub block_count: usize,
-    pub first_height: usize,
-    pub height: usize,
-    pub date: NaiveDate,
-}
 
 pub struct ProcessedBlockData<'a> {
     pub address_cohorts_input_states: &'a Option<AddressCohortsInputStates>,
@@ -54,13 +46,13 @@ pub struct ProcessedBlockData<'a> {
     pub address_cohorts_realized_states: &'a Option<AddressCohortsRealizedStates>,
     pub address_index_to_address_realized_data: &'a BTreeMap<u32, AddressRealizedData>,
     pub address_index_to_removed_address_data: &'a BTreeMap<u32, AddressData>,
-    pub block_path_to_received_data: &'a BTreeMap<BlockPath, ReceivedData>,
-    pub block_path_to_spent_data: &'a BTreeMap<BlockPath, SpentData>,
     pub block_price: f32,
     pub coinbase: u64,
     pub databases: &'a Databases,
+    pub datasets: &'a AllDatasets,
     pub date: NaiveDate,
     pub date_first_height: usize,
+    pub date_blocks_range: &'a RangeInclusive<usize>,
     pub date_price: f32,
     pub fees: &'a Vec<u64>,
     pub height: usize,
@@ -75,19 +67,6 @@ pub struct ProcessedBlockData<'a> {
     pub utxo_cohorts_received_states: &'a UTXOCohortsReceivedStates,
     pub utxo_cohorts_sent_states: &'a UTXOCohortsSentStates,
 }
-
-// pub struct ExportData<'a> {
-//     pub annualized_transaction_volume: &'a BiMap<f32>,
-//     pub circulating_supply: &'a BiMap<f32>,
-//     pub convert_last_height_to_date: &'a HeightToDateConverter<'a>,
-//     pub convert_sum_heights_to_date: &'a HeightToDateConverter<'a>,
-//     pub yearly_inflation_rate: &'a BiMap<f32>,
-//     pub height_price: &'a HeightMap<f32>,
-//     pub date_price: &'a DateMap<f32>,
-//     pub realized_cap: &'a BiMap<f32>,
-//     pub realized_price: &'a BiMap<f32>,
-//     pub subsidy_in_dollars: &'a BiMap<f32>,
-// }
 
 pub struct AllDatasets {
     min_initial_state: MinInitialState,
@@ -154,7 +133,7 @@ impl AllDatasets {
             };
 
             s.min_initial_state
-                .eat(MinInitialState::compute_from_datasets(&s));
+                .consume(MinInitialState::compute_from_datasets(&s));
 
             s.export_path_to_type()?;
 
@@ -168,7 +147,7 @@ impl AllDatasets {
             .into_iter()
             .flat_map(|dataset| {
                 dataset
-                    .to_any_exported_map_vec()
+                    .to_any_map_vec()
                     .into_iter()
                     .map(|map| map.exported_path_with_t_name())
             })
@@ -178,64 +157,10 @@ impl AllDatasets {
     }
 
     pub fn export(&self) -> color_eyre::Result<()> {
-        self._export_if_needed(None, true)
-    }
-
-    pub fn export_if_needed(
-        &self,
-        date: NaiveDate,
-        height: usize,
-        compute: bool,
-    ) -> color_eyre::Result<()> {
-        self._export_if_needed(Some((height, date)), compute)
-    }
-
-    pub fn _export_if_needed(
-        &self,
-        height_and_date: Option<(usize, NaiveDate)>,
-        compute: bool,
-    ) -> color_eyre::Result<()> {
-        // let export_data = ExportData {
-        //     // They all need to be:
-        //     // - Be stored memory
-        //     // - Either inserted or computed in the prepare function
-        //     annualized_transaction_volume: &self.transaction.annualized_volume,
-        //     circulating_supply: &self.address.all.all.supply.total,
-        //     yearly_inflation_rate: &self.mining.yearly_inflation_rate,
-        //     height_price: &self.price.height.closes,
-        //     date_price: &self.price.date.closes,
-        //     realized_cap: &self.address.all.all.price_paid.realized_cap,
-        //     realized_price: &self.address.all.all.price_paid.realized_price,
-        //     subsidy_in_dollars: &self.mining.subsidy_in_dollars,
-
-        //     convert_last_height_to_date: &HeightToDateConverter::Last(
-        //         &self.date_metadata.first_height,
-        //     ),
-        //     convert_sum_heights_to_date: &HeightToDateConverter::Sum {
-        //         first_height: &self.date_metadata.first_height,
-        //         last_height: &self.date_metadata.last_height,
-        //     },
-        // };
-
         let vec = self.to_generic_dataset_vec();
 
-        // vec.iter().for_each(|dataset| dataset.prepare(&export_data));
-
         vec.par_iter()
-            // .filter(|dataset| {
-            //     if let Some((height, date)) = height_and_date {
-            //         dataset.should_insert(height, date)
-            //     } else {
-            //         true
-            //     }
-            // })
-            .try_for_each(|dataset| -> color_eyre::Result<()> {
-                // if compute {
-                //     dataset.compute(&export_data);
-                // }
-
-                dataset.export()
-            })?;
+            .try_for_each(|dataset| -> color_eyre::Result<()> { dataset.export() })?;
 
         vec.par_iter().for_each(|dataset| dataset.clean());
 
@@ -254,12 +179,12 @@ impl AnyDatasets for AllDatasets {
             self.price.to_generic_dataset_vec(),
             self.utxo.to_generic_dataset_vec(),
             vec![
-                &self.block_metadata,
-                &self.cointime,
-                &self.coindays,
-                &self.date_metadata,
                 &self.mining,
                 &self.transaction,
+                &self.block_metadata,
+                &self.date_metadata,
+                &self.cointime,
+                &self.coindays,
             ],
         ]
         .into_iter()

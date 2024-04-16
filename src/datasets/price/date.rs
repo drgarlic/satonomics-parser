@@ -5,7 +5,7 @@ use color_eyre::eyre::Error;
 
 use crate::{
     datasets::{AnyDataset, GenericDataset, MinInitialState},
-    parse::{AnyDateMap, DateMap, WNaiveDate},
+    parse::{AnyDateMap, DateMap},
     price::Kraken,
 };
 
@@ -30,14 +30,14 @@ impl DateDataset {
         };
 
         s.min_initial_state
-            .eat(MinInitialState::compute_from_dataset(&s));
+            .consume(MinInitialState::compute_from_dataset(&s));
 
         Ok(s)
     }
 
     pub fn get(&mut self, date: NaiveDate) -> color_eyre::Result<f32> {
         if self.closes.is_date_safe(date) {
-            Ok(self.closes.get(&WNaiveDate::wrap(date)).unwrap().to_owned())
+            Ok(self.closes.get(date).unwrap().to_owned())
         } else {
             let price = self.get_from_daily_kraken(&date.to_string())?;
 
@@ -68,11 +68,7 @@ impl AnyDataset for DateDataset {
         &self.min_initial_state
     }
 
-    fn to_any_inserted_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
-        vec![&self.closes]
-    }
-
-    fn to_any_exported_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
+    fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
         vec![&self.closes]
     }
 }

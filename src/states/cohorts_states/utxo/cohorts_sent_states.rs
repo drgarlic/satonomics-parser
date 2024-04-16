@@ -25,14 +25,14 @@ impl UTXOCohortsSentStates {
     pub fn compute(
         &mut self,
         date_data_vec: &DateDataVec,
-        block_path_to_spent_data: &BTreeMap<BlockPath, SpentData>,
+        block_path_to_spent_data: BTreeMap<BlockPath, SpentData>,
         current_price: f32,
     ) {
         if let Some(last_date_data) = date_data_vec.last() {
             let last_block_data = last_date_data.blocks.last().unwrap();
 
             block_path_to_spent_data
-                .iter()
+                .into_iter()
                 .map(|(block_path, data)| {
                     let block_data = date_data_vec
                         .get(block_path.date_index as usize)
@@ -55,9 +55,7 @@ impl UTXOCohortsSentStates {
 
                     let btc_spent = sats_to_btc(spent_data.volume);
 
-                    self.filter(&days_old, &year).into_iter().for_each(|id| {
-                        let state = self.get_mut(&id);
-
+                    self.filtered_apply(&days_old, &year, |state| {
                         state.input.iterate(spent_data.count as f32, btc_spent);
 
                         let previous_dollar_amount = previous_price * btc_spent;
@@ -70,7 +68,7 @@ impl UTXOCohortsSentStates {
                             state.realized.realized_loss +=
                                 previous_dollar_amount - current_dollar_amount;
                         }
-                    });
+                    })
                 })
         }
     }

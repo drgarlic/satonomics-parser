@@ -1,7 +1,6 @@
-use std::{collections::BTreeSet, thread};
+use std::thread;
 
 use derive_deref::{Deref, DerefMut};
-use itertools::Itertools;
 
 use crate::{
     parse::BlockData,
@@ -12,7 +11,7 @@ use crate::{
     },
 };
 
-use super::{SplitByUTXOCohort, UTXOCohortId, UTXOCohortsOneShotStates};
+use super::{SplitByUTXOCohort, UTXOCohortsOneShotStates};
 
 #[derive(Default, Deref, DerefMut)]
 pub struct UTXOCohortsDurableStates(SplitByUTXOCohort<DurableStates>);
@@ -41,12 +40,20 @@ impl UTXOCohortsDurableStates {
         last_block_data: &BlockData,
         previous_last_block_data: Option<&BlockData>,
     ) {
+        let amount = block_data.amount;
+        let utxo_count = block_data.spendable_outputs as usize;
+
+        // No need to either insert or remove if 0
+        if amount == 0 {
+            return;
+        }
+
+        let price_in_cents = convert_price_to_significant_cents(block_data.price);
+
         let increment_days_old =
             difference_in_days_between_timestamps(block_data.timestamp, last_block_data.timestamp);
 
         let increment_year = timestamp_to_year(block_data.timestamp);
-
-        let mut increment_ids = self.filter(&increment_days_old, &increment_year);
 
         if let Some(previous_last_block_data) = previous_last_block_data {
             if block_data.height <= previous_last_block_data.height {
@@ -64,52 +71,32 @@ impl UTXOCohortsDurableStates {
                     return;
                 }
 
-                let mut decrement_ids = self.filter(&decrement_days_old, &decrement_year);
+                let decrement_ids = self.filtered_ids(&decrement_days_old, &decrement_year);
 
-                let intersection = decrement_ids
-                    .intersection(&increment_ids)
-                    .cloned()
-                    .collect_vec();
+                let increment_ids = self.filtered_ids(&increment_days_old, &increment_year);
 
-                intersection.into_iter().for_each(|id| {
-                    increment_ids.remove(&id);
-                    decrement_ids.remove(&id);
-                });
+                decrement_ids
+                    .iter()
+                    .filter(|id| !increment_ids.contains(id))
+                    .for_each(|id| {
+                        self.get_mut(id)
+                            .decrement(amount, utxo_count, price_in_cents)
+                    });
 
-                self.decrement(block_data, decrement_ids);
+                increment_ids
+                    .iter()
+                    .filter(|id| !decrement_ids.contains(id))
+                    .for_each(|id| {
+                        self.get_mut(id)
+                            .increment(amount, utxo_count, price_in_cents)
+                    });
+
+                return;
             }
         }
 
-        self.increment(block_data, increment_ids);
-    }
-
-    fn increment(&mut self, block_data: &BlockData, ids: BTreeSet<UTXOCohortId>) {
-        self._crement(block_data, ids, true)
-    }
-
-    fn decrement(&mut self, block_data: &BlockData, ids: BTreeSet<UTXOCohortId>) {
-        self._crement(block_data, ids, false)
-    }
-
-    fn _crement(&mut self, block_data: &BlockData, ids: BTreeSet<UTXOCohortId>, increment: bool) {
-        let amount = block_data.amount;
-        let utxo_count = block_data.spendable_outputs as usize;
-
-        // No need to either insert or remove if 0
-        if amount == 0 {
-            return;
-        }
-
-        let price_in_cents = convert_price_to_significant_cents(block_data.price);
-
-        ids.into_iter().for_each(|id| {
-            let state = self.get_mut(&id);
-
-            if increment {
-                state.increment(amount, utxo_count, price_in_cents);
-            } else {
-                state.decrement(amount, utxo_count, price_in_cents)
-            }
+        self.filtered_apply(&increment_days_old, &increment_year, |state| {
+            state.increment(amount, utxo_count, price_in_cents);
         })
     }
 

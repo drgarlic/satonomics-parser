@@ -3,7 +3,7 @@ use crate::{
     parse::{AnyDateMap, DateMap},
 };
 
-use super::{GenericDataset, MinInitialState, ProcessedDateData};
+use super::{GenericDataset, MinInitialState, ProcessedBlockData};
 
 pub struct DateMetadataDataset {
     min_initial_state: MinInitialState,
@@ -24,34 +24,30 @@ impl DateMetadataDataset {
         };
 
         s.min_initial_state
-            .eat(MinInitialState::compute_from_dataset(&s));
+            .consume(MinInitialState::compute_from_dataset(&s));
 
         Ok(s)
     }
 }
 
 impl GenericDataset for DateMetadataDataset {
-    fn insert_date_data(
+    fn insert_data(
         &self,
-        &ProcessedDateData {
+        &ProcessedBlockData {
             date,
-            first_height,
+            date_first_height,
             height,
             ..
-        }: &ProcessedDateData,
+        }: &ProcessedBlockData,
     ) {
-        self.first_height.insert(date, first_height);
+        self.first_height.insert(date, date_first_height);
 
         self.last_height.insert(date, height);
     }
 }
 
 impl AnyDataset for DateMetadataDataset {
-    fn to_any_inserted_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
-        vec![&self.first_height, &self.last_height]
-    }
-
-    fn to_any_exported_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
+    fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
         vec![&self.first_height, &self.last_height]
     }
 

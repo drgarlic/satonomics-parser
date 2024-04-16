@@ -1,8 +1,9 @@
+use chrono::NaiveDate;
 use itertools::Itertools;
 
 use crate::{
     datasets::{AnyDataset, MinInitialState, ProcessedBlockData},
-    parse::{AnyBiMap, AnyHeightMap, BiMap},
+    parse::{AnyBiMap, BiMap},
     states::PricePaidState,
 };
 
@@ -65,14 +66,19 @@ impl PricePaidSubDataset {
         };
 
         s.min_initial_state
-            .eat(MinInitialState::compute_from_dataset(&s));
+            .consume(MinInitialState::compute_from_dataset(&s));
 
         Ok(s)
     }
 
     pub fn insert(
         &self,
-        &ProcessedBlockData { height, .. }: &ProcessedBlockData,
+        &ProcessedBlockData {
+            height,
+            is_date_last_block,
+            date,
+            ..
+        }: &ProcessedBlockData,
         state: &PricePaidState,
         cohort_supply: f32,
     ) {
@@ -100,44 +106,85 @@ impl PricePaidSubDataset {
             ..
         } = state;
 
-        self.realized_cap.height.insert(height, *realized_cap);
+        let realized_cap = self.realized_cap.height.insert(height, *realized_cap);
 
-        self.realized_price
+        if is_date_last_block {
+            self.realized_cap.date.insert(date, realized_cap);
+        }
+
+        let realized_price = self
+            .realized_price
             .height
             .insert(height, cohort_supply / realized_cap);
+
+        if is_date_last_block {
+            self.realized_price.date.insert(date, realized_price);
+        }
 
         // Check if iter was empty
         if pp_05p.is_none() {
             self.insert_height_default(height);
 
+            if is_date_last_block {
+                self.insert_date_default(date);
+            }
+
             return;
         }
 
-        self.pp_05p.height.insert(height, pp_05p.unwrap());
-        self.pp_10p.height.insert(height, pp_10p.unwrap());
-        self.pp_15p.height.insert(height, pp_15p.unwrap());
-        self.pp_20p.height.insert(height, pp_20p.unwrap());
-        self.pp_25p.height.insert(height, pp_25p.unwrap());
-        self.pp_30p.height.insert(height, pp_30p.unwrap());
-        self.pp_35p.height.insert(height, pp_35p.unwrap());
-        self.pp_40p.height.insert(height, pp_40p.unwrap());
-        self.pp_45p.height.insert(height, pp_45p.unwrap());
-        self.pp_median.height.insert(height, pp_median.unwrap());
-        self.pp_55p.height.insert(height, pp_55p.unwrap());
-        self.pp_60p.height.insert(height, pp_60p.unwrap());
-        self.pp_65p.height.insert(height, pp_65p.unwrap());
-        self.pp_70p.height.insert(height, pp_70p.unwrap());
-        self.pp_75p.height.insert(height, pp_75p.unwrap());
-        self.pp_80p.height.insert(height, pp_80p.unwrap());
-        self.pp_85p.height.insert(height, pp_85p.unwrap());
-        self.pp_90p.height.insert(height, pp_90p.unwrap());
-        self.pp_95p.height.insert(height, pp_95p.unwrap());
+        let pp_05p = self.pp_05p.height.insert(height, pp_05p.unwrap());
+        let pp_10p = self.pp_10p.height.insert(height, pp_10p.unwrap());
+        let pp_15p = self.pp_15p.height.insert(height, pp_15p.unwrap());
+        let pp_20p = self.pp_20p.height.insert(height, pp_20p.unwrap());
+        let pp_25p = self.pp_25p.height.insert(height, pp_25p.unwrap());
+        let pp_30p = self.pp_30p.height.insert(height, pp_30p.unwrap());
+        let pp_35p = self.pp_35p.height.insert(height, pp_35p.unwrap());
+        let pp_40p = self.pp_40p.height.insert(height, pp_40p.unwrap());
+        let pp_45p = self.pp_45p.height.insert(height, pp_45p.unwrap());
+        let pp_median = self.pp_median.height.insert(height, pp_median.unwrap());
+        let pp_55p = self.pp_55p.height.insert(height, pp_55p.unwrap());
+        let pp_60p = self.pp_60p.height.insert(height, pp_60p.unwrap());
+        let pp_65p = self.pp_65p.height.insert(height, pp_65p.unwrap());
+        let pp_70p = self.pp_70p.height.insert(height, pp_70p.unwrap());
+        let pp_75p = self.pp_75p.height.insert(height, pp_75p.unwrap());
+        let pp_80p = self.pp_80p.height.insert(height, pp_80p.unwrap());
+        let pp_85p = self.pp_85p.height.insert(height, pp_85p.unwrap());
+        let pp_90p = self.pp_90p.height.insert(height, pp_90p.unwrap());
+        let pp_95p = self.pp_95p.height.insert(height, pp_95p.unwrap());
+
+        if is_date_last_block {
+            self.pp_05p.date.insert(date, pp_05p);
+            self.pp_10p.date.insert(date, pp_10p);
+            self.pp_15p.date.insert(date, pp_15p);
+            self.pp_20p.date.insert(date, pp_20p);
+            self.pp_25p.date.insert(date, pp_25p);
+            self.pp_30p.date.insert(date, pp_30p);
+            self.pp_35p.date.insert(date, pp_35p);
+            self.pp_40p.date.insert(date, pp_40p);
+            self.pp_45p.date.insert(date, pp_45p);
+            self.pp_median.date.insert(date, pp_median);
+            self.pp_55p.date.insert(date, pp_55p);
+            self.pp_60p.date.insert(date, pp_60p);
+            self.pp_65p.date.insert(date, pp_65p);
+            self.pp_70p.date.insert(date, pp_70p);
+            self.pp_75p.date.insert(date, pp_75p);
+            self.pp_80p.date.insert(date, pp_80p);
+            self.pp_85p.date.insert(date, pp_85p);
+            self.pp_90p.date.insert(date, pp_90p);
+            self.pp_95p.date.insert(date, pp_95p);
+        }
     }
 
     fn insert_height_default(&self, height: usize) {
-        self.to_vec()
-            .iter()
-            .for_each(|bi| bi.height.insert_default(height))
+        self.to_vec().into_iter().for_each(|bi| {
+            bi.height.insert_default(height);
+        })
+    }
+
+    fn insert_date_default(&self, date: NaiveDate) {
+        self.to_vec().into_iter().for_each(|bi| {
+            bi.date.insert_default(date);
+        })
     }
 
     pub fn to_vec(&self) -> Vec<&BiMap<f32>> {
@@ -168,30 +215,11 @@ impl PricePaidSubDataset {
 }
 
 impl AnyDataset for PricePaidSubDataset {
-    // fn compute(
-    //     &self,
-    //     &ExportData {
-    //         convert_last_height_to_date,
-    //         ..
-    //     }: &ExportData,
-    // ) {
-    // self.to_vec()
-    //     .into_iter()
-    //     .for_each(|dataset| dataset.compute_date(convert_last_height_to_date));
-    // }
-
     fn get_min_initial_state(&self) -> &MinInitialState {
         &self.min_initial_state
     }
 
-    fn to_any_inserted_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
-        self.to_vec()
-            .iter()
-            .map(|dataset| &dataset.height as &(dyn AnyHeightMap + Send + Sync))
-            .collect_vec()
-    }
-
-    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
+    fn to_any_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         self.to_vec()
             .iter()
             .map(|dataset| *dataset as &(dyn AnyBiMap + Send + Sync))

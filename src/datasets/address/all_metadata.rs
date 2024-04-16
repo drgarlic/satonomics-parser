@@ -1,6 +1,6 @@
 use crate::{
     datasets::{AnyDataset, GenericDataset, MinInitialState, ProcessedBlockData},
-    parse::{AnyBiMap, AnyHeightMap, BiMap},
+    parse::{AnyBiMap, BiMap},
 };
 
 pub struct AllAddressesMetadataDataset {
@@ -22,55 +22,50 @@ impl AllAddressesMetadataDataset {
         };
 
         s.min_initial_state
-            .eat(MinInitialState::compute_from_dataset(&s));
+            .consume(MinInitialState::compute_from_dataset(&s));
 
         Ok(s)
     }
 }
 
 impl GenericDataset for AllAddressesMetadataDataset {
-    fn insert_block_data(&self, processed_block_data: &ProcessedBlockData) {
+    fn insert_data(&self, processed_block_data: &ProcessedBlockData) {
         let &ProcessedBlockData {
-            databases, height, ..
+            databases,
+            height,
+            date,
+            is_date_last_block,
+            ..
         } = processed_block_data;
 
-        self.total_addresses_created
+        let total_addresses_created = self
+            .total_addresses_created
             .height
             .insert(height, *databases.address_to_address_index.metadata.len);
 
-        self.total_empty_addresses.height.insert(
+        let total_empty_addresses = self.total_empty_addresses.height.insert(
             height,
             *databases.address_index_to_empty_address_data.metadata.len,
         );
+
+        if is_date_last_block {
+            self.total_addresses_created
+                .date
+                .insert(date, total_addresses_created);
+
+            self.total_empty_addresses
+                .date
+                .insert(date, total_empty_addresses);
+        }
     }
 }
 
 impl AnyDataset for AllAddressesMetadataDataset {
-    // fn compute(
-    //     &self,
-    //     &ExportData {
-    //         convert_last_height_to_date,
-    //         ..
-    //     }: &ExportData,
-    // ) {
-    // self.total_addresses_created
-    //     .compute_date(convert_last_height_to_date);
-    // self.total_empty_addresses
-    //     .compute_date(convert_last_height_to_date);
-    // }
-
     fn get_min_initial_state(&self) -> &MinInitialState {
         &self.min_initial_state
     }
 
-    fn to_any_inserted_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
-        vec![
-            &self.total_addresses_created.height,
-            &self.total_empty_addresses.height,
-        ]
-    }
-
-    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
+    fn to_any_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         vec![&self.total_addresses_created, &self.total_empty_addresses]
     }
 }

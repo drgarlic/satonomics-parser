@@ -1,6 +1,6 @@
 use crate::{
     datasets::{AnyDataset, MinInitialState, ProcessedBlockData},
-    parse::{AnyBiMap, AnyHeightMap, BiMap},
+    parse::{AnyBiMap, BiMap},
     states::InputState,
 };
 
@@ -23,44 +23,40 @@ impl InputSubDataset {
         };
 
         s.min_initial_state
-            .eat(MinInitialState::compute_from_dataset(&s));
+            .consume(MinInitialState::compute_from_dataset(&s));
 
         Ok(s)
     }
 
     pub fn insert(
         &self,
-        &ProcessedBlockData { height, .. }: &ProcessedBlockData,
+        &ProcessedBlockData {
+            height,
+            date,
+            is_date_last_block,
+            date_blocks_range,
+            ..
+        }: &ProcessedBlockData,
         state: &InputState,
     ) {
-        self.count.height.insert(height, state.count);
+        let count = self.count.height.insert(height, state.count);
 
         self.volume.height.insert(height, state.volume);
+
+        if is_date_last_block {
+            self.count.date.insert(date, count);
+
+            self.volume.date_insert_sum_range(date, date_blocks_range);
+        }
     }
 }
 
 impl AnyDataset for InputSubDataset {
-    // fn compute(
-    //     &self,
-    //     &ExportData {
-    //         convert_last_height_to_date,
-    //         convert_sum_heights_to_date,
-    //         ..
-    //     }: &ExportData,
-    // ) {
-    // self.count.compute_date(convert_last_height_to_date);
-    // self.volume.compute_date(convert_sum_heights_to_date);
-    // }
-
     fn get_min_initial_state(&self) -> &MinInitialState {
         &self.min_initial_state
     }
 
-    fn to_any_inserted_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
-        vec![&self.count.height, &self.volume.height]
-    }
-
-    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
+    fn to_any_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         vec![&self.count, &self.volume]
     }
 }

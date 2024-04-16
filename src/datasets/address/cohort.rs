@@ -60,7 +60,7 @@ impl CohortDataset {
         };
 
         s.min_initial_state
-            .eat(MinInitialState::compute_from_dataset(&s));
+            .consume(MinInitialState::compute_from_dataset(&s));
 
         Ok(s)
     }
@@ -140,30 +140,15 @@ impl CohortDataset {
             .insert(processed_block_data, &split_realized_state.highly_liquid);
     }
 
-    fn insert_metadata(
-        &self,
-        &ProcessedBlockData {
-            height,
-            date,
-            is_date_last_block,
-            states,
-            ..
-        }: &ProcessedBlockData,
-    ) {
-        let address_count = states
+    fn insert_metadata(&self, processed_block_data: &ProcessedBlockData) {
+        let address_count = processed_block_data
+            .states
             .address_cohorts_durable_states
             .get_state(&self.split)
             .unwrap()
             .address_count;
 
-        self.metadata
-            .address_count
-            .height
-            .insert(height, address_count);
-
-        if is_date_last_block {
-            self.metadata.address_count.date.insert(date, address_count);
-        }
+        self.metadata.insert(processed_block_data, address_count);
     }
 
     fn insert_supply_data(
@@ -359,7 +344,7 @@ impl CohortDataset {
 }
 
 impl GenericDataset for CohortDataset {
-    fn insert_block_data(&self, processed_block_data: &ProcessedBlockData) {
+    fn insert_data(&self, processed_block_data: &ProcessedBlockData) {
         let &ProcessedBlockData { height, date, .. } = processed_block_data;
 
         let needs_metadata = self.needs_metadata(date, height);
@@ -425,50 +410,24 @@ impl GenericDataset for CohortDataset {
 }
 
 impl AnyDataset for CohortDataset {
-    // fn prepare(&self, export_data: &ExportData) {
-    //     self.to_vec()
-    //         .into_par_iter()
-    //         .for_each(|d| d.prepare(export_data));
-    // }
-
-    // fn compute(&self, export_data: &ExportData) {
-    //     self.to_vec()
-    //         .into_par_iter()
-    //         .for_each(|d| d.compute(export_data));
-    // }
-
-    fn to_any_inserted_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
+    fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
         self.to_vec()
             .into_iter()
-            .flat_map(|d| d.to_any_inserted_height_map_vec())
+            .flat_map(|d| d.to_any_height_map_vec())
             .collect_vec()
     }
 
-    fn to_any_inserted_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
+    fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
         self.to_vec()
             .into_iter()
-            .flat_map(|d| d.to_any_inserted_date_map_vec())
+            .flat_map(|d| d.to_any_date_map_vec())
             .collect_vec()
     }
 
-    fn to_any_exported_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
+    fn to_any_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         self.to_vec()
             .into_iter()
-            .flat_map(|d| d.to_any_exported_date_map_vec())
-            .collect_vec()
-    }
-
-    fn to_any_exported_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
-        self.to_vec()
-            .into_iter()
-            .flat_map(|d| d.to_any_exported_height_map_vec())
-            .collect_vec()
-    }
-
-    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
-        self.to_vec()
-            .into_iter()
-            .flat_map(|d| d.to_any_exported_bi_map_vec())
+            .flat_map(|d| d.to_any_bi_map_vec())
             .collect_vec()
     }
 

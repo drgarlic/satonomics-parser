@@ -8,7 +8,7 @@ use crate::{
     actions::{export_all, find_first_unsafe_height, parse_block},
     bitcoin::{check_if_height_safe, BitcoinDB, NUMBER_OF_UNSAFE_BLOCKS},
     databases::Databases,
-    datasets::{AllDatasets, AnyDatasets, ProcessedDateData},
+    datasets::{AllDatasets, AnyDatasets},
     parse::DateData,
     states::States,
     utils::timestamp_to_naive_date,
@@ -142,15 +142,6 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
                     blocks_loop_i += 1;
 
                     if is_date_last_block {
-                        if insert {
-                            datasets.insert_date_data(ProcessedDateData {
-                                block_count,
-                                first_height: height,
-                                height: current_block_height,
-                                date: blocks_loop_date,
-                            });
-                        }
-
                         height += blocks_loop_i;
 
                         let is_new_month = next_block_date

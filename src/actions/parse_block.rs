@@ -555,15 +555,17 @@ pub fn parse_block(
                     .rev()
                     .nth(1);
 
-                states.date_data_vec.iter().for_each(|date_data| {
-                    date_data.blocks.iter().for_each(|block_data| {
+                states
+                    .date_data_vec
+                    .iter()
+                    .flat_map(|date_data| &date_data.blocks)
+                    .for_each(|block_data| {
                         states.utxo_cohorts_durable_states.iterate(
                             block_data,
                             last_block_data,
                             previous_last_block_data,
                         );
-                    })
-                });
+                    });
             }
 
             utxo_cohorts_one_shot_states =
@@ -575,13 +577,17 @@ pub fn parse_block(
                         None
                     },
                 );
+        });
 
+        scope.spawn(|| {
             utxo_cohorts_received_states
-                .compute(&states.date_data_vec, &block_path_to_received_data);
+                .compute(&states.date_data_vec, block_path_to_received_data);
+        });
 
+        scope.spawn(|| {
             utxo_cohorts_sent_states.compute(
                 &states.date_data_vec,
-                &block_path_to_spent_data,
+                block_path_to_spent_data,
                 block_price,
             );
         });
@@ -646,20 +652,20 @@ pub fn parse_block(
         }
     });
 
-    datasets.insert_block_data(ProcessedBlockData {
+    datasets.insert_data(ProcessedBlockData {
         address_cohorts_input_states: &address_cohorts_input_states,
         address_cohorts_one_shot_states: &address_cohorts_one_shot_states,
         address_cohorts_output_states: &address_cohorts_output_states,
         address_cohorts_realized_states: &address_cohorts_realized_states,
         address_index_to_address_realized_data: &address_index_to_address_realized_data,
         address_index_to_removed_address_data: &address_index_to_removed_address_data,
-        block_path_to_received_data: &block_path_to_received_data,
-        block_path_to_spent_data: &block_path_to_spent_data,
         block_price,
         coinbase,
         databases,
+        datasets,
         date,
         date_first_height: first_date_height,
+        date_blocks_range: &(first_date_height..=height),
         date_price,
         fees: &fees,
         height,

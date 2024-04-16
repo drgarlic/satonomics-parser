@@ -19,13 +19,13 @@ impl UTXOCohortsReceivedStates {
     pub fn compute(
         &mut self,
         date_data_vec: &DateDataVec,
-        block_path_to_received_data: &BTreeMap<BlockPath, ReceivedData>,
+        block_path_to_received_data: BTreeMap<BlockPath, ReceivedData>,
     ) {
         if let Some(last_date_data) = date_data_vec.last() {
             let last_block_data = last_date_data.blocks.last().unwrap();
 
             block_path_to_received_data
-                .iter()
+                .into_iter()
                 .map(|(block_path, data)| {
                     let block_data = date_data_vec
                         .get(block_path.date_index as usize)
@@ -46,9 +46,8 @@ impl UTXOCohortsReceivedStates {
 
                     let volume = sats_to_btc(received_data.volume);
 
-                    self.filter(&days_old, &year).into_iter().for_each(|id| {
-                        self.get_mut(&id)
-                            .iterate(received_data.count as f32, volume);
+                    self.filtered_apply(&days_old, &year, |state| {
+                        state.iterate(received_data.count as f32, volume);
                     });
                 })
         }

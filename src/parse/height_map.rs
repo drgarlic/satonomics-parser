@@ -4,7 +4,7 @@ use std::{
     fs,
     iter::Sum,
     mem,
-    ops::{Add, AddAssign, DerefMut, Div, Mul, RangeInclusive, Sub, SubAssign},
+    ops::{Add, DerefMut, RangeInclusive, Sub},
     path::{Path, PathBuf},
 };
 
@@ -16,7 +16,6 @@ use serde::{de::DeserializeOwned, Serialize};
 use crate::{
     bitcoin::{BLOCKS_PER_HAVLING_EPOCH, NUMBER_OF_UNSAFE_BLOCKS},
     io::{format_path, Serialization},
-    utils::ToF32,
 };
 
 use super::AnyMap;
@@ -42,6 +41,7 @@ where
 impl<T> HeightMap<T>
 where
     T: Clone
+        + Copy
         + Default
         + Debug
         + Serialize
@@ -126,19 +126,19 @@ where
         height / CHUNK_SIZE * CHUNK_SIZE
     }
 
-    pub fn insert(&self, height: usize, value: T) {
+    pub fn insert(&self, height: usize, value: T) -> T {
         if !self.is_height_safe(height) {
             self.to_insert
                 .write()
                 .entry(Self::height_to_chunk_start(height))
                 .or_default()
                 .insert(height, value);
-        } else {
-            panic!("Shouldn't have called insert")
         }
+
+        value
     }
 
-    pub fn insert_default(&self, height: usize) {
+    pub fn insert_default(&self, height: usize) -> T {
         self.insert(height, T::default())
     }
 
@@ -158,13 +158,6 @@ where
                     .and_then(|tree| tree.get(height))
                     .cloned()
             })
-    }
-
-    pub fn sum(&self, range: RangeInclusive<usize>) -> T
-    where
-        T: Sum,
-    {
-        range.flat_map(|height| self.get(&height)).sum::<T>()
     }
 
     #[inline(always)]
@@ -243,6 +236,7 @@ where
 impl<T> AnyMap for HeightMap<T>
 where
     T: Clone
+        + Copy
         + Default
         + Debug
         + Serialize
@@ -251,27 +245,6 @@ where
         + savefile::Deserialize
         + savefile::ReprC,
 {
-    // fn import_tmp_data(&self) {
-    //     // println!("import tmp {}", &self.path);
-
-    //     if !self.modified.read().to_owned() {
-    //         return;
-    //     }
-
-    //     if self.storage == Storage::Disk {
-    //         if self.imported.read().is_some() {
-    //             dbg!(&self.path);
-    //             panic!("Probably forgot to drop inner after an export");
-    //         }
-
-    //         self.import_to_inner();
-
-    //         self.to_insert.read().drain(..).for_each(|(height, value)| {
-    //             self.insert_to_inner(height, value);
-    //         });
-    //     }
-    // }
-
     fn path(&self) -> &str {
         &self.path_all
     }
@@ -322,12 +295,13 @@ where
                     .serialization
                     .append_extension(&format!("{}/{}", self.path_all, chunk_name));
 
-                self.serialization.export(&path, to_export)?;
+                let vec = to_export.values().cloned().collect_vec();
+
+                self.serialization.export(&path, &vec)?;
 
                 if index == len - 1 {
                     if let Some(path_last) = self.path_last.as_ref() {
-                        self.serialization
-                            .export(path_last, to_export.values().last().unwrap())?;
+                        self.serialization.export(path_last, vec.last().unwrap())?;
                     }
                 }
 
@@ -363,6 +337,7 @@ pub trait AnyHeightMap: AnyMap {
 impl<T> AnyHeightMap for HeightMap<T>
 where
     T: Clone
+        + Copy
         + Default
         + Debug
         + Serialize
@@ -391,6 +366,7 @@ where
 impl<T> HeightMap<T>
 where
     T: Clone
+        + Copy
         + Default
         + Debug
         + Serialize
@@ -399,271 +375,139 @@ where
         + savefile::Deserialize
         + savefile::ReprC,
 {
-    // pub fn transform<F>(&self, transform: F) -> Vec<T>
-    // where
-    //     T: Copy + Default,
-    //     F: Fn((usize, &T, &[T])) -> T,
-    // {
-    //     Self::_transform(self.inner.read().as_ref().unwrap(), transform)
-    // }
-
-    #[allow(unused)]
-    pub fn _transform<F>(vec: &[T], transform: F) -> Vec<T>
+    pub fn sum_range(&self, range: &RangeInclusive<usize>) -> T
     where
-        T: Copy + Default,
-        F: Fn((usize, &T, &[T])) -> T,
+        T: Sum,
     {
-        vec.iter()
-            .enumerate()
-            .map(|(index, value)| transform((index, value, &vec)))
-            .collect_vec()
+        range
+            .to_owned()
+            .flat_map(|height| self.get(&height))
+            .sum::<T>()
     }
 
-    // #[allow(unused)]
-    // pub fn add(&self, other: &Self) -> Vec<T>
-    // where
-    //     T: Add<Output = T> + Copy + Default,
-    // {
-    //     Self::_add(
-    //         self.inner.read().as_ref().unwrap(),
-    //         other.inner.read().as_ref().unwrap(),
-    //     )
-    // }
-
-    #[allow(unused)]
-    pub fn _add(arr1: &[T], arr2: &[T]) -> Vec<T>
+    pub fn insert_cumulative(&self, height: usize, source: &HeightMap<T>) -> T
     where
-        T: Add<Output = T> + Copy + Default,
+        T: Add<Output = T> + Sub<Output = T>,
     {
-        Self::_transform(Self::slice_arr1(arr1, arr2), |(index, value, _)| {
-            *value + *arr2.get(index).unwrap()
-        })
-    }
-
-    // #[allow(unused)]
-    // pub fn subtract(&self, other: &Self) -> Vec<T>
-    // where
-    //     T: Sub<Output = T> + Copy + Default,
-    // {
-    //     Self::_subtract(
-    //         self.inner.read().as_ref().unwrap(),
-    //         other.inner.read().as_ref().unwrap(),
-    //     )
-    // }
-
-    #[allow(unused)]
-    pub fn _subtract(arr1: &[T], arr2: &[T]) -> Vec<T>
-    where
-        T: Sub<Output = T> + Copy + Default,
-    {
-        Self::_transform(Self::slice_arr1(arr1, arr2), |(index, value, _)| {
-            *value - *arr2.get(index).unwrap()
-        })
-    }
-
-    // #[allow(unused)]
-    // pub fn multiply(&self, other: &Self) -> Vec<T>
-    // where
-    //     T: Mul<Output = T> + Copy + Default,
-    // {
-    //     Self::_multiply(
-    //         self.inner.read().as_ref().unwrap(),
-    //         other.inner.read().as_ref().unwrap(),
-    //     )
-    // }
-
-    #[allow(unused)]
-    pub fn _multiply(arr1: &[T], arr2: &[T]) -> Vec<T>
-    where
-        T: Mul<Output = T> + Copy + Default,
-    {
-        Self::_transform(Self::slice_arr1(arr1, arr2), |(index, value, _)| {
-            *value * *arr2.get(index).unwrap()
-        })
-    }
-
-    // #[allow(unused)]
-    // pub fn divide(&self, other: &Self) -> Vec<T>
-    // where
-    //     T: Div<Output = T> + Copy + Default,
-    // {
-    //     Self::_divide(
-    //         self.inner.read().as_ref().unwrap(),
-    //         other.inner.read().as_ref().unwrap(),
-    //     )
-    // }
-
-    #[allow(unused)]
-    pub fn _divide(arr1: &[T], arr2: &[T]) -> Vec<T>
-    where
-        T: Div<Output = T> + Copy + Default,
-    {
-        Self::_transform(Self::slice_arr1(arr1, arr2), |(index, value, _)| {
-            *value / *arr2.get(index).unwrap()
-        })
-    }
-
-    #[allow(unused)]
-    fn slice_arr1<'a>(arr1: &'a [T], arr2: &'a [T]) -> &'a [T] {
-        if arr1.len() > arr2.len() {
-            &arr1[..arr2.len()]
-        } else {
-            arr1
-        }
-    }
-
-    // pub fn cumulate(&self) -> Vec<T>
-    // where
-    //     T: Sum + Copy + Default + AddAssign,
-    // {
-    //     Self::_cumulate(self.inner.read().as_ref().unwrap())
-    // }
-
-    #[allow(unused)]
-    pub fn _cumulate(arr: &[T]) -> Vec<T>
-    where
-        T: Sum + Copy + Default + AddAssign,
-    {
-        let mut sum = T::default();
-
-        arr.iter()
-            .map(|value| {
-                sum += *value;
-                sum
+        let previous_cum = height
+            .checked_sub(1)
+            .map(|previous_sum_height| {
+                self.get(&previous_sum_height).unwrap_or_else(|| {
+                    dbg!(previous_sum_height);
+                    panic!()
+                })
             })
-            .collect_vec()
+            .unwrap_or_default();
+
+        let last_value = source.get(&height).unwrap();
+
+        let cum_value = previous_cum + last_value;
+
+        self.insert(height, cum_value);
+
+        cum_value
     }
 
-    // #[allow(unused)]
-    // pub fn last_x_sum(&self, x: usize) -> Vec<T>
-    // where
-    //     T: Sum + Copy + Default + AddAssign + SubAssign,
-    // {
-    //     Self::_last_x_sum(self.inner.read().as_ref().unwrap(), x)
-    // }
-
-    #[allow(unused)]
-    pub fn _last_x_sum(arr: &[T], x: usize) -> Vec<T>
+    pub fn insert_last_x_sum(&self, height: usize, source: &HeightMap<T>, x: usize) -> T
     where
-        T: Sum + Copy + Default + AddAssign + SubAssign,
+        T: Add<Output = T> + Sub<Output = T>,
     {
-        let mut sum = T::default();
+        let to_subtract = (height + 1)
+            .checked_sub(x)
+            .map(|previous_height| source.get(&previous_height).unwrap())
+            .unwrap_or_default();
 
-        arr.iter()
-            .enumerate()
-            .map(|(index, value)| {
-                sum += *value;
+        let previous_sum = height
+            .checked_sub(1)
+            .map(|previous_sum_height| self.get(&previous_sum_height).unwrap())
+            .unwrap_or_default();
 
-                if index >= x - 1 {
-                    let previous_index = index + 1 - x;
+        let last_value = source.get(&height).unwrap();
 
-                    sum -= *arr.get(previous_index).unwrap()
-                }
+        let sum = previous_sum - to_subtract + last_value;
 
-                sum
-            })
-            .collect_vec()
+        self.insert(height, sum);
+
+        sum
     }
 
-    // #[allow(unused)]
-    // pub fn moving_average(&self, x: usize) -> Vec<f32>
-    // where
-    //     T: Sum + Copy + Default + AddAssign + SubAssign + ToF32,
-    // {
-    //     Self::_moving_average(self.inner.read().as_ref().unwrap(), x)
-    // }
-
     #[allow(unused)]
-    pub fn _moving_average(arr: &[T], x: usize) -> Vec<f32>
+    pub fn insert_simple_average(&self, height: usize, source: &HeightMap<T>, x: usize)
     where
-        T: Sum + Copy + Default + AddAssign + SubAssign + ToF32,
+        T: Into<f32> + From<f32>,
     {
-        let mut sum = T::default();
+        let to_subtract: f32 = (height + 1)
+            .checked_sub(x)
+            .map(|previous_height| source.get(&previous_height).unwrap())
+            .unwrap_or_default()
+            .into();
 
-        arr.iter()
-            .enumerate()
-            .map(|(index, value)| {
-                sum += *value;
+        let previous_average: f32 = height
+            .checked_sub(1)
+            .map(|previous_average_height| self.get(&previous_average_height).unwrap())
+            .unwrap_or_default()
+            .into();
 
-                if index >= x - 1 {
-                    sum -= *arr.get(index + 1 - x).unwrap()
-                }
+        let last_value: f32 = source.get(&height).unwrap().into();
 
-                sum.to_f32() / x as f32
-            })
-            .collect_vec()
+        let sum = previous_average * x as f32 - to_subtract + last_value;
+
+        let average: T = (sum / x as f32).into();
+
+        self.insert(height, average);
     }
 
-    // #[allow(unused)]
-    // pub fn net_change(&self, offset: usize) -> Vec<T>
-    // where
-    //     T: Copy + Default + Sub<Output = T>,
-    // {
-    //     Self::_net_change(self.inner.read().as_ref().unwrap(), offset)
-    // }
-
-    #[allow(unused)]
-    pub fn _net_change(arr: &[T], offset: usize) -> Vec<T>
+    pub fn insert_net_change(&self, height: usize, source: &HeightMap<T>, offset: usize) -> T
     where
-        T: Copy + Default + Sub<Output = T>,
+        T: Sub<Output = T>,
     {
-        Self::_transform(arr, |(index, value, arr)| {
-            let previous = {
-                if let Some(previous_index) = index.checked_sub(offset) {
-                    *arr.get(previous_index).unwrap()
-                } else {
-                    T::default()
-                }
-            };
+        let previous_value = height
+            .checked_sub(offset)
+            .map(|height| source.get(&height).unwrap())
+            .unwrap_or_default();
 
-            *value - previous
-        })
+        let last_value = source.get(&height).unwrap();
+
+        let net = last_value - previous_value;
+
+        self.insert(height, net);
+
+        net
     }
 
-    // #[allow(unused)]
-    // pub fn median(&self, size: usize) -> Vec<Option<T>>
-    // where
-    //     T: FloatCore,
-    // {
-    //     Self::_median(self.inner.read().as_ref().unwrap(), size)
-    // }
-
-    #[allow(unused)]
-    pub fn _median(arr: &[T], size: usize) -> Vec<Option<T>>
+    pub fn insert_median(&self, height: usize, source: &HeightMap<T>, size: usize) -> T
     where
         T: FloatCore,
     {
-        let even = size % 2 == 0;
-        let median_index = size / 2;
-
         if size < 3 {
             panic!("Computing a median for a size lower than 3 is useless");
         }
 
-        arr.iter()
-            .enumerate()
-            .map(|(index, _)| {
-                if index >= size - 1 {
-                    let mut arr = arr[index - (size - 1)..index + 1]
-                        .iter()
-                        .map(|value| OrderedFloat(*value))
-                        .collect_vec();
+        let median = {
+            if let Some(start) = height.checked_sub(size - 1) {
+                let even = size % 2 == 0;
+                let median_index = size / 2;
 
-                    arr.sort_unstable();
+                let mut vec = (start..=height)
+                    .flat_map(|height| source.get(&height))
+                    .map(|f| OrderedFloat(f))
+                    .collect_vec();
 
-                    if even {
-                        Some(
-                            (**arr.get(median_index).unwrap()
-                                + **arr.get(median_index - 1).unwrap())
-                                / T::from(2.0).unwrap(),
-                        )
-                    } else {
-                        Some(**arr.get(median_index).unwrap())
-                    }
+                vec.sort_unstable();
+
+                if even {
+                    (vec.get(median_index).unwrap().0 + vec.get(median_index - 1).unwrap().0)
+                        / T::from(2.0).unwrap()
                 } else {
-                    None
+                    vec.get(median_index).unwrap().0
                 }
-            })
-            .collect()
+            } else {
+                T::default()
+            }
+        };
+
+        self.insert(height, median);
+
+        median
     }
 }

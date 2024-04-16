@@ -32,7 +32,7 @@ pub fn find_first_unsafe_height(
             datasets
                 .date_metadata
                 .last_height
-                .get(&last_safe_date)
+                ._get(&last_safe_date)
                 .and_then(|last_safe_height| {
                     if min_datasets_last_height.map_or(true, |min_datasets_last_height| min_datasets_last_height < last_safe_height) {
                         println!("last_safe_height ({last_safe_height}) > min_datasets_height ({min_datasets_last_height:?})");

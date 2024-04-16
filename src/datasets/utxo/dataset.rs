@@ -11,7 +11,6 @@ use crate::{
 
 pub struct UTXODataset {
     min_initial_state: MinInitialState,
-
     id: UTXOCohortId,
 
     pub subs: SubDataset,
@@ -30,35 +29,23 @@ impl UTXODataset {
         };
 
         s.min_initial_state
-            .eat(MinInitialState::compute_from_dataset(&s));
+            .consume(MinInitialState::compute_from_dataset(&s));
 
         Ok(s)
     }
 }
 
 impl GenericDataset for UTXODataset {
-    fn insert_block_data(&self, processed_block_data: &ProcessedBlockData) {
+    fn insert_data(&self, processed_block_data: &ProcessedBlockData) {
         let &ProcessedBlockData {
-            block_path_to_received_data,
-            block_path_to_spent_data,
-            block_price,
             date,
-            date_price,
             height,
-            is_date_last_block,
             states,
             utxo_cohorts_one_shot_states,
             utxo_cohorts_received_states,
             utxo_cohorts_sent_states,
             ..
         } = processed_block_data;
-
-        let needs_price_paid_data = self.subs.price_paid.should_insert(height, date);
-        let needs_unrealized_data = self.subs.unrealized.should_insert(height, date);
-        let needs_realized_data = self.subs.realized.should_insert(height, date);
-        let needs_input_data = self.subs.input.should_insert(height, date);
-        let needs_output_data = self.subs.output.should_insert(height, date);
-        let needs_utxo_data = self.subs.utxo.should_insert(height, date);
 
         if self.subs.supply.should_insert(height, date) {
             self.subs.supply.insert(
@@ -125,57 +112,27 @@ impl AnyDataset for UTXODataset {
         &self.min_initial_state
     }
 
-    // fn prepare(&self, export_data: &ExportData) {
-    //     self.subs
-    //         .to_vec()
-    //         .into_iter()
-    //         .for_each(|d| d.prepare(export_data))
-    // }
-
-    // fn compute(&self, export_data: &ExportData) {
-    //     self.subs
-    //         .to_vec()
-    //         .into_iter()
-    //         .for_each(|d| d.compute(export_data))
-    // }
-
-    fn to_any_inserted_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
+    fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
         self.subs
             .to_vec()
             .into_iter()
-            .flat_map(|d| d.to_any_inserted_height_map_vec())
+            .flat_map(|d| d.to_any_height_map_vec())
             .collect_vec()
     }
 
-    fn to_any_inserted_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
+    fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
         self.subs
             .to_vec()
             .into_iter()
-            .flat_map(|d| d.to_any_inserted_date_map_vec())
+            .flat_map(|d| d.to_any_date_map_vec())
             .collect_vec()
     }
 
-    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
+    fn to_any_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         self.subs
             .to_vec()
             .into_iter()
-            .flat_map(|d| d.to_any_exported_bi_map_vec())
-            .collect_vec()
-    }
-
-    fn to_any_exported_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
-        self.subs
-            .to_vec()
-            .into_iter()
-            .flat_map(|d| d.to_any_exported_date_map_vec())
-            .collect_vec()
-    }
-
-    fn to_any_exported_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
-        self.subs
-            .to_vec()
-            .into_iter()
-            .flat_map(|d| d.to_any_exported_height_map_vec())
+            .flat_map(|d| d.to_any_bi_map_vec())
             .collect_vec()
     }
 }

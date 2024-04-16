@@ -1,7 +1,7 @@
 use crate::{
     bitcoin::sats_to_btc,
     datasets::AnyDataset,
-    parse::{AnyBiMap, AnyHeightMap, BiMap},
+    parse::{AnyBiMap, BiMap},
 };
 
 use super::{GenericDataset, MinInitialState, ProcessedBlockData};
@@ -23,43 +23,37 @@ impl CoindaysDataset {
         };
 
         s.min_initial_state
-            .eat(MinInitialState::compute_from_dataset(&s));
+            .consume(MinInitialState::compute_from_dataset(&s));
 
         Ok(s)
     }
 }
 
 impl GenericDataset for CoindaysDataset {
-    fn insert_block_data(
+    fn insert_data(
         &self,
         &ProcessedBlockData {
             height,
             satdays_destroyed,
+            date_blocks_range,
+            is_date_last_block,
+            date,
             ..
         }: &ProcessedBlockData,
     ) {
         self.destroyed
             .height
             .insert(height, sats_to_btc(satdays_destroyed));
+
+        if is_date_last_block {
+            self.destroyed
+                .date_insert_sum_range(date, date_blocks_range)
+        }
     }
 }
 
 impl AnyDataset for CoindaysDataset {
-    fn to_any_inserted_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
-        vec![&self.destroyed.height]
-    }
-
-    // fn compute(
-    //     &self,
-    //     &ExportData {
-    //         convert_sum_heights_to_date,
-    //         ..
-    //     }: &ExportData,
-    // ) {
-    // self.destroyed.compute_date(convert_sum_heights_to_date);
-    // }
-
-    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
+    fn to_any_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         vec![&self.destroyed]
     }
 

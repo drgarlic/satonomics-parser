@@ -6,6 +6,7 @@ use std::{
     mem,
     ops::{Add, AddAssign, DerefMut, Div, Mul, Sub, SubAssign},
     path::{Path, PathBuf},
+    str::FromStr,
 };
 
 use chrono::{Datelike, Days, NaiveDate};
@@ -23,14 +24,6 @@ use super::{AnyMap, WNaiveDate};
 
 const NUMBER_OF_UNSAFE_DATES: usize = 2;
 
-pub enum HeightToDateConverter<'a> {
-    Last(&'a DateMap<usize>),
-    Sum {
-        first_height: &'a DateMap<usize>,
-        last_height: &'a DateMap<usize>,
-    },
-}
-
 pub struct DateMap<T> {
     path_all: String,
     path_last: Option<String>,
@@ -47,6 +40,7 @@ pub struct DateMap<T> {
 impl<T> DateMap<T>
 where
     T: Clone
+        + Copy
         + Default
         + Debug
         + Serialize
@@ -117,27 +111,35 @@ where
             last_date.checked_sub_days(Days::new(offset as u64))
         });
 
+        if s.initial_first_unsafe_date.is_none() {
+            dbg!(&s.path_all);
+        }
+
         s
     }
 
-    pub fn insert(&self, date: NaiveDate, value: T) {
+    pub fn insert(&self, date: NaiveDate, value: T) -> T {
         if !self.is_date_safe(date) {
             self.to_insert
                 .write()
                 .entry(date.year() as usize)
                 .or_default()
                 .insert(WNaiveDate::wrap(date), value);
-        } else {
-            panic!("Shouldn't have called insert")
         }
+
+        value
     }
 
     #[allow(unused)]
-    pub fn insert_default(&self, date: NaiveDate) {
+    pub fn insert_default(&self, date: NaiveDate) -> T {
         self.insert(date, T::default())
     }
 
-    pub fn get(&self, date: &WNaiveDate) -> Option<T> {
+    pub fn get(&self, date: NaiveDate) -> Option<T> {
+        self._get(&WNaiveDate::wrap(date))
+    }
+
+    pub fn _get(&self, date: &WNaiveDate) -> Option<T> {
         let year = date.year() as usize;
 
         self.to_insert
@@ -154,35 +156,6 @@ where
                     .cloned()
             })
     }
-
-    // pub fn get_range(&self, first_date: usize, last_date: usize) -> Vec<Option<T>> {
-    //     let to_insert = self.to_insert.lock();
-    //     let imported = &mut None;
-
-    //     (first_height..=last_height)
-    //         .map(|height| {
-    //             let chunk_name = Self::height_to_chunk_name(height);
-
-    //             to_insert
-    //                 .get(&chunk_name)
-    //                 .and_then(|tree| tree.get(&height).cloned())
-    //                 .or_else(|| {
-    //                     self.import_chunk_if_needed(&chunk_name);
-
-    //                     if imported.is_none() {
-    //                         imported.as_mut().replace(&mut self.imported.lock());
-    //                     }
-
-    //                     imported
-    //                         .as_mut()
-    //                         .unwrap()
-    //                         .get(&chunk_name)
-    //                         .and_then(|tree| tree.get(&height))
-    //                         .cloned()
-    //                 })
-    //         })
-    //         .collect_vec()
-    // }
 
     #[inline(always)]
     pub fn is_date_safe(&self, date: NaiveDate) -> bool {
@@ -257,54 +230,30 @@ where
             .import::<BTreeMap<WNaiveDate, T>>(path.to_str().unwrap())
     }
 
-    // pub fn compute_from_height_map(&self, map: &[T], converter: &HeightToDateConverter) {
-    //     self.set_inner({
-    //         match converter {
-    //             HeightToDateConverter::Last(last_height) => {
-    //                 let last_height = last_height.imported.lock();
+    // pub fn last_inserted_date(&self) -> WNaiveDate {
+    //     self.last_inserted().0
+    // }
 
-    //                 last_height
-    //                     .as_ref()
-    //                     .unwrap()
-    //                     .iter()
-    //                     .map(|(date, height)| {
-    //                         let v = map.get(*height).unwrap().clone();
+    // pub fn last_inserted_value(&self) -> T {
+    //     self.last_inserted().1
+    // }
 
-    //                         (*date, v)
-    //                     })
-    //                     .collect()
-    //             }
-    //             HeightToDateConverter::Sum {
-    //                 first_height,
-    //                 last_height,
-    //             } => {
-    //                 let last_height = last_height.imported.lock();
-
-    //                 let first_height = first_height.imported.lock();
-
-    //                 first_height
-    //                     .as_ref()
-    //                     .unwrap()
-    //                     .iter()
-    //                     .map(|(date, height)| {
-    //                         let v = map
-    //                             [*height..last_height.as_ref().unwrap().get(date).unwrap() + 1]
-    //                             .iter()
-    //                             .cloned()
-    //                             .sum::<T>();
-
-    //                         (*date, v)
-    //                     })
-    //                     .collect()
-    //             }
-    //         }
-    //     });
+    // fn last_inserted(&self) -> (WNaiveDate, T) {
+    //     self.to_insert
+    //         .read()
+    //         .last_key_value()
+    //         .and_then(|(_, map)| {
+    //             map.last_key_value()
+    //                 .map(|(a, b)| (a.to_owned(), b.to_owned()))
+    //         })
+    //         .unwrap()
     // }
 }
 
 impl<T> AnyMap for DateMap<T>
 where
     T: Clone
+        + Copy
         + Default
         + Debug
         + Serialize
@@ -313,27 +262,6 @@ where
         + savefile::Serialize
         + savefile::Deserialize,
 {
-    //     fn import_tmp_data(&self) {
-    //         // println!("import tmp {}", &self.path);
-
-    //         if !self.modified.lock().to_owned() {
-    //             return;
-    //         }
-
-    //         if self.storage == Storage::Disk {
-    //             if self.imported.lock().is_some() {
-    //                 dbg!(&self.path);
-    //                 panic!("Probably forgot to drop inner after an export");
-    //             }
-
-    //             self.import_to_inner();
-
-    //             self.to_insert.lock().drain(..).for_each(|(date, value)| {
-    //                 self.insert_to_inner(date, value);
-    //             });
-    //         }
-    //     }
-
     fn path(&self) -> &str {
         &self.path_all
     }
@@ -429,6 +357,7 @@ pub trait AnyDateMap: AnyMap {
 impl<T> AnyDateMap for DateMap<T>
 where
     T: Clone
+        + Copy
         + Default
         + Debug
         + Serialize
@@ -457,6 +386,7 @@ where
 impl<T> DateMap<T>
 where
     T: Clone
+        + Copy
         + Default
         + Debug
         + Serialize
@@ -616,6 +546,66 @@ where
             .collect()
     }
 
+    pub fn insert_cumulative(&self, date: NaiveDate, source: &DateMap<T>) -> T
+    where
+        T: Add<Output = T> + Sub<Output = T>,
+    {
+        let previous_cum = date
+            .checked_sub_days(Days::new(1))
+            .map(|previous_date| {
+                self.get(previous_date).unwrap_or_else(|| {
+                    if previous_date.year() == 2009 && previous_date.month() == 1 {
+                        let day = previous_date.day();
+
+                        if day == 8 {
+                            self.get(NaiveDate::from_str("2009-01-03").unwrap())
+                                .unwrap()
+                        } else if day == 2 {
+                            T::default()
+                        } else {
+                            panic!()
+                        }
+                    } else {
+                        dbg!(previous_date, &self.path_all);
+                        panic!()
+                    }
+                })
+            })
+            .unwrap_or_default();
+
+        let last_value = source.get(date).unwrap();
+
+        let cum_value = previous_cum + last_value;
+
+        self.insert(date, cum_value);
+
+        cum_value
+    }
+
+    #[allow(unused)]
+    pub fn insert_last_x_sum(&self, date: NaiveDate, source: &DateMap<T>, x: usize) -> T
+    where
+        T: Add<Output = T> + Sub<Output = T>,
+    {
+        let to_subtract = date
+            .checked_sub_days(Days::new(x as u64 - 1))
+            .and_then(|previous_date| source.get(previous_date))
+            .unwrap_or_default();
+
+        let previous_sum = date
+            .checked_sub_days(Days::new(1))
+            .and_then(|previous_sum_date| self.get(previous_sum_date))
+            .unwrap_or_default();
+
+        let last_value = source.get(date).unwrap();
+
+        let sum = previous_sum - to_subtract + last_value;
+
+        self.insert(date, sum);
+
+        sum
+    }
+
     // #[allow(unused)]
     // pub fn last_x_sum(&self, x: usize) -> BTreeMap<WNaiveDate, T>
     // where
@@ -654,6 +644,42 @@ where
     // {
     //     Self::_simple_moving_average(self.imported.lock().as_ref().unwrap(), x)
     // }
+    //
+    #[allow(unused)]
+    pub fn insert_simple_average<K>(&self, date: NaiveDate, source: &DateMap<K>, x: usize)
+    where
+        T: Into<f32> + From<f32>,
+        K: Clone
+            + Copy
+            + Default
+            + Debug
+            + Serialize
+            + DeserializeOwned
+            + Sum
+            + savefile::Serialize
+            + savefile::Deserialize
+            + ToF32,
+    {
+        let to_subtract = date
+            .checked_sub_days(Days::new(x as u64 - 1))
+            .and_then(|previous_date| source.get(previous_date))
+            .unwrap_or_default()
+            .to_f32();
+
+        let previous_average: f32 = date
+            .checked_sub_days(Days::new(1))
+            .and_then(|previous_average_date| self.get(previous_average_date))
+            .unwrap_or_default()
+            .into();
+
+        let last_value: f32 = source.get(date).unwrap().to_f32();
+
+        let sum = previous_average * x as f32 - 0.0 + last_value;
+
+        let average: T = (sum / x as f32).into();
+
+        self.insert(date, average);
+    }
 
     #[allow(unused)]
     pub fn _simple_moving_average(
@@ -661,7 +687,7 @@ where
         x: usize,
     ) -> BTreeMap<WNaiveDate, f32>
     where
-        T: Sum + Copy + Default + AddAssign + SubAssign + ToF32,
+        T: Sum + Copy + Default + AddAssign + SubAssign + Into<f32>,
     {
         let mut sum = T::default();
 
@@ -674,7 +700,9 @@ where
                     sum -= *map.values().nth(index + 1 - x).unwrap()
                 }
 
-                (date.to_owned(), sum.to_f32() / x as f32)
+                let float_sum: f32 = sum.into();
+
+                (date.to_owned(), float_sum / x as f32)
             })
             .collect()
     }
@@ -686,6 +714,28 @@ where
     // {
     //     Self::_net_change(self.imported.lock().as_ref().unwrap(), offset)
     // }
+    //
+    //
+    pub fn insert_net_change(&self, date: NaiveDate, source: &DateMap<T>, offset: usize) -> T
+    where
+        T: Sub<Output = T>,
+    {
+        let previous_value = date
+            .checked_sub_days(Days::new(offset as u64))
+            .and_then(|date| source.get(date))
+            .unwrap_or_default();
+
+        let last_value = source.get(date).unwrap_or_else(|| {
+            dbg!(date);
+            panic!();
+        });
+
+        let net = last_value - previous_value;
+
+        self.insert(date, net);
+
+        net
+    }
 
     #[allow(unused)]
     pub fn _net_change(map: &BTreeMap<WNaiveDate, T>, offset: usize) -> BTreeMap<WNaiveDate, T>
@@ -712,6 +762,48 @@ where
     // {
     //     Self::_median(self.imported.lock().as_ref().unwrap(), size)
     // }
+    //
+    pub fn insert_median(&self, date: NaiveDate, source: &DateMap<T>, size: usize) -> T
+    where
+        T: FloatCore,
+    {
+        if size < 3 {
+            panic!("Computing a median for a size lower than 3 is useless");
+        }
+
+        let median = {
+            if let Some(start) = date.checked_sub_days(Days::new(size as u64 - 1)) {
+                let even = size % 2 == 0;
+                let median_index = size / 2;
+
+                let mut vec = start
+                    .iter_days()
+                    .take(size)
+                    .flat_map(|date| source.get(date))
+                    .map(|f| OrderedFloat(f))
+                    .collect_vec();
+
+                if vec.len() != size {
+                    return T::default();
+                }
+
+                vec.sort_unstable();
+
+                if even {
+                    (vec.get(median_index).unwrap().0 + vec.get(median_index - 1).unwrap().0)
+                        / T::from(2.0).unwrap()
+                } else {
+                    vec.get(median_index).unwrap().0
+                }
+            } else {
+                T::default()
+            }
+        };
+
+        self.insert(date, median);
+
+        median
+    }
 
     #[allow(unused)]
     pub fn _median(map: &BTreeMap<WNaiveDate, T>, size: usize) -> BTreeMap<WNaiveDate, Option<T>>

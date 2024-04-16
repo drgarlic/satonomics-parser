@@ -1,7 +1,7 @@
 use crate::{
     bitcoin::sats_to_btc,
     datasets::{AnyDataset, MinInitialState, ProcessedBlockData},
-    parse::{AnyBiMap, AnyDateMap, AnyHeightMap, BiMap},
+    parse::{AnyBiMap, BiMap},
     states::UnrealizedState,
 };
 
@@ -26,14 +26,19 @@ impl UnrealizedSubDataset {
         };
 
         s.min_initial_state
-            .eat(MinInitialState::compute_from_dataset(&s));
+            .consume(MinInitialState::compute_from_dataset(&s));
 
         Ok(s)
     }
 
     pub fn insert(
         &self,
-        &ProcessedBlockData { height, date, .. }: &ProcessedBlockData,
+        &ProcessedBlockData {
+            height,
+            date,
+            is_date_last_block,
+            ..
+        }: &ProcessedBlockData,
         block_state: &UnrealizedState,
         date_state: &Option<UnrealizedState>,
     ) {
@@ -49,7 +54,9 @@ impl UnrealizedSubDataset {
             .height
             .insert(height, block_state.unrealized_loss);
 
-        if let Some(date_state) = date_state {
+        if is_date_last_block {
+            let date_state = date_state.as_ref().unwrap();
+
             self.supply_in_profit
                 .date
                 .insert(date, sats_to_btc(date_state.supply_in_profit));
@@ -70,23 +77,7 @@ impl AnyDataset for UnrealizedSubDataset {
         &self.min_initial_state
     }
 
-    fn to_any_inserted_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
-        vec![
-            &self.supply_in_profit.date,
-            &self.unrealized_profit.date,
-            &self.unrealized_loss.date,
-        ]
-    }
-
-    fn to_any_inserted_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
-        vec![
-            &self.supply_in_profit.height,
-            &self.unrealized_profit.height,
-            &self.unrealized_loss.height,
-        ]
-    }
-
-    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
+    fn to_any_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         vec![
             &self.supply_in_profit,
             &self.unrealized_profit,

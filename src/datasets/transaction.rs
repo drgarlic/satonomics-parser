@@ -1,7 +1,7 @@
 use crate::{
     bitcoin::{sats_to_btc, ONE_YEAR_IN_BLOCK_TIME},
     datasets::ProcessedBlockData,
-    parse::{AnyBiMap, AnyHeightMap, BiMap},
+    parse::{AnyBiMap, BiMap},
     utils::ONE_YEAR_IN_DAYS,
 };
 
@@ -13,7 +13,7 @@ pub struct TransactionDataset {
     pub count: BiMap<usize>,
     pub volume: BiMap<f32>,
 
-    pub annualized_volume: BiMap<Option<f32>>,
+    pub annualized_volume: BiMap<f32>,
     pub velocity: BiMap<f32>,
 }
 
@@ -32,14 +32,14 @@ impl TransactionDataset {
         };
 
         s.min_initial_state
-            .eat(MinInitialState::compute_from_dataset(&s));
+            .consume(MinInitialState::compute_from_dataset(&s));
 
         Ok(s)
     }
 }
 
 impl GenericDataset for TransactionDataset {
-    fn insert_block_data(
+    fn insert_data(
         &self,
         &ProcessedBlockData {
             height,
@@ -47,80 +47,48 @@ impl GenericDataset for TransactionDataset {
             sats_sent,
             transaction_count,
             is_date_last_block,
-            date_first_height,
+            date_blocks_range,
+            datasets,
             ..
         }: &ProcessedBlockData,
     ) {
+        let circulating_supply_map = &datasets.address.all.all.supply.total;
+        let circulating_supply = circulating_supply_map.height.get(&height).unwrap();
+
         self.count.height.insert(height, transaction_count);
+
         self.volume.height.insert(height, sats_to_btc(sats_sent));
 
-        self.annualized_volume.height.insert(
+        let annualized_volume = self.annualized_volume.height.insert_last_x_sum(
             height,
-            height
-                .checked_sub(ONE_YEAR_IN_BLOCK_TIME)
-                .map(|from| self.volume.height.sum(from..=height)),
+            &self.volume.height,
+            ONE_YEAR_IN_BLOCK_TIME,
         );
 
-        // self.velocity.set_height(
-        //     self.annualized_volume
-        //         .height
-        //         .divide(&circulating_supply.height),
-        // );
-        //     .set_height(self.volume.height.last_x_sum(ONE_YEAR_IN_BLOCK_TIME));
+        self.velocity
+            .height
+            .insert(height, annualized_volume / circulating_supply);
 
         if is_date_last_block {
-            self.count
-                .date
-                .insert(date, self.count.height.sum(date_first_height..=height));
+            self.count.date_insert_sum_range(date, date_blocks_range);
 
-            self.volume
-                .date
-                .insert(date, self.volume.height.sum(date_first_height..=height));
+            self.volume.date_insert_sum_range(date, date_blocks_range);
 
-            // first_height: &self.date_metadata.first_height,
-            //         last_height: &self.date_metadata.last_height,
+            let annualized_volume = self.annualized_volume.date.insert_last_x_sum(
+                date,
+                &self.volume.date,
+                ONE_YEAR_IN_DAYS,
+            );
+
+            self.velocity
+                .date
+                .insert(date, annualized_volume / circulating_supply);
         }
     }
 }
 
 impl AnyDataset for TransactionDataset {
-    fn to_any_inserted_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
-        vec![&self.count.height, &self.volume.height]
-    }
-
-    // fn prepare(
-    //     &self,
-    //     &ExportData {
-    //         convert_last_height_to_date,
-    //         convert_sum_heights_to_date,
-    //         ..
-    //     }: &ExportData,
-    // ) {
-    // self.count.compute_date(convert_sum_heights_to_date);
-    // self.volume.compute_date(convert_sum_heights_to_date);
-
-    // self.annualized_volume
-    //     .set_height(self.volume.height.last_x_sum(ONE_YEAR_IN_BLOCK_TIME));
-    // self.annualized_volume
-    //     .set_date(self.volume.date.last_x_sum(ONE_YEAR_IN_DAYS));
-    // }
-
-    // fn compute(
-    //     &self,
-    //     &ExportData {
-    //         circulating_supply, ..
-    //     }: &ExportData,
-    // ) {
-    // self.velocity.set_height(
-    //     self.annualized_volume
-    //         .height
-    //         .divide(&circulating_supply.height),
-    // );
-    // self.velocity
-    //     .set_date(self.annualized_volume.date.divide(&circulating_supply.date));
-    // }
-
-    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
+    fn to_any_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         vec![
             &self.count,
             &self.volume,

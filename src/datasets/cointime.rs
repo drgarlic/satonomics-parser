@@ -2,8 +2,8 @@ use crate::{
     bitcoin::{
         sats_to_btc, ONE_DAY_IN_BLOCK_TIME, THREE_MONTHS_IN_BLOCK_TIME, TWO_WEEKS_IN_BLOCK_TIME,
     },
-    parse::{AnyBiMap, AnyHeightMap, BiMap, HeightMap},
-    utils::{ONE_DAY_IN_DAYS, THREE_MONTHS_IN_DAYS, TWO_WEEK_IN_DAYS},
+    parse::{AnyBiMap, BiMap},
+    utils::{ONE_DAY_IN_DAYS, ONE_YEAR_IN_DAYS, THREE_MONTHS_IN_DAYS, TWO_WEEK_IN_DAYS},
 };
 
 use super::{AnyDataset, GenericDataset, MinInitialState, ProcessedBlockData};
@@ -11,47 +11,46 @@ use super::{AnyDataset, GenericDataset, MinInitialState, ProcessedBlockData};
 pub struct CointimeDataset {
     min_initial_state: MinInitialState,
 
-    pub coinblocks_destroyed: BiMap<f32>,
-
-    pub cumulative_coinblocks_destroyed: BiMap<f32>,
-    pub coinblocks_created: BiMap<f32>,
-    pub cumulative_coinblocks_created: BiMap<f32>,
-    pub coinblocks_stored: BiMap<f32>,
-    pub cumulative_coinblocks_stored: BiMap<f32>,
-    pub liveliness: BiMap<f32>,
-    pub vaultedness: BiMap<f32>,
-    pub activity_to_vaultedness_ratio: BiMap<f32>,
-    pub concurrent_liveliness: BiMap<f32>,
-    pub concurrent_liveliness_2w_median: BiMap<Option<f32>>,
-    pub liveliness_net_change: BiMap<f32>,
-    pub liveliness_net_change_2w_median: BiMap<Option<f32>>,
-    pub vaulted_supply: BiMap<f32>,
-    pub vaulting_rate: BiMap<f32>,
-    pub active_supply: BiMap<f32>,
-    pub active_supply_net_change: BiMap<f32>,
-    pub active_supply_3m_net_change: BiMap<f32>,
-    pub cointime_adjusted_yearly_inflation_rate: BiMap<f32>,
-    pub cointime_adjusted_velocity: BiMap<f32>,
-    pub thermo_cap: BiMap<f32>,
-    pub investor_cap: BiMap<f32>,
-    pub thermo_cap_to_investor_cap_ratio: BiMap<f32>,
-    pub active_price: BiMap<f32>,
     pub active_cap: BiMap<f32>,
-    pub vaulted_price: BiMap<f32>,
-    pub vaulted_cap: BiMap<f32>,
-    pub true_market_mean: BiMap<f32>,
-    pub true_market_deviation: BiMap<f32>,
-    pub true_market_net_unrealized_profit_and_loss: BiMap<f32>,
-    pub investorness: BiMap<f32>,
-    pub producerness: BiMap<f32>,
+    pub active_price: BiMap<f32>,
+    pub active_supply: BiMap<f32>,
+    pub active_supply_3m_net_change: BiMap<f32>,
+    pub active_supply_net_change: BiMap<f32>,
+    pub activity_to_vaultedness_ratio: BiMap<f32>,
+    pub coinblocks_created: BiMap<f32>,
+    pub coinblocks_destroyed: BiMap<f32>,
+    pub coinblocks_stored: BiMap<f32>,
+    pub cointime_adjusted_velocity: BiMap<f32>,
+    pub cointime_adjusted_yearly_inflation_rate: BiMap<f32>,
+    pub cointime_cap: BiMap<f32>,
+    pub cointime_price: BiMap<f32>,
     pub cointime_value_created: BiMap<f32>,
     pub cointime_value_destroyed: BiMap<f32>,
     pub cointime_value_stored: BiMap<f32>,
+    pub concurrent_liveliness: BiMap<f32>,
+    pub concurrent_liveliness_2w_median: BiMap<f32>,
+    pub cumulative_coinblocks_created: BiMap<f32>,
+    pub cumulative_coinblocks_destroyed: BiMap<f32>,
+    pub cumulative_coinblocks_stored: BiMap<f32>,
+    pub investor_cap: BiMap<f32>,
+    pub investorness: BiMap<f32>,
+    pub liveliness: BiMap<f32>,
+    pub liveliness_net_change: BiMap<f32>,
+    pub liveliness_net_change_2w_median: BiMap<f32>,
+    pub producerness: BiMap<f32>,
+    pub thermo_cap: BiMap<f32>,
+    pub thermo_cap_to_investor_cap_ratio: BiMap<f32>,
     pub total_cointime_value_created: BiMap<f32>,
     pub total_cointime_value_destroyed: BiMap<f32>,
     pub total_cointime_value_stored: BiMap<f32>,
-    pub cointime_price: BiMap<f32>,
-    pub cointime_cap: BiMap<f32>,
+    pub true_market_deviation: BiMap<f32>,
+    pub true_market_mean: BiMap<f32>,
+    pub true_market_net_unrealized_profit_and_loss: BiMap<f32>,
+    pub vaulted_cap: BiMap<f32>,
+    pub vaulted_price: BiMap<f32>,
+    pub vaulted_supply: BiMap<f32>,
+    pub vaultedness: BiMap<f32>,
+    pub vaulting_rate: BiMap<f32>,
 }
 
 impl CointimeDataset {
@@ -110,352 +109,470 @@ impl CointimeDataset {
         };
 
         s.min_initial_state
-            .eat(MinInitialState::compute_from_dataset(&s));
+            .consume(MinInitialState::compute_from_dataset(&s));
 
         Ok(s)
     }
 }
 
 impl GenericDataset for CointimeDataset {
-    fn insert_block_data(
+    fn insert_data(
         &self,
         &ProcessedBlockData {
             height,
+            date,
             satblocks_destroyed,
+            block_price,
+            date_price,
+            datasets,
+            date_blocks_range,
+            is_date_last_block,
             ..
         }: &ProcessedBlockData,
     ) {
-        self.coinblocks_destroyed
+        let circulating_supply_map = &datasets.address.all.all.supply.total;
+        let circulating_supply = circulating_supply_map.height.get(&height).unwrap();
+
+        let realized_cap_map = &datasets.address.all.all.price_paid.realized_cap;
+        let realized_cap = realized_cap_map.height.get(&height).unwrap();
+
+        let realized_price_map = &datasets.address.all.all.price_paid.realized_price;
+        let realized_price = realized_price_map.height.get(&height).unwrap();
+
+        let yearly_inflation_rate_map = &datasets.mining.yearly_inflation_rate;
+        let yearly_inflation_rate = yearly_inflation_rate_map.height.get(&height).unwrap();
+
+        let annualized_transaction_volume_map = &datasets.transaction.annualized_volume;
+        let annualized_transaction_volume = annualized_transaction_volume_map
+            .height
+            .get(&height)
+            .unwrap();
+
+        let cumulative_subsidy_in_dollars_map = &datasets.mining.cumulative_subsidy_in_dollars;
+        let cumulative_subsidy_in_dollars = cumulative_subsidy_in_dollars_map
+            .height
+            .get(&height)
+            .unwrap();
+
+        let coinblocks_destroyed = self
+            .coinblocks_destroyed
             .height
             .insert(height, sats_to_btc(satblocks_destroyed));
+
+        let cumulative_coinblocks_destroyed = self
+            .cumulative_coinblocks_destroyed
+            .height
+            .insert_cumulative(height, &self.coinblocks_destroyed.height);
+
+        let coinblocks_created = self
+            .coinblocks_created
+            .height
+            .insert(height, circulating_supply);
+
+        let cumulative_coinblocks_created = self
+            .cumulative_coinblocks_created
+            .height
+            .insert_cumulative(height, &self.coinblocks_created.height);
+
+        let coinblocks_stored = self
+            .coinblocks_stored
+            .height
+            .insert(height, coinblocks_created - coinblocks_destroyed);
+
+        let cumulative_coinblocks_stored = self
+            .cumulative_coinblocks_stored
+            .height
+            .insert_cumulative(height, &self.coinblocks_stored.height);
+
+        let liveliness = self.liveliness.height.insert(
+            height,
+            cumulative_coinblocks_destroyed / cumulative_coinblocks_created,
+        );
+
+        let vaultedness = self.vaultedness.height.insert(height, 1.0 - liveliness);
+
+        let activity_to_vaultedness_ratio = self
+            .activity_to_vaultedness_ratio
+            .height
+            .insert(height, liveliness / vaultedness);
+
+        let concurrent_liveliness = self
+            .concurrent_liveliness
+            .height
+            .insert(height, coinblocks_destroyed / coinblocks_created);
+
+        self.concurrent_liveliness_2w_median.height.insert_median(
+            height,
+            &self.concurrent_liveliness.height,
+            TWO_WEEKS_IN_BLOCK_TIME,
+        );
+
+        self.liveliness_net_change.height.insert_net_change(
+            height,
+            &self.liveliness.height,
+            ONE_DAY_IN_BLOCK_TIME,
+        );
+
+        self.liveliness_net_change_2w_median
+            .height
+            .insert_net_change(height, &self.liveliness.height, TWO_WEEKS_IN_BLOCK_TIME);
+
+        let vaulted_supply = self
+            .vaulted_supply
+            .height
+            .insert(height, vaultedness * circulating_supply);
+
+        let vaulting_rate = self
+            .vaulting_rate
+            .height
+            .insert(height, vaulted_supply * ONE_YEAR_IN_DAYS as f32);
+
+        let active_supply = self
+            .active_supply
+            .height
+            .insert(height, liveliness * circulating_supply);
+
+        self.active_supply_net_change.height.insert_net_change(
+            height,
+            &self.active_supply.height,
+            ONE_DAY_IN_BLOCK_TIME,
+        );
+
+        self.active_supply_3m_net_change.height.insert_net_change(
+            height,
+            &self.active_supply.height,
+            THREE_MONTHS_IN_BLOCK_TIME,
+        );
+
+        // TODO: Do these
+        // let min_vaulted_supply = ;
+        // let max_active_supply = ;
+
+        self.cointime_adjusted_yearly_inflation_rate.height.insert(
+            height,
+            yearly_inflation_rate * activity_to_vaultedness_ratio,
+        );
+
+        self.cointime_adjusted_velocity
+            .height
+            .insert(height, annualized_transaction_volume / active_supply);
+
+        // TODO:
+        // const activeSupplyChangeFromTransactions90dChange =
+        //     createNetChangeLazyDataset(activeSupplyChangeFromTransactions, 90);
+        //   const activeSupplyChangeFromIssuance = createMultipliedLazyDataset(
+        //     lastSubsidy,
+        //     liveliness,
+        //   );
+
+        let thermo_cap = self
+            .thermo_cap
+            .height
+            .insert(height, cumulative_subsidy_in_dollars);
+
+        let investor_cap = self
+            .investor_cap
+            .height
+            .insert(height, realized_cap - thermo_cap);
+
+        self.thermo_cap_to_investor_cap_ratio
+            .height
+            .insert(height, thermo_cap / investor_cap);
+
+        // TODO:
+        // const activeSupplyChangeFromIssuance90dChange = createNetChangeLazyDataset(
+        //   activeSupplyChangeFromIssuance,
+        //   90,
+        // );
+
+        self.active_price
+            .height
+            .insert(height, realized_price / liveliness);
+
+        let active_cap = self
+            .active_cap
+            .height
+            .insert(height, active_supply * block_price);
+
+        self.vaulted_price
+            .height
+            .insert(height, realized_price / vaultedness);
+
+        self.vaulted_cap
+            .height
+            .insert(height, vaulted_supply * block_price);
+
+        let true_market_mean = self
+            .true_market_mean
+            .height
+            .insert(height, investor_cap / active_supply);
+
+        let true_market_deviation = self
+            .true_market_deviation
+            .height
+            .insert(height, active_cap / investor_cap);
+
+        let true_market_net_unrealized_profit_and_loss = self
+            .true_market_net_unrealized_profit_and_loss
+            .height
+            .insert(height, (active_cap - investor_cap) / active_cap);
+
+        self.investorness
+            .height
+            .insert(height, investor_cap / realized_cap);
+
+        self.producerness
+            .height
+            .insert(height, thermo_cap / realized_cap);
+
+        let cointime_value_destroyed = self
+            .cointime_value_destroyed
+            .height
+            .insert(height, block_price * coinblocks_destroyed);
+
+        let cointime_value_created = self
+            .cointime_value_created
+            .height
+            .insert(height, block_price * coinblocks_created);
+
+        let cointime_value_stored = self
+            .cointime_value_stored
+            .height
+            .insert(height, block_price * coinblocks_stored);
+
+        let total_cointime_value_created = self
+            .total_cointime_value_created
+            .height
+            .insert_cumulative(height, &self.cointime_value_created.height);
+
+        let total_cointime_value_destroyed = self
+            .total_cointime_value_destroyed
+            .height
+            .insert_cumulative(height, &self.cointime_value_destroyed.height);
+
+        let total_cointime_value_stored = self
+            .total_cointime_value_stored
+            .height
+            .insert_cumulative(height, &self.cointime_value_stored.height);
+
+        let cointime_price = self.cointime_price.height.insert(
+            height,
+            total_cointime_value_destroyed / cumulative_coinblocks_stored,
+        );
+
+        let cointime_cap = self
+            .cointime_cap
+            .height
+            .insert(height, cointime_price * circulating_supply);
+
+        if is_date_last_block {
+            let realized_cap = realized_cap_map.date.get(date).unwrap();
+            let realized_price = realized_price_map.date.get(date).unwrap();
+            let yearly_inflation_rate = yearly_inflation_rate_map.date.get(date).unwrap();
+            let annualized_transaction_volume =
+                annualized_transaction_volume_map.date.get(date).unwrap();
+            let cumulative_subsidy_in_dollars =
+                cumulative_subsidy_in_dollars_map.date.get(date).unwrap();
+
+            self.coinblocks_destroyed
+                .date_insert_sum_range(date, date_blocks_range);
+
+            self.cumulative_coinblocks_destroyed
+                .date
+                .insert(date, cumulative_coinblocks_destroyed);
+
+            self.coinblocks_created
+                .date_insert_sum_range(date, date_blocks_range);
+
+            self.cumulative_coinblocks_created
+                .date
+                .insert(date, cumulative_coinblocks_created);
+
+            self.coinblocks_stored
+                .date_insert_sum_range(date, date_blocks_range);
+
+            self.cumulative_coinblocks_stored
+                .date
+                .insert(date, cumulative_coinblocks_stored);
+
+            self.liveliness.date.insert(date, liveliness);
+
+            self.vaultedness.date.insert(date, vaultedness);
+
+            self.activity_to_vaultedness_ratio
+                .date
+                .insert(date, activity_to_vaultedness_ratio);
+
+            self.concurrent_liveliness
+                .date
+                .insert(date, concurrent_liveliness);
+
+            self.concurrent_liveliness_2w_median.date.insert_median(
+                date,
+                &self.concurrent_liveliness.date,
+                TWO_WEEK_IN_DAYS,
+            );
+
+            self.liveliness_net_change.date.insert_net_change(
+                date,
+                &self.liveliness.date,
+                ONE_DAY_IN_DAYS,
+            );
+
+            self.liveliness_net_change_2w_median.date.insert_net_change(
+                date,
+                &self.liveliness.date,
+                TWO_WEEK_IN_DAYS,
+            );
+
+            self.vaulted_supply.date.insert(date, vaulted_supply);
+
+            self.vaulting_rate.date.insert(date, vaulting_rate);
+
+            self.active_supply.date.insert(date, active_supply);
+
+            self.active_supply_net_change.date.insert_net_change(
+                date,
+                &self.active_supply.date,
+                ONE_DAY_IN_DAYS,
+            );
+
+            self.active_supply_3m_net_change.date.insert_net_change(
+                date,
+                &self.active_supply.date,
+                THREE_MONTHS_IN_DAYS,
+            );
+
+            self.cointime_adjusted_yearly_inflation_rate
+                .date
+                .insert(date, yearly_inflation_rate * activity_to_vaultedness_ratio);
+
+            self.cointime_adjusted_velocity
+                .date
+                .insert(date, annualized_transaction_volume / active_supply);
+
+            let thermo_cap = self
+                .thermo_cap
+                .date
+                .insert(date, cumulative_subsidy_in_dollars);
+
+            let investor_cap = self
+                .investor_cap
+                .date
+                .insert(date, realized_cap - thermo_cap);
+
+            self.thermo_cap_to_investor_cap_ratio
+                .date
+                .insert(date, thermo_cap / investor_cap);
+
+            self.active_price
+                .date
+                .insert(date, realized_price / liveliness);
+
+            self.active_cap
+                .date
+                .insert(date, active_supply * date_price);
+
+            self.vaulted_price
+                .date
+                .insert(date, realized_price / vaultedness);
+
+            self.vaulted_cap
+                .date
+                .insert(date, vaulted_supply * date_price);
+
+            self.true_market_mean.date.insert(date, true_market_mean);
+
+            self.true_market_deviation
+                .date
+                .insert(date, true_market_deviation);
+
+            self.true_market_net_unrealized_profit_and_loss
+                .date
+                .insert(date, true_market_net_unrealized_profit_and_loss);
+
+            self.investorness
+                .date
+                .insert(date, investor_cap / realized_cap);
+
+            self.producerness
+                .date
+                .insert(date, thermo_cap / realized_cap);
+
+            self.cointime_value_destroyed
+                .date
+                .insert(date, cointime_value_destroyed);
+
+            self.cointime_value_created
+                .date
+                .insert(date, cointime_value_created);
+
+            self.cointime_value_stored
+                .date
+                .insert(date, cointime_value_stored);
+
+            self.total_cointime_value_created
+                .date
+                .insert(date, total_cointime_value_created);
+
+            self.total_cointime_value_destroyed
+                .date
+                .insert(date, total_cointime_value_destroyed);
+
+            self.total_cointime_value_stored
+                .date
+                .insert(date, total_cointime_value_stored);
+
+            self.cointime_price.date.insert(date, cointime_price);
+
+            self.cointime_cap.date.insert(date, cointime_cap);
+        }
     }
 }
 
 impl AnyDataset for CointimeDataset {
-    fn to_any_inserted_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
-        vec![&self.coinblocks_destroyed.height]
-    }
-
-    // fn compute(
-    //     &self,
-    //     &ExportData {
-    //         // height,
-    //         annualized_transaction_volume,
-    //         circulating_supply,
-    //         yearly_inflation_rate: inflation_rate,
-    //         height_price,
-    //         realized_cap,
-    //         realized_price,
-    //         subsidy_in_dollars,
-    //         convert_sum_heights_to_date,
-    //         convert_last_height_to_date,
-    //         ..
-    //     }: &ExportData,
-    // ) {
-    //     self.coinblocks_destroyed
-    //         .compute_date(convert_sum_heights_to_date);
-
-    //     self.cumulative_coinblocks_destroyed
-    //         .set_height_then_compute_date(
-    //             self.coinblocks_destroyed.height.cumulate(),
-    //             convert_last_height_to_date,
-    //         );
-
-    //     self.coinblocks_created.set_height_then_compute_date(
-    //         circulating_supply
-    //             .height
-    //             .imported
-    //             .lock()
-    //             .as_ref()
-    //             .unwrap()
-    //             .clone(),
-    //         convert_sum_heights_to_date,
-    //     );
-
-    //     self.cumulative_coinblocks_created
-    //         .set_height_then_compute_date(
-    //             self.coinblocks_created.height.cumulate(),
-    //             convert_last_height_to_date,
-    //         );
-
-    //     self.coinblocks_stored.set_height_then_compute_date(
-    //         self.coinblocks_created
-    //             .height
-    //             .subtract(&self.coinblocks_destroyed.height),
-    //         convert_sum_heights_to_date,
-    //     );
-
-    //     self.cumulative_coinblocks_stored
-    //         .set_height_then_compute_date(
-    //             self.coinblocks_created.height.cumulate(),
-    //             convert_last_height_to_date,
-    //         );
-
-    //     self.liveliness.set_height_then_compute_date(
-    //         self.cumulative_coinblocks_destroyed
-    //             .height
-    //             .divide(&self.cumulative_coinblocks_created.height),
-    //         convert_last_height_to_date,
-    //     );
-
-    //     self.vaultedness.set_height_then_compute_date(
-    //         self.liveliness.height.transform(|(_, v, ..)| 1.0 - *v),
-    //         convert_last_height_to_date,
-    //     );
-
-    //     self.activity_to_vaultedness_ratio
-    //         .set_height_then_compute_date(
-    //             self.liveliness.height.divide(&self.vaultedness.height),
-    //             convert_last_height_to_date,
-    //         );
-
-    //     self.concurrent_liveliness.set_height_then_compute_date(
-    //         self.coinblocks_destroyed
-    //             .height
-    //             .divide(&self.coinblocks_created.height),
-    //         convert_last_height_to_date,
-    //     );
-
-    //     self.concurrent_liveliness_2w_median.set_height(
-    //         self.concurrent_liveliness
-    //             .height
-    //             .median(TWO_WEEKS_IN_BLOCK_TIME),
-    //     );
-    //     self.concurrent_liveliness_2w_median
-    //         .set_date(self.concurrent_liveliness.date.median(TWO_WEEK_IN_DAYS));
-
-    //     self.liveliness_net_change
-    //         .set_height(self.liveliness.height.net_change(ONE_DAY_IN_BLOCK_TIME));
-    //     self.liveliness_net_change
-    //         .set_date(self.liveliness.date.net_change(ONE_DAY_IN_DAYS));
-
-    //     self.liveliness_net_change_2w_median.set_height(
-    //         self.liveliness_net_change
-    //             .height
-    //             .median(TWO_WEEKS_IN_BLOCK_TIME),
-    //     );
-    //     self.liveliness_net_change_2w_median
-    //         .set_date(self.liveliness_net_change.date.median(TWO_WEEK_IN_DAYS));
-
-    //     self.vaulted_supply.set_height_then_compute_date(
-    //         self.vaultedness.height.multiply(&circulating_supply.height),
-    //         convert_last_height_to_date,
-    //     );
-
-    //     self.vaulting_rate.set_height_then_compute_date(
-    //         self.vaulted_supply
-    //             .height
-    //             .transform(|(_, v, ..)| *v * 365.0),
-    //         convert_last_height_to_date,
-    //     );
-
-    //     self.active_supply.set_height_then_compute_date(
-    //         self.liveliness.height.multiply(&circulating_supply.height),
-    //         convert_last_height_to_date,
-    //     );
-
-    //     self.active_supply_net_change
-    //         .set_height(self.active_supply.height.net_change(ONE_DAY_IN_BLOCK_TIME));
-    //     self.active_supply_net_change
-    //         .set_date(self.active_supply.date.net_change(ONE_DAY_IN_DAYS));
-
-    //     self.active_supply_3m_net_change.set_height(
-    //         self.active_supply
-    //             .height
-    //             .net_change(THREE_MONTHS_IN_BLOCK_TIME),
-    //     );
-    //     self.active_supply_3m_net_change
-    //         .set_date(self.active_supply.date.net_change(THREE_MONTHS_IN_DAYS));
-
-    //     // TODO: Do these
-    //     // let min_vaulted_supply = ;
-    //     // let max_active_supply = ;
-
-    //     self.cointime_adjusted_yearly_inflation_rate
-    //         .set_height_then_compute_date(
-    //             inflation_rate
-    //                 .height
-    //                 .multiply(&self.activity_to_vaultedness_ratio.height),
-    //             convert_last_height_to_date,
-    //         );
-
-    //     self.cointime_adjusted_velocity
-    //         .set_height_then_compute_date(
-    //             annualized_transaction_volume
-    //                 .height
-    //                 .divide(&self.active_supply.height),
-    //             convert_last_height_to_date,
-    //         );
-
-    //     // TODO:
-    //     // const activeSupplyChangeFromTransactions90dChange =
-    //     //     createNetChangeLazyDataset(activeSupplyChangeFromTransactions, 90);
-    //     //   const activeSupplyChangeFromIssuance = createMultipliedLazyDataset(
-    //     //     lastSubsidy,
-    //     //     liveliness,
-    //     //   );
-
-    //     self.thermo_cap.set_height_then_compute_date(
-    //         subsidy_in_dollars.height.cumulate(),
-    //         convert_last_height_to_date,
-    //     );
-
-    //     self.investor_cap.set_height_then_compute_date(
-    //         realized_cap.height.subtract(&self.thermo_cap.height),
-    //         convert_last_height_to_date,
-    //     );
-
-    //     self.thermo_cap_to_investor_cap_ratio
-    //         .set_height_then_compute_date(
-    //             self.thermo_cap.height.divide(&self.investor_cap.height),
-    //             convert_last_height_to_date,
-    //         );
-
-    //     // TODO:
-    //     // const activeSupplyChangeFromIssuance90dChange = createNetChangeLazyDataset(
-    //     //   activeSupplyChangeFromIssuance,
-    //     //   90,
-    //     // );
-
-    //     self.active_price.set_height_then_compute_date(
-    //         realized_price.height.divide(&self.liveliness.height),
-    //         convert_last_height_to_date,
-    //     );
-
-    //     self.active_cap.set_height_then_compute_date(
-    //         self.active_supply.height.multiply(height_price),
-    //         convert_last_height_to_date,
-    //     );
-
-    //     self.vaulted_price.set_height_then_compute_date(
-    //         realized_price.height.divide(&self.vaultedness.height),
-    //         convert_last_height_to_date,
-    //     );
-
-    //     self.vaulted_cap.set_height_then_compute_date(
-    //         self.vaulted_supply.height.multiply(height_price),
-    //         convert_last_height_to_date,
-    //     );
-
-    //     self.true_market_mean.set_height_then_compute_date(
-    //         self.investor_cap.height.divide(&self.active_supply.height),
-    //         convert_last_height_to_date,
-    //     );
-
-    //     self.true_market_deviation.set_height_then_compute_date(
-    //         self.active_cap.height.divide(&self.investor_cap.height),
-    //         convert_last_height_to_date,
-    //     );
-
-    //     self.true_market_net_unrealized_profit_and_loss
-    //         .set_height_then_compute_date(
-    //             HeightMap::_divide(
-    //                 &self.active_cap.height.subtract(&self.investor_cap.height),
-    //                 self.active_cap.height.imported.lock().as_ref().unwrap(),
-    //             ),
-    //             convert_last_height_to_date,
-    //         );
-
-    //     self.investorness.set_height_then_compute_date(
-    //         self.investor_cap.height.divide(&realized_cap.height),
-    //         convert_last_height_to_date,
-    //     );
-
-    //     self.producerness.set_height_then_compute_date(
-    //         self.thermo_cap.height.divide(&realized_cap.height),
-    //         convert_last_height_to_date,
-    //     );
-
-    //     self.cointime_value_created.set_height_then_compute_date(
-    //         height_price.multiply(&self.coinblocks_created.height),
-    //         convert_last_height_to_date,
-    //     );
-
-    //     self.cointime_value_destroyed.set_height_then_compute_date(
-    //         height_price.multiply(&self.coinblocks_destroyed.height),
-    //         convert_last_height_to_date,
-    //     );
-
-    //     self.cointime_value_stored.set_height_then_compute_date(
-    //         height_price.multiply(&self.coinblocks_stored.height),
-    //         convert_last_height_to_date,
-    //     );
-
-    //     self.total_cointime_value_created
-    //         .set_height_then_compute_date(
-    //             self.cointime_value_created.height.cumulate(),
-    //             convert_last_height_to_date,
-    //         );
-
-    //     self.total_cointime_value_destroyed
-    //         .set_height_then_compute_date(
-    //             self.cointime_value_destroyed.height.cumulate(),
-    //             convert_last_height_to_date,
-    //         );
-
-    //     self.total_cointime_value_stored
-    //         .set_height_then_compute_date(
-    //             self.cointime_value_stored.height.cumulate(),
-    //             convert_last_height_to_date,
-    //         );
-
-    //     self.cointime_price.set_height_then_compute_date(
-    //         self.total_cointime_value_destroyed
-    //             .height
-    //             .divide(&self.cumulative_coinblocks_stored.height),
-    //         convert_last_height_to_date,
-    //     );
-
-    //     self.cointime_cap.set_height_then_compute_date(
-    //         self.cointime_price
-    //             .height
-    //             .multiply(&circulating_supply.height),
-    //         convert_last_height_to_date,
-    //     );
-    // }
-
-    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
+    fn to_any_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         vec![
-            &self.coinblocks_destroyed,
-            &self.cumulative_coinblocks_destroyed,
-            &self.coinblocks_created,
-            &self.cumulative_coinblocks_created,
-            &self.coinblocks_stored,
-            &self.cumulative_coinblocks_stored,
-            &self.liveliness,
-            &self.vaultedness,
-            &self.activity_to_vaultedness_ratio,
-            &self.concurrent_liveliness,
-            &self.concurrent_liveliness_2w_median,
-            &self.liveliness_net_change,
-            &self.liveliness_net_change_2w_median,
-            &self.vaulted_supply,
-            &self.vaulting_rate,
-            &self.active_supply,
-            &self.active_supply_net_change,
-            &self.active_supply_3m_net_change,
-            &self.cointime_adjusted_yearly_inflation_rate,
-            &self.cointime_adjusted_velocity,
-            &self.thermo_cap,
-            &self.investor_cap,
-            &self.thermo_cap_to_investor_cap_ratio,
-            &self.active_price,
             &self.active_cap,
-            &self.vaulted_price,
-            &self.vaulted_cap,
-            &self.true_market_mean,
-            &self.true_market_deviation,
-            &self.true_market_net_unrealized_profit_and_loss,
-            &self.investorness,
-            &self.producerness,
+            &self.active_price,
+            &self.active_supply,
+            &self.active_supply_3m_net_change,
+            &self.active_supply_net_change,
+            &self.activity_to_vaultedness_ratio,
+            &self.coinblocks_created,
+            &self.coinblocks_destroyed,
+            &self.coinblocks_stored,
+            &self.cointime_adjusted_velocity,
+            &self.cointime_adjusted_yearly_inflation_rate,
+            &self.cointime_cap,
+            &self.cointime_price,
             &self.cointime_value_created,
             &self.cointime_value_destroyed,
             &self.cointime_value_stored,
+            &self.concurrent_liveliness,
+            &self.concurrent_liveliness_2w_median,
+            &self.cumulative_coinblocks_created,
+            &self.cumulative_coinblocks_destroyed,
+            &self.cumulative_coinblocks_stored,
+            &self.investor_cap,
+            &self.investorness,
+            &self.liveliness,
+            &self.liveliness_net_change,
+            &self.liveliness_net_change_2w_median,
+            &self.producerness,
+            &self.thermo_cap,
+            &self.thermo_cap_to_investor_cap_ratio,
             &self.total_cointime_value_created,
             &self.total_cointime_value_destroyed,
             &self.total_cointime_value_stored,
-            &self.cointime_price,
-            &self.cointime_cap,
+            &self.true_market_deviation,
+            &self.true_market_mean,
+            &self.true_market_net_unrealized_profit_and_loss,
+            &self.vaulted_cap,
+            &self.vaulted_price,
+            &self.vaulted_supply,
+            &self.vaultedness,
+            &self.vaulting_rate,
         ]
     }
 

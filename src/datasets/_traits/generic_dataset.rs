@@ -1,9 +1,7 @@
-use crate::datasets::{ProcessedBlockData, ProcessedDateData};
+use crate::datasets::ProcessedBlockData;
 
 use super::AnyDataset;
 
 pub trait GenericDataset: AnyDataset {
-    fn insert_block_data(&self, _: &ProcessedBlockData) {}
-
-    fn insert_date_data(&self, _: &ProcessedDateData) {}
+    fn insert_data(&self, _: &ProcessedBlockData) {}
 }

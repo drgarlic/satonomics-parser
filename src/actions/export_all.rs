@@ -1,6 +1,6 @@
 use std::thread;
 
-use chrono::{Datelike, Local, NaiveDate};
+use chrono::{Local, NaiveDate};
 
 use crate::{databases::Databases, datasets::AllDatasets, states::States, utils::time};
 
@@ -16,17 +16,14 @@ pub fn export_all(
     ExportedData {
         databases,
         datasets,
-        date,
-        height,
         states,
+        ..
     }: ExportedData,
 ) -> color_eyre::Result<()> {
     println!("{:?} - Saving... (Don't close !!)", Local::now());
 
     time("Total save time", || -> color_eyre::Result<()> {
-        time("Datasets saved", || {
-            datasets.export_if_needed(date, height, date.month0() == 0)
-        })?;
+        time("Datasets saved", || datasets.export())?;
 
         // time("States saved in", || states.export())?;
 

@@ -1,7 +1,7 @@
 use crate::{
     bitcoin::sats_to_btc,
     datasets::{AnyDataset, MinInitialState, ProcessedBlockData},
-    parse::{AnyBiMap, AnyHeightMap, BiMap},
+    parse::{AnyBiMap, BiMap},
     states::SupplyState,
 };
 
@@ -22,40 +22,35 @@ impl SupplySubDataset {
         };
 
         s.min_initial_state
-            .eat(MinInitialState::compute_from_dataset(&s));
+            .consume(MinInitialState::compute_from_dataset(&s));
 
         Ok(s)
     }
 
     pub fn insert(
         &self,
-        &ProcessedBlockData { height, .. }: &ProcessedBlockData,
+        &ProcessedBlockData {
+            height,
+            date,
+            is_date_last_block,
+            ..
+        }: &ProcessedBlockData,
         state: &SupplyState,
     ) {
-        self.total.height.insert(height, sats_to_btc(state.supply));
+        let total_supply = self.total.height.insert(height, sats_to_btc(state.supply));
+
+        if is_date_last_block {
+            self.total.date.insert(date, total_supply);
+        }
     }
 }
 
 impl AnyDataset for SupplySubDataset {
-    // fn prepare(
-    //     &self,
-    //     &ExportData {
-    //         convert_last_height_to_date,
-    //         ..
-    //     }: &ExportData,
-    // ) {
-    // self.total.compute_date(convert_last_height_to_date);
-    // }
-
     fn get_min_initial_state(&self) -> &MinInitialState {
         &self.min_initial_state
     }
 
-    fn to_any_inserted_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
-        vec![&self.total.height]
-    }
-
-    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
+    fn to_any_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         vec![&self.total]
     }
 }

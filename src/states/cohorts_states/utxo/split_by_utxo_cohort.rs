@@ -153,7 +153,7 @@ impl<T> SplitByUTXOCohort<T> {
         }
     }
 
-    pub fn filter(&mut self, days_old: &u32, year: &u32) -> BTreeSet<UTXOCohortId> {
+    pub fn filtered_ids(&mut self, days_old: &u32, year: &u32) -> BTreeSet<UTXOCohortId> {
         let mut set = BTreeSet::new();
 
         if UTXO_FILTERS.up_to_1d.check(days_old, year) {
@@ -214,41 +214,23 @@ impl<T> SplitByUTXOCohort<T> {
 
         if UTXO_FILTERS.from_1d_to_1w.check(days_old, year) {
             set.insert(UTXOCohortId::From1dTo1w);
-        }
-
-        if UTXO_FILTERS.from_1w_to_1m.check(days_old, year) {
+        } else if UTXO_FILTERS.from_1w_to_1m.check(days_old, year) {
             set.insert(UTXOCohortId::From1wTo1m);
-        }
-
-        if UTXO_FILTERS.from_1m_to_3m.check(days_old, year) {
+        } else if UTXO_FILTERS.from_1m_to_3m.check(days_old, year) {
             set.insert(UTXOCohortId::From1mTo3m);
-        }
-
-        if UTXO_FILTERS.from_3m_to_6m.check(days_old, year) {
+        } else if UTXO_FILTERS.from_3m_to_6m.check(days_old, year) {
             set.insert(UTXOCohortId::From3mTo6m);
-        }
-
-        if UTXO_FILTERS.from_6m_to_1y.check(days_old, year) {
+        } else if UTXO_FILTERS.from_6m_to_1y.check(days_old, year) {
             set.insert(UTXOCohortId::From6mTo1y);
-        }
-
-        if UTXO_FILTERS.from_1y_to_2y.check(days_old, year) {
+        } else if UTXO_FILTERS.from_1y_to_2y.check(days_old, year) {
             set.insert(UTXOCohortId::From1yTo2y);
-        }
-
-        if UTXO_FILTERS.from_2y_to_3y.check(days_old, year) {
+        } else if UTXO_FILTERS.from_2y_to_3y.check(days_old, year) {
             set.insert(UTXOCohortId::From2yTo3y);
-        }
-
-        if UTXO_FILTERS.from_3y_to_5y.check(days_old, year) {
+        } else if UTXO_FILTERS.from_3y_to_5y.check(days_old, year) {
             set.insert(UTXOCohortId::From3yTo5y);
-        }
-
-        if UTXO_FILTERS.from_5y_to_7y.check(days_old, year) {
+        } else if UTXO_FILTERS.from_5y_to_7y.check(days_old, year) {
             set.insert(UTXOCohortId::From5yTo7y);
-        }
-
-        if UTXO_FILTERS.from_7y_to_10y.check(days_old, year) {
+        } else if UTXO_FILTERS.from_7y_to_10y.check(days_old, year) {
             set.insert(UTXOCohortId::From7yTo10y);
         }
 
@@ -262,77 +244,197 @@ impl<T> SplitByUTXOCohort<T> {
 
         if UTXO_FILTERS.year_2009.check(days_old, year) {
             set.insert(UTXOCohortId::Year2009);
-        }
-
-        if UTXO_FILTERS.year_2010.check(days_old, year) {
+        } else if UTXO_FILTERS.year_2010.check(days_old, year) {
             set.insert(UTXOCohortId::Year2010);
-        }
-
-        if UTXO_FILTERS.year_2011.check(days_old, year) {
+        } else if UTXO_FILTERS.year_2011.check(days_old, year) {
             set.insert(UTXOCohortId::Year2011);
-        }
-
-        if UTXO_FILTERS.year_2012.check(days_old, year) {
+        } else if UTXO_FILTERS.year_2012.check(days_old, year) {
             set.insert(UTXOCohortId::Year2012);
-        }
-
-        if UTXO_FILTERS.year_2013.check(days_old, year) {
+        } else if UTXO_FILTERS.year_2013.check(days_old, year) {
             set.insert(UTXOCohortId::Year2013);
-        }
-
-        if UTXO_FILTERS.year_2014.check(days_old, year) {
+        } else if UTXO_FILTERS.year_2014.check(days_old, year) {
             set.insert(UTXOCohortId::Year2014);
-        }
-
-        if UTXO_FILTERS.year_2015.check(days_old, year) {
+        } else if UTXO_FILTERS.year_2015.check(days_old, year) {
             set.insert(UTXOCohortId::Year2015);
-        }
-
-        if UTXO_FILTERS.year_2016.check(days_old, year) {
+        } else if UTXO_FILTERS.year_2016.check(days_old, year) {
             set.insert(UTXOCohortId::Year2016);
-        }
-
-        if UTXO_FILTERS.year_2017.check(days_old, year) {
+        } else if UTXO_FILTERS.year_2017.check(days_old, year) {
             set.insert(UTXOCohortId::Year2017);
-        }
-
-        if UTXO_FILTERS.year_2018.check(days_old, year) {
+        } else if UTXO_FILTERS.year_2018.check(days_old, year) {
             set.insert(UTXOCohortId::Year2018);
-        }
-
-        if UTXO_FILTERS.year_2019.check(days_old, year) {
+        } else if UTXO_FILTERS.year_2019.check(days_old, year) {
             set.insert(UTXOCohortId::Year2019);
-        }
-
-        if UTXO_FILTERS.year_2020.check(days_old, year) {
+        } else if UTXO_FILTERS.year_2020.check(days_old, year) {
             set.insert(UTXOCohortId::Year2020);
-        }
-
-        if UTXO_FILTERS.year_2021.check(days_old, year) {
+        } else if UTXO_FILTERS.year_2021.check(days_old, year) {
             set.insert(UTXOCohortId::Year2021);
-        }
-
-        if UTXO_FILTERS.year_2022.check(days_old, year) {
+        } else if UTXO_FILTERS.year_2022.check(days_old, year) {
             set.insert(UTXOCohortId::Year2022);
-        }
-
-        if UTXO_FILTERS.year_2023.check(days_old, year) {
+        } else if UTXO_FILTERS.year_2023.check(days_old, year) {
             set.insert(UTXOCohortId::Year2023);
-        }
-
-        if UTXO_FILTERS.year_2024.check(days_old, year) {
+        } else if UTXO_FILTERS.year_2024.check(days_old, year) {
             set.insert(UTXOCohortId::Year2024);
         }
 
         if UTXO_FILTERS.sth.check(days_old, year) {
             set.insert(UTXOCohortId::ShortTermHolders);
-        }
-
-        if UTXO_FILTERS.lth.check(days_old, year) {
+        } else {
+            // } else if UTXO_FILTERS.lth.check(days_old, year) {
             set.insert(UTXOCohortId::LongTermHolders);
         }
 
         set
+    }
+
+    pub fn filtered_apply(&mut self, days_old: &u32, year: &u32, apply: impl Fn(&mut T)) {
+        if UTXO_FILTERS.up_to_1d.check(days_old, year) {
+            apply(&mut self.up_to_1d);
+        } else if UTXO_FILTERS.from_1d_to_1w.check(days_old, year) {
+            apply(&mut self.from_1d_to_1w);
+        } else if UTXO_FILTERS.from_1w_to_1m.check(days_old, year) {
+            apply(&mut self.from_1w_to_1m);
+        } else if UTXO_FILTERS.from_1m_to_3m.check(days_old, year) {
+            apply(&mut self.from_1m_to_3m);
+        } else if UTXO_FILTERS.from_3m_to_6m.check(days_old, year) {
+            apply(&mut self.from_3m_to_6m);
+        } else if UTXO_FILTERS.from_6m_to_1y.check(days_old, year) {
+            apply(&mut self.from_6m_to_1y);
+        } else if UTXO_FILTERS.from_1y_to_2y.check(days_old, year) {
+            apply(&mut self.from_1y_to_2y);
+        } else if UTXO_FILTERS.from_2y_to_3y.check(days_old, year) {
+            apply(&mut self.from_2y_to_3y);
+        } else if UTXO_FILTERS.from_3y_to_5y.check(days_old, year) {
+            apply(&mut self.from_3y_to_5y);
+        } else if UTXO_FILTERS.from_5y_to_7y.check(days_old, year) {
+            apply(&mut self.from_5y_to_7y);
+        } else if UTXO_FILTERS.from_7y_to_10y.check(days_old, year) {
+            apply(&mut self.from_7y_to_10y);
+        }
+
+        if UTXO_FILTERS.year_2009.check(days_old, year) {
+            apply(&mut self.year_2009);
+        } else if UTXO_FILTERS.year_2010.check(days_old, year) {
+            apply(&mut self.year_2010);
+        } else if UTXO_FILTERS.year_2011.check(days_old, year) {
+            apply(&mut self.year_2011);
+        } else if UTXO_FILTERS.year_2012.check(days_old, year) {
+            apply(&mut self.year_2012);
+        } else if UTXO_FILTERS.year_2013.check(days_old, year) {
+            apply(&mut self.year_2013);
+        } else if UTXO_FILTERS.year_2014.check(days_old, year) {
+            apply(&mut self.year_2014);
+        } else if UTXO_FILTERS.year_2015.check(days_old, year) {
+            apply(&mut self.year_2015);
+        } else if UTXO_FILTERS.year_2016.check(days_old, year) {
+            apply(&mut self.year_2016);
+        } else if UTXO_FILTERS.year_2017.check(days_old, year) {
+            apply(&mut self.year_2017);
+        } else if UTXO_FILTERS.year_2018.check(days_old, year) {
+            apply(&mut self.year_2018);
+        } else if UTXO_FILTERS.year_2019.check(days_old, year) {
+            apply(&mut self.year_2019);
+        } else if UTXO_FILTERS.year_2020.check(days_old, year) {
+            apply(&mut self.year_2020);
+        } else if UTXO_FILTERS.year_2021.check(days_old, year) {
+            apply(&mut self.year_2021);
+        } else if UTXO_FILTERS.year_2022.check(days_old, year) {
+            apply(&mut self.year_2022);
+        } else if UTXO_FILTERS.year_2023.check(days_old, year) {
+            apply(&mut self.year_2023);
+        } else if UTXO_FILTERS.year_2024.check(days_old, year) {
+            apply(&mut self.year_2024);
+        }
+
+        if UTXO_FILTERS.sth.check(days_old, year) {
+            apply(&mut self.sth);
+        } else {
+            // } else if UTXO_FILTERS.lth.check(days_old, year) {
+            apply(&mut self.lth);
+        }
+
+        if UTXO_FILTERS.from_1y.check(days_old, year) {
+            apply(&mut self.from_1y);
+        }
+
+        if UTXO_FILTERS.from_10y.check(days_old, year) {
+            apply(&mut self.from_10y);
+        }
+
+        if UTXO_FILTERS.up_to_10y.check(days_old, year) {
+            apply(&mut self.up_to_10y);
+        } else {
+            return;
+        }
+
+        if UTXO_FILTERS.up_to_7y.check(days_old, year) {
+            apply(&mut self.up_to_7y);
+        } else {
+            return;
+        }
+
+        if UTXO_FILTERS.up_to_5y.check(days_old, year) {
+            apply(&mut self.up_to_5y);
+        } else {
+            return;
+        }
+
+        if UTXO_FILTERS.up_to_3y.check(days_old, year) {
+            apply(&mut self.up_to_3y);
+        } else {
+            return;
+        }
+
+        if UTXO_FILTERS.up_to_2y.check(days_old, year) {
+            apply(&mut self.up_to_2y);
+        } else {
+            return;
+        }
+
+        if UTXO_FILTERS.up_to_1y.check(days_old, year) {
+            apply(&mut self.up_to_1y);
+        } else {
+            return;
+        }
+
+        if UTXO_FILTERS.up_to_6m.check(days_old, year) {
+            apply(&mut self.up_to_6m);
+        } else {
+            return;
+        }
+
+        if UTXO_FILTERS.up_to_5m.check(days_old, year) {
+            apply(&mut self.up_to_5m);
+        } else {
+            return;
+        }
+
+        if UTXO_FILTERS.up_to_4m.check(days_old, year) {
+            apply(&mut self.up_to_4m);
+        } else {
+            return;
+        }
+
+        if UTXO_FILTERS.up_to_3m.check(days_old, year) {
+            apply(&mut self.up_to_3m);
+        } else {
+            return;
+        }
+
+        if UTXO_FILTERS.up_to_2m.check(days_old, year) {
+            apply(&mut self.up_to_2m);
+        } else {
+            return;
+        }
+
+        if UTXO_FILTERS.up_to_1m.check(days_old, year) {
+            apply(&mut self.up_to_1m);
+        } else {
+            return;
+        }
+
+        if UTXO_FILTERS.up_to_1w.check(days_old, year) {
+            apply(&mut self.up_to_1w);
+        }
     }
 
     pub fn to_vec(&self) -> Vec<&T> {

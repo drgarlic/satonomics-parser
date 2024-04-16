@@ -164,7 +164,7 @@ impl AddressDatasets {
             };
 
             s.min_initial_state
-                .eat(MinInitialState::compute_from_datasets(&s));
+                .consume(MinInitialState::compute_from_datasets(&s));
 
             Ok(s)
         })

@@ -1,27 +1,28 @@
 use crate::{
     bitcoin::{sats_to_btc, ONE_YEAR_IN_BLOCK_TIME},
     datasets::AnyDataset,
-    parse::{AnyBiMap, AnyDateMap, AnyHeightMap, BiMap, DateMap},
+    parse::{AnyBiMap, AnyDateMap, BiMap, DateMap},
     utils::{ONE_MONTH_IN_DAYS, ONE_WEEK_IN_DAYS, ONE_YEAR_IN_DAYS},
 };
 
-use super::{GenericDataset, MinInitialState, ProcessedBlockData, ProcessedDateData};
+use super::{GenericDataset, MinInitialState, ProcessedBlockData};
 
 pub struct MiningDataset {
     min_initial_state: MinInitialState,
 
-    pub blocks_mined: DateMap<usize>,
     pub coinbase: BiMap<f32>,
     pub fees: BiMap<f32>,
-
     pub subsidy: BiMap<f32>,
     pub subsidy_in_dollars: BiMap<f32>,
+    pub cumulative_subsidy_in_dollars: BiMap<f32>,
     pub annualized_issuance: BiMap<f32>,
     pub yearly_inflation_rate: BiMap<f32>,
-    pub last_subsidy: DateMap<f32>,
-    pub last_subsidy_in_dollars: DateMap<f32>,
+
+    pub blocks_mined: DateMap<usize>,
     pub blocks_mined_1w_sma: DateMap<f32>,
     pub blocks_mined_1m_sma: DateMap<f32>,
+    pub last_subsidy: DateMap<f32>,
+    pub last_subsidy_in_dollars: DateMap<f32>,
 }
 
 impl MiningDataset {
@@ -37,6 +38,7 @@ impl MiningDataset {
 
             subsidy: BiMap::new_bin(&f("subsidy")),
             subsidy_in_dollars: BiMap::new_bin(&f("subsidy_in_dollars")),
+            cumulative_subsidy_in_dollars: BiMap::new_bin(&f("cumulative_subsidy_in_dollars")),
 
             annualized_issuance: BiMap::new_bin(&f("annualized_issuance")),
             yearly_inflation_rate: BiMap::new_bin(&f("yearly_inflation_rate")),
@@ -49,141 +51,139 @@ impl MiningDataset {
         };
 
         s.min_initial_state
-            .eat(MinInitialState::compute_from_dataset(&s));
+            .consume(MinInitialState::compute_from_dataset(&s));
 
         Ok(s)
     }
 }
 
 impl GenericDataset for MiningDataset {
-    fn insert_date_data(
-        &self,
-        &ProcessedDateData {
-            date,
-            first_height,
-            height,
-            ..
-        }: &ProcessedDateData,
-    ) {
-        self.blocks_mined.insert(date, height + 1 - first_height);
-    }
-
-    fn insert_block_data(
+    fn insert_data(
         &self,
         &ProcessedBlockData {
+            date_first_height,
             height,
             coinbase,
             fees,
+            datasets,
+            date_blocks_range,
+            is_date_last_block,
+            block_price,
+            date_price,
+            date,
             ..
         }: &ProcessedBlockData,
     ) {
-        let sumed_fees = fees.iter().sum();
+        let circulating_supply_map = &datasets.address.all.all.supply.total;
+        let circulating_supply = circulating_supply_map.height.get(&height).unwrap();
 
-        self.coinbase.height.insert(height, sats_to_btc(coinbase));
+        let coinbase = sats_to_btc(coinbase);
 
-        self.fees.height.insert(height, sats_to_btc(sumed_fees));
+        self.coinbase.height.insert(height, coinbase);
+
+        let sumed_fees = sats_to_btc(fees.iter().sum());
+
+        self.fees.height.insert(height, sumed_fees);
+
+        let subsidy = coinbase - sumed_fees;
+
+        self.subsidy.height.insert(height, subsidy);
+
+        let subsidy_in_dollars = subsidy * block_price;
+
+        self.subsidy_in_dollars
+            .height
+            .insert(height, subsidy_in_dollars);
+
+        self.cumulative_subsidy_in_dollars
+            .height
+            .insert_cumulative(height, &self.subsidy_in_dollars.height);
+
+        let annualized_issuance = self.annualized_issuance.height.insert_last_x_sum(
+            height,
+            &self.subsidy.height,
+            ONE_YEAR_IN_BLOCK_TIME,
+        );
+
+        self.yearly_inflation_rate
+            .height
+            .insert(height, annualized_issuance / circulating_supply);
+
+        if is_date_last_block {
+            let coinbase = self
+                .coinbase
+                .date
+                .insert(date, self.coinbase.height.sum_range(date_blocks_range));
+
+            let fees = self
+                .fees
+                .date
+                .insert(date, self.fees.height.sum_range(date_blocks_range));
+
+            let subsidy = self.subsidy.date.insert(date, coinbase - fees);
+
+            let subsidy_in_dollars = self
+                .subsidy_in_dollars
+                .date
+                .insert(date, subsidy * date_price);
+
+            self.cumulative_subsidy_in_dollars
+                .date
+                .insert_cumulative(date, &self.subsidy_in_dollars.date);
+
+            self.last_subsidy.insert(date, subsidy);
+
+            self.last_subsidy_in_dollars
+                .insert(date, subsidy_in_dollars);
+
+            let annualized_issuance = self.annualized_issuance.date.insert_last_x_sum(
+                date,
+                &self.subsidy.date,
+                ONE_YEAR_IN_DAYS,
+            );
+
+            self.yearly_inflation_rate
+                .date
+                .insert(date, annualized_issuance / circulating_supply);
+
+            self.blocks_mined
+                .insert(date, height + 1 - date_first_height);
+
+            self.blocks_mined_1w_sma.insert_simple_average(
+                date,
+                &self.blocks_mined,
+                ONE_WEEK_IN_DAYS,
+            );
+
+            self.blocks_mined_1m_sma.insert_simple_average(
+                date,
+                &self.blocks_mined,
+                ONE_MONTH_IN_DAYS,
+            );
+        }
     }
 }
 
 impl AnyDataset for MiningDataset {
-    fn to_any_inserted_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
-        vec![&self.blocks_mined]
-    }
-
-    fn to_any_inserted_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
+    fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
         vec![
-            &self.coinbase.height,
-            &self.fees.height,
-            &self.subsidy.height,
-            &self.subsidy_in_dollars.height,
+            &self.blocks_mined,
+            &self.blocks_mined_1w_sma,
+            &self.blocks_mined_1m_sma,
+            &self.last_subsidy,
+            &self.last_subsidy_in_dollars,
         ]
     }
 
-    // fn prepare(
-    //     &self,
-    //     &ExportData {
-    //         circulating_supply,
-    //         convert_sum_heights_to_date,
-    //         height_price,
-    //         ..
-    //     }: &ExportData,
-    // ) {
-    // self.coinbase.compute_date(convert_sum_heights_to_date);
-
-    // self.fees.compute_date(convert_sum_heights_to_date);
-
-    // self.subsidy.set_height_then_compute_date(
-    //     self.coinbase.height.subtract(&self.fees.height),
-    //     convert_sum_heights_to_date,
-    // );
-
-    // self.subsidy_in_dollars.set_height_then_compute_date(
-    //     self.subsidy.height.multiply(height_price),
-    //     convert_sum_heights_to_date,
-    // );
-
-    // self.annualized_issuance
-    //     .set_height(self.subsidy.height.last_x_sum(ONE_YEAR_IN_BLOCK_TIME));
-    // self.annualized_issuance
-    //     .set_date(self.subsidy.date.last_x_sum(ONE_YEAR_IN_DAYS));
-
-    // self.yearly_inflation_rate.set_height(
-    //     self.annualized_issuance
-    //         .height
-    //         .divide(&circulating_supply.height),
-    // );
-    // self.yearly_inflation_rate.set_date(
-    //     self.annualized_issuance
-    //         .date
-    //         .divide(&circulating_supply.date),
-    // );
-    // }
-
-    // fn compute(
-    //     &self,
-    //     &ExportData {
-    //         convert_last_height_to_date,
-    //         ..
-    //     }: &ExportData,
-    // ) {
-    // self.last_subsidy.compute_from_height_map(
-    //     self.subsidy.height.imported.lock().as_ref().unwrap(),
-    //     convert_last_height_to_date,
-    // );
-    // self.last_subsidy_in_dollars.compute_from_height_map(
-    //     self.subsidy_in_dollars
-    //         .height
-    //         .imported
-    //         .lock()
-    //         .as_ref()
-    //         .unwrap(),
-    //     convert_last_height_to_date,
-    // );
-
-    // self.blocks_mined_1w_sma
-    //     .set_inner(self.blocks_mined.simple_moving_average(ONE_WEEK_IN_DAYS));
-    // self.blocks_mined_1m_sma
-    //     .set_inner(self.blocks_mined.simple_moving_average(ONE_MONTH_IN_DAYS));
-    // }
-
-    fn to_any_exported_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
+    fn to_any_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         vec![
             &self.coinbase,
             &self.fees,
             &self.subsidy,
             &self.subsidy_in_dollars,
+            &self.cumulative_subsidy_in_dollars,
             &self.annualized_issuance,
             &self.yearly_inflation_rate,
-        ]
-    }
-
-    fn to_any_exported_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
-        vec![
-            &self.last_subsidy,
-            &self.last_subsidy_in_dollars,
-            &self.blocks_mined,
-            &self.blocks_mined_1w_sma,
-            &self.blocks_mined_1m_sma,
         ]
     }
 
