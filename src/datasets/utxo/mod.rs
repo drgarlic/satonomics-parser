@@ -11,7 +11,7 @@ use crate::{
     states::{SplitByUTXOCohort, UTXOCohortId},
 };
 
-use super::{GenericDataset, MinInitialState};
+use super::{AnyDataset, MinInitialState, ProcessedBlockData};
 
 pub struct UTXODatasets {
     min_initial_state: MinInitialState,
@@ -177,8 +177,19 @@ impl UTXODatasets {
         })
     }
 
-    fn to_vec(&self) -> Vec<&UTXODataset> {
-        self.cohorts.to_vec()
+    pub fn insert_data(&mut self, processed_block_data: &ProcessedBlockData) {
+        self.cohorts
+            .as_mut_vec()
+            .into_iter()
+            .for_each(|cohort| cohort.insert_data(processed_block_data))
+    }
+
+    fn as_vec(&self) -> Vec<&UTXODataset> {
+        self.cohorts.as_vec()
+    }
+
+    fn as_mut_vec(&mut self) -> Vec<&mut UTXODataset> {
+        self.cohorts.as_mut_vec()
     }
 }
 
@@ -187,10 +198,17 @@ impl AnyDatasets for UTXODatasets {
         &self.min_initial_state
     }
 
-    fn to_generic_dataset_vec(&self) -> Vec<&(dyn GenericDataset + Send + Sync)> {
-        self.to_vec()
+    fn to_any_dataset_vec(&self) -> Vec<&(dyn AnyDataset + Send + Sync)> {
+        self.as_vec()
             .into_iter()
-            .map(|dataset| dataset as &(dyn GenericDataset + Send + Sync))
+            .map(|dataset| dataset as &(dyn AnyDataset + Send + Sync))
+            .collect_vec()
+    }
+
+    fn to_mut_any_dataset_vec(&mut self) -> Vec<&mut dyn AnyDataset> {
+        self.as_mut_vec()
+            .into_iter()
+            .map(|dataset| dataset as &mut dyn AnyDataset)
             .collect_vec()
     }
 }

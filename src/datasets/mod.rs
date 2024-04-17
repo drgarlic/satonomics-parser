@@ -49,7 +49,6 @@ pub struct ProcessedBlockData<'a> {
     pub block_price: f32,
     pub coinbase: u64,
     pub databases: &'a Databases,
-    pub datasets: &'a AllDatasets,
     pub date: NaiveDate,
     pub date_first_height: usize,
     pub date_blocks_range: &'a RangeInclusive<usize>,
@@ -141,9 +140,48 @@ impl AllDatasets {
         })
     }
 
+    pub fn insert_data(&mut self, processed_block_data: ProcessedBlockData) {
+        let ProcessedBlockData { height, date, .. } = processed_block_data;
+
+        self.address.insert_data(&processed_block_data);
+
+        self.utxo.insert_data(&processed_block_data);
+
+        if self.block_metadata.should_insert(height, date) {
+            self.block_metadata.insert_data(&processed_block_data);
+        }
+
+        if self.date_metadata.should_insert(height, date) {
+            self.date_metadata.insert_data(&processed_block_data);
+        }
+
+        if self.coindays.should_insert(height, date) {
+            self.coindays.insert_data(&processed_block_data);
+        }
+
+        if self.mining.should_insert(height, date) {
+            self.mining
+                .insert_data(&processed_block_data, &self.address);
+        }
+
+        if self.transaction.should_insert(height, date) {
+            self.transaction
+                .insert_data(&processed_block_data, &self.address);
+        }
+
+        if self.cointime.should_insert(height, date) {
+            self.cointime.insert_data(
+                &processed_block_data,
+                &self.address,
+                &self.mining,
+                &self.transaction,
+            );
+        }
+    }
+
     pub fn export_path_to_type(&self) -> color_eyre::Result<()> {
         let path_to_type: BTreeMap<&str, &str> = self
-            .to_generic_dataset_vec()
+            .to_any_dataset_vec()
             .into_iter()
             .flat_map(|dataset| {
                 dataset
@@ -156,13 +194,18 @@ impl AllDatasets {
         Json::export("./datasets/paths.json", &path_to_type)
     }
 
-    pub fn export(&self) -> color_eyre::Result<()> {
-        let vec = self.to_generic_dataset_vec();
+    pub fn export(&mut self) -> color_eyre::Result<()> {
+        self.to_mut_any_dataset_vec()
+            .into_iter()
+            .for_each(|dataset| dataset.pre_export());
 
-        vec.par_iter()
+        self.to_any_dataset_vec()
+            .into_par_iter()
             .try_for_each(|dataset| -> color_eyre::Result<()> { dataset.export() })?;
 
-        vec.par_iter().for_each(|dataset| dataset.clean());
+        self.to_mut_any_dataset_vec()
+            .into_iter()
+            .for_each(|dataset| dataset.post_export());
 
         Ok(())
     }
@@ -173,11 +216,11 @@ impl AnyDatasets for AllDatasets {
         &self.min_initial_state
     }
 
-    fn to_generic_dataset_vec(&self) -> Vec<&(dyn GenericDataset + Send + Sync)> {
+    fn to_any_dataset_vec(&self) -> Vec<&(dyn AnyDataset + Send + Sync)> {
         vec![
-            self.address.to_generic_dataset_vec(),
-            self.price.to_generic_dataset_vec(),
-            self.utxo.to_generic_dataset_vec(),
+            self.address.to_any_dataset_vec(),
+            self.price.to_any_dataset_vec(),
+            self.utxo.to_any_dataset_vec(),
             vec![
                 &self.mining,
                 &self.transaction,
@@ -185,6 +228,25 @@ impl AnyDatasets for AllDatasets {
                 &self.date_metadata,
                 &self.cointime,
                 &self.coindays,
+            ],
+        ]
+        .into_iter()
+        .flatten()
+        .collect_vec()
+    }
+
+    fn to_mut_any_dataset_vec(&mut self) -> Vec<&mut dyn AnyDataset> {
+        vec![
+            self.address.to_mut_any_dataset_vec(),
+            self.price.to_mut_any_dataset_vec(),
+            self.utxo.to_mut_any_dataset_vec(),
+            vec![
+                &mut self.mining,
+                &mut self.transaction,
+                &mut self.block_metadata,
+                &mut self.date_metadata,
+                &mut self.cointime,
+                &mut self.coindays,
             ],
         ]
         .into_iter()

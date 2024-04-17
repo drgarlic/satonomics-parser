@@ -72,7 +72,7 @@ impl PricePaidSubDataset {
     }
 
     pub fn insert(
-        &self,
+        &mut self,
         &ProcessedBlockData {
             height,
             is_date_last_block,
@@ -175,19 +175,19 @@ impl PricePaidSubDataset {
         }
     }
 
-    fn insert_height_default(&self, height: usize) {
-        self.to_vec().into_iter().for_each(|bi| {
+    fn insert_height_default(&mut self, height: usize) {
+        self.as_mut_vec().into_iter().for_each(|bi| {
             bi.height.insert_default(height);
         })
     }
 
-    fn insert_date_default(&self, date: NaiveDate) {
-        self.to_vec().into_iter().for_each(|bi| {
+    fn insert_date_default(&mut self, date: NaiveDate) {
+        self.as_mut_vec().into_iter().for_each(|bi| {
             bi.date.insert_default(date);
         })
     }
 
-    pub fn to_vec(&self) -> Vec<&BiMap<f32>> {
+    pub fn as_vec(&self) -> Vec<&BiMap<f32>> {
         vec![
             &self.realized_cap,
             &self.realized_price,
@@ -212,6 +212,32 @@ impl PricePaidSubDataset {
             &self.pp_05p,
         ]
     }
+
+    pub fn as_mut_vec(&mut self) -> Vec<&mut BiMap<f32>> {
+        vec![
+            &mut self.realized_cap,
+            &mut self.realized_price,
+            &mut self.pp_95p,
+            &mut self.pp_90p,
+            &mut self.pp_85p,
+            &mut self.pp_80p,
+            &mut self.pp_75p,
+            &mut self.pp_70p,
+            &mut self.pp_65p,
+            &mut self.pp_60p,
+            &mut self.pp_55p,
+            &mut self.pp_median,
+            &mut self.pp_45p,
+            &mut self.pp_40p,
+            &mut self.pp_35p,
+            &mut self.pp_30p,
+            &mut self.pp_25p,
+            &mut self.pp_20p,
+            &mut self.pp_15p,
+            &mut self.pp_10p,
+            &mut self.pp_05p,
+        ]
+    }
 }
 
 impl AnyDataset for PricePaidSubDataset {
@@ -220,9 +246,16 @@ impl AnyDataset for PricePaidSubDataset {
     }
 
     fn to_any_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
-        self.to_vec()
-            .iter()
-            .map(|dataset| *dataset as &(dyn AnyBiMap + Send + Sync))
+        self.as_vec()
+            .into_iter()
+            .map(|dataset| dataset as &(dyn AnyBiMap + Send + Sync))
+            .collect_vec()
+    }
+
+    fn to_any_mut_bi_map_vec(&mut self) -> Vec<&mut dyn AnyBiMap> {
+        self.as_mut_vec()
+            .into_iter()
+            .map(|dataset| dataset as &mut dyn AnyBiMap)
             .collect_vec()
     }
 }

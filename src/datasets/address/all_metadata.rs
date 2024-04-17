@@ -1,5 +1,5 @@
 use crate::{
-    datasets::{AnyDataset, GenericDataset, MinInitialState, ProcessedBlockData},
+    datasets::{AnyDataset, MinInitialState, ProcessedBlockData},
     parse::{AnyBiMap, BiMap},
 };
 
@@ -26,10 +26,8 @@ impl AllAddressesMetadataDataset {
 
         Ok(s)
     }
-}
 
-impl GenericDataset for AllAddressesMetadataDataset {
-    fn insert_data(&self, processed_block_data: &ProcessedBlockData) {
+    pub fn insert_data(&mut self, processed_block_data: &ProcessedBlockData) {
         let &ProcessedBlockData {
             databases,
             height,
@@ -67,5 +65,12 @@ impl AnyDataset for AllAddressesMetadataDataset {
 
     fn to_any_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         vec![&self.total_addresses_created, &self.total_empty_addresses]
+    }
+
+    fn to_any_mut_bi_map_vec(&mut self) -> Vec<&mut dyn AnyBiMap> {
+        vec![
+            &mut self.total_addresses_created,
+            &mut self.total_empty_addresses,
+        ]
     }
 }

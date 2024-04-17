@@ -5,7 +5,7 @@ use chrono::NaiveDate;
 use date::*;
 use height::*;
 
-use super::{AnyDatasets, GenericDataset, MinInitialState};
+use super::{AnyDataset, AnyDatasets, MinInitialState};
 
 pub struct PriceDatasets {
     min_initial_state: MinInitialState,
@@ -45,7 +45,11 @@ impl AnyDatasets for PriceDatasets {
         &self.min_initial_state
     }
 
-    fn to_generic_dataset_vec(&self) -> Vec<&(dyn GenericDataset + Send + Sync)> {
+    fn to_any_dataset_vec(&self) -> Vec<&(dyn AnyDataset + Send + Sync)> {
         vec![&self.date, &self.height]
+    }
+
+    fn to_mut_any_dataset_vec(&mut self) -> Vec<&mut dyn AnyDataset> {
+        vec![&mut self.date, &mut self.height]
     }
 }

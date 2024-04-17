@@ -4,13 +4,12 @@ use std::{
     fs,
     iter::Sum,
     mem,
-    ops::{Add, DerefMut, RangeInclusive, Sub},
+    ops::{Add, RangeInclusive, Sub},
     path::{Path, PathBuf},
 };
 
 use itertools::Itertools;
 use ordered_float::{FloatCore, OrderedFloat};
-use parking_lot::RwLock;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
@@ -34,8 +33,8 @@ where
     initial_last_height: Option<usize>,
     initial_first_unsafe_height: Option<usize>,
 
-    imported: RwLock<BTreeMap<usize, BTreeMap<usize, T>>>,
-    to_insert: RwLock<BTreeMap<usize, BTreeMap<usize, T>>>,
+    imported: BTreeMap<usize, BTreeMap<usize, T>>,
+    to_insert: BTreeMap<usize, BTreeMap<usize, T>>,
 }
 
 impl<T> HeightMap<T>
@@ -94,15 +93,14 @@ where
             initial_first_unsafe_height: None,
             initial_last_height: None,
 
-            to_insert: RwLock::new(BTreeMap::default()),
-            imported: RwLock::new(BTreeMap::default()),
+            to_insert: BTreeMap::default(),
+            imported: BTreeMap::default(),
         };
 
         s.import_last();
 
         s.initial_last_height = s
             .imported
-            .read()
             .values()
             .last()
             .and_then(|d| d.keys().cloned().max());
@@ -126,10 +124,9 @@ where
         height / CHUNK_SIZE * CHUNK_SIZE
     }
 
-    pub fn insert(&self, height: usize, value: T) -> T {
+    pub fn insert(&mut self, height: usize, value: T) -> T {
         if !self.is_height_safe(height) {
             self.to_insert
-                .write()
                 .entry(Self::height_to_chunk_start(height))
                 .or_default()
                 .insert(height, value);
@@ -138,7 +135,7 @@ where
         value
     }
 
-    pub fn insert_default(&self, height: usize) -> T {
+    pub fn insert_default(&mut self, height: usize) -> T {
         self.insert(height, T::default())
     }
 
@@ -146,14 +143,13 @@ where
         let chunk_start = Self::height_to_chunk_start(*height);
 
         self.to_insert
-            .read()
             .get(&chunk_start)
             .and_then(|tree| tree.get(height).cloned())
             .or_else(|| {
-                self.import_chunk_if_needed(*height);
+                // DO that before
+                // self.import_chunk_if_needed(*height);
 
                 self.imported
-                    .read()
                     .get(&chunk_start)
                     .and_then(|tree| tree.get(height))
                     .cloned()
@@ -191,22 +187,22 @@ where
             .collect()
     }
 
-    fn import_chunk_if_needed(&self, height: usize) {
+    pub fn import_if_needed(&mut self, height: usize) {
         let chunk_start = Self::height_to_chunk_start(height);
 
         if let Some(path) = self.read_dir().get(&chunk_start) {
-            if self.imported.read().get(&chunk_start).is_none() {
+            if self.imported.get(&chunk_start).is_none() {
                 if let Ok(map) = self._import(path) {
-                    self.imported.write().insert(chunk_start, map);
+                    self.imported.insert(chunk_start, map);
                 }
             }
         }
     }
 
-    fn import_last(&self) {
+    fn import_last(&mut self) {
         if let Some((chunk_start, path)) = self.read_dir().into_iter().last() {
             if let Ok(map) = self._import(&path) {
-                self.imported.write().insert(chunk_start, map);
+                self.imported.insert(chunk_start, map);
             }
         }
     }
@@ -259,43 +255,59 @@ where
         self.initial_last_height = None;
         self.initial_first_unsafe_height = None;
 
-        self.imported.write().clear();
-        self.to_insert.write().clear();
+        self.imported.clear();
+        self.to_insert.clear();
 
         Ok(())
     }
 
-    fn export(&self) -> color_eyre::Result<()> {
-        let to_insert = mem::take(self.to_insert.write().deref_mut());
-
-        match to_insert.iter().next() {
-            Some(first_map_to_insert) => {
-                let first_height_to_insert = first_map_to_insert.1.iter().next().unwrap().0;
-
-                if first_height_to_insert % CHUNK_SIZE != 0 {
-                    self.import_chunk_if_needed(*first_height_to_insert);
-                }
-            }
-            None => return Ok(()),
+    fn pre_export(&mut self) {
+        // Don't take to_insert, only take map (which should be vecs really)
+        // use to_insert keys to know what to export
+        // Then drop to_insert in post_export
+        //
+        if true {
+            panic!("do upper stuff");
         }
 
-        let mut imported = self.imported.write();
+        if let Some(first_map_to_insert) = self.to_insert.iter().next() {
+            let first_height_to_insert = first_map_to_insert.1.iter().next().unwrap().0;
 
-        let len = imported.len();
+            if first_height_to_insert % CHUNK_SIZE != 0 {
+                self.import_if_needed(*first_height_to_insert);
+            }
+        }
 
-        to_insert.into_iter().enumerate().try_for_each(
-            |(index, (chunk_start, map))| -> color_eyre::Result<()> {
-                let chunk_name = Self::height_to_chunk_name(chunk_start);
+        let imported = &mut self.imported;
 
+        self.to_insert
+            .iter_mut()
+            .enumerate()
+            .for_each(|(_, (chunk_start, map))| {
                 let to_export = imported.entry(chunk_start.to_owned()).or_default();
 
-                to_export.extend(map);
+                to_export.extend(mem::take(map));
+            });
+    }
+
+    fn export(&self) -> color_eyre::Result<()> {
+        let len = self.imported.len();
+
+        self.to_insert.iter().enumerate().try_for_each(
+            |(index, (chunk_start, _))| -> color_eyre::Result<()> {
+                let chunk_name = Self::height_to_chunk_name(*chunk_start);
 
                 let path = self
                     .serialization
                     .append_extension(&format!("{}/{}", self.path_all, chunk_name));
 
-                let vec = to_export.values().cloned().collect_vec();
+                let vec = self
+                    .imported
+                    .get(chunk_start)
+                    .unwrap()
+                    .values()
+                    .cloned()
+                    .collect_vec();
 
                 self.serialization.export(&path, &vec)?;
 
@@ -310,19 +322,19 @@ where
         )
     }
 
-    fn clean(&self) {
-        let mut imported = self.imported.write();
+    fn post_export(&mut self) {
+        let len = self.imported.len();
 
-        let len = imported.len();
-
-        let keys = imported.keys().cloned().collect_vec();
+        let keys = self.imported.keys().cloned().collect_vec();
 
         keys.into_iter()
             .enumerate()
             .filter(|(index, _)| index + 1 < len)
             .for_each(|(_, key)| {
-                imported.remove(&key);
+                self.imported.remove(&key);
             });
+
+        self.to_insert.clear();
     }
 }
 
@@ -332,6 +344,8 @@ pub trait AnyHeightMap: AnyMap {
     fn get_initial_last_height(&self) -> Option<usize>;
 
     fn as_any_map(&self) -> &(dyn AnyMap + Send + Sync);
+
+    fn as_any_mut_map(&mut self) -> &mut dyn AnyMap;
 }
 
 impl<T> AnyHeightMap for HeightMap<T>
@@ -361,6 +375,10 @@ where
     fn as_any_map(&self) -> &(dyn AnyMap + Send + Sync) {
         self
     }
+
+    fn as_any_mut_map(&mut self) -> &mut dyn AnyMap {
+        self
+    }
 }
 
 impl<T> HeightMap<T>
@@ -385,7 +403,7 @@ where
             .sum::<T>()
     }
 
-    pub fn insert_cumulative(&self, height: usize, source: &HeightMap<T>) -> T
+    pub fn insert_cumulative(&mut self, height: usize, source: &HeightMap<T>) -> T
     where
         T: Add<Output = T> + Sub<Output = T>,
     {
@@ -408,7 +426,7 @@ where
         cum_value
     }
 
-    pub fn insert_last_x_sum(&self, height: usize, source: &HeightMap<T>, x: usize) -> T
+    pub fn insert_last_x_sum(&mut self, height: usize, source: &HeightMap<T>, x: usize) -> T
     where
         T: Add<Output = T> + Sub<Output = T>,
     {
@@ -432,7 +450,7 @@ where
     }
 
     #[allow(unused)]
-    pub fn insert_simple_average(&self, height: usize, source: &HeightMap<T>, x: usize)
+    pub fn insert_simple_average(&mut self, height: usize, source: &HeightMap<T>, x: usize)
     where
         T: Into<f32> + From<f32>,
     {
@@ -457,7 +475,7 @@ where
         self.insert(height, average);
     }
 
-    pub fn insert_net_change(&self, height: usize, source: &HeightMap<T>, offset: usize) -> T
+    pub fn insert_net_change(&mut self, height: usize, source: &HeightMap<T>, offset: usize) -> T
     where
         T: Sub<Output = T>,
     {
@@ -475,7 +493,7 @@ where
         net
     }
 
-    pub fn insert_median(&self, height: usize, source: &HeightMap<T>, size: usize) -> T
+    pub fn insert_median(&mut self, height: usize, source: &HeightMap<T>, size: usize) -> T
     where
         T: FloatCore,
     {

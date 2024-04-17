@@ -65,6 +65,18 @@ pub trait AnyDataset {
         vec![]
     }
 
+    fn to_any_mut_bi_map_vec(&mut self) -> Vec<&mut dyn AnyBiMap> {
+        vec![]
+    }
+
+    fn to_any_mut_height_map_vec(&mut self) -> Vec<&mut dyn AnyHeightMap> {
+        vec![]
+    }
+
+    fn to_any_mut_date_map_vec(&mut self) -> Vec<&mut dyn AnyDateMap> {
+        vec![]
+    }
+
     fn to_any_inserted_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
         let mut vec = self.to_any_height_map_vec();
 
@@ -98,15 +110,41 @@ pub trait AnyDataset {
         self.to_any_map_vec().is_empty()
     }
 
+    fn pre_export(&mut self) {
+        self.to_any_mut_height_map_vec()
+            .into_iter()
+            .for_each(|d| d.pre_export());
+
+        self.to_any_mut_date_map_vec()
+            .into_iter()
+            .for_each(|d| d.pre_export());
+
+        self.to_any_mut_bi_map_vec().into_iter().for_each(|d| {
+            d.as_any_mut_map()
+                .into_iter()
+                .for_each(|map| map.pre_export())
+        });
+    }
+
     fn export(&self) -> color_eyre::Result<()> {
         self.to_any_map_vec()
             .into_par_iter()
             .try_for_each(|map| -> color_eyre::Result<()> { map.export() })
     }
 
-    fn clean(&self) {
-        self.to_any_map_vec().into_par_iter().for_each(|map| {
-            map.clean();
-        })
+    fn post_export(&mut self) {
+        self.to_any_mut_height_map_vec()
+            .into_iter()
+            .for_each(|d| d.post_export());
+
+        self.to_any_mut_date_map_vec()
+            .into_iter()
+            .for_each(|d| d.post_export());
+
+        self.to_any_mut_bi_map_vec().into_iter().for_each(|d| {
+            d.as_any_mut_map()
+                .into_iter()
+                .for_each(|map| map.post_export())
+        });
     }
 }

@@ -8,7 +8,7 @@ use crate::parse::{AddressSize, AddressSplit, AddressType};
 
 use self::{all_metadata::AllAddressesMetadataDataset, cohort::CohortDataset};
 
-use super::{AnyDatasets, GenericDataset, MinInitialState};
+use super::{AnyDataset, AnyDatasets, MinInitialState, ProcessedBlockData};
 
 pub struct AddressDatasets {
     min_initial_state: MinInitialState,
@@ -169,6 +169,28 @@ impl AddressDatasets {
             Ok(s)
         })
     }
+
+    pub fn insert_data(&mut self, processed_block_data: &ProcessedBlockData) {
+        self.metadata.insert_data(processed_block_data);
+
+        self.all.insert_data(processed_block_data);
+
+        self.plankton.insert_data(processed_block_data);
+        self.shrimp.insert_data(processed_block_data);
+        self.crab.insert_data(processed_block_data);
+        self.fish.insert_data(processed_block_data);
+        self.shark.insert_data(processed_block_data);
+        self.whale.insert_data(processed_block_data);
+        self.humpback.insert_data(processed_block_data);
+        self.megalodon.insert_data(processed_block_data);
+
+        self.p2pk.insert_data(processed_block_data);
+        self.p2pkh.insert_data(processed_block_data);
+        self.p2sh.insert_data(processed_block_data);
+        self.p2wpkh.insert_data(processed_block_data);
+        self.p2wsh.insert_data(processed_block_data);
+        self.p2tr.insert_data(processed_block_data);
+    }
 }
 
 impl AnyDatasets for AddressDatasets {
@@ -176,7 +198,7 @@ impl AnyDatasets for AddressDatasets {
         &self.min_initial_state
     }
 
-    fn to_generic_dataset_vec(&self) -> Vec<&(dyn GenericDataset + Send + Sync)> {
+    fn to_any_dataset_vec(&self) -> Vec<&(dyn AnyDataset + Send + Sync)> {
         vec![
             &self.all,
             &self.plankton,
@@ -194,6 +216,27 @@ impl AnyDatasets for AddressDatasets {
             &self.p2wsh,
             &self.p2tr,
             &self.metadata,
+        ]
+    }
+
+    fn to_mut_any_dataset_vec(&mut self) -> Vec<&mut dyn AnyDataset> {
+        vec![
+            &mut self.all,
+            &mut self.plankton,
+            &mut self.shrimp,
+            &mut self.crab,
+            &mut self.fish,
+            &mut self.shark,
+            &mut self.whale,
+            &mut self.humpback,
+            &mut self.megalodon,
+            &mut self.p2pk,
+            &mut self.p2pkh,
+            &mut self.p2sh,
+            &mut self.p2wpkh,
+            &mut self.p2wsh,
+            &mut self.p2tr,
+            &mut self.metadata,
         ]
     }
 }

@@ -5,7 +5,7 @@ use crate::{
     utils::{ONE_MONTH_IN_DAYS, ONE_WEEK_IN_DAYS, ONE_YEAR_IN_DAYS},
 };
 
-use super::{GenericDataset, MinInitialState, ProcessedBlockData};
+use super::{AddressDatasets, MinInitialState, ProcessedBlockData};
 
 pub struct MiningDataset {
     min_initial_state: MinInitialState,
@@ -55,17 +55,14 @@ impl MiningDataset {
 
         Ok(s)
     }
-}
 
-impl GenericDataset for MiningDataset {
-    fn insert_data(
-        &self,
+    pub fn insert_data(
+        &mut self,
         &ProcessedBlockData {
             date_first_height,
             height,
             coinbase,
             fees,
-            datasets,
             date_blocks_range,
             is_date_last_block,
             block_price,
@@ -73,8 +70,9 @@ impl GenericDataset for MiningDataset {
             date,
             ..
         }: &ProcessedBlockData,
+        address_datasets: &AddressDatasets,
     ) {
-        let circulating_supply_map = &datasets.address.all.all.supply.total;
+        let circulating_supply_map = &address_datasets.all.all.supply.total;
         let circulating_supply = circulating_supply_map.height.get(&height).unwrap();
 
         let coinbase = sats_to_btc(coinbase);
@@ -165,6 +163,10 @@ impl GenericDataset for MiningDataset {
 }
 
 impl AnyDataset for MiningDataset {
+    fn get_min_initial_state(&self) -> &MinInitialState {
+        &self.min_initial_state
+    }
+
     fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
         vec![
             &self.blocks_mined,
@@ -172,6 +174,16 @@ impl AnyDataset for MiningDataset {
             &self.blocks_mined_1m_sma,
             &self.last_subsidy,
             &self.last_subsidy_in_dollars,
+        ]
+    }
+
+    fn to_any_mut_date_map_vec(&mut self) -> Vec<&mut dyn AnyDateMap> {
+        vec![
+            &mut self.blocks_mined,
+            &mut self.blocks_mined_1w_sma,
+            &mut self.blocks_mined_1m_sma,
+            &mut self.last_subsidy,
+            &mut self.last_subsidy_in_dollars,
         ]
     }
 
@@ -187,7 +199,15 @@ impl AnyDataset for MiningDataset {
         ]
     }
 
-    fn get_min_initial_state(&self) -> &MinInitialState {
-        &self.min_initial_state
+    fn to_any_mut_bi_map_vec(&mut self) -> Vec<&mut dyn AnyBiMap> {
+        vec![
+            &mut self.coinbase,
+            &mut self.fees,
+            &mut self.subsidy,
+            &mut self.subsidy_in_dollars,
+            &mut self.cumulative_subsidy_in_dollars,
+            &mut self.annualized_issuance,
+            &mut self.yearly_inflation_rate,
+        ]
     }
 }

@@ -5,7 +5,7 @@ use crate::{
     utils::ONE_YEAR_IN_DAYS,
 };
 
-use super::{AnyDataset, GenericDataset, MinInitialState};
+use super::{AddressDatasets, AnyDataset, MinInitialState};
 
 pub struct TransactionDataset {
     min_initial_state: MinInitialState,
@@ -36,11 +36,9 @@ impl TransactionDataset {
 
         Ok(s)
     }
-}
 
-impl GenericDataset for TransactionDataset {
-    fn insert_data(
-        &self,
+    pub fn insert_data(
+        &mut self,
         &ProcessedBlockData {
             height,
             date,
@@ -48,11 +46,11 @@ impl GenericDataset for TransactionDataset {
             transaction_count,
             is_date_last_block,
             date_blocks_range,
-            datasets,
             ..
         }: &ProcessedBlockData,
+        address_datasets: &AddressDatasets,
     ) {
-        let circulating_supply_map = &datasets.address.all.all.supply.total;
+        let circulating_supply_map = &address_datasets.all.all.supply.total;
         let circulating_supply = circulating_supply_map.height.get(&height).unwrap();
 
         self.count.height.insert(height, transaction_count);
@@ -88,6 +86,10 @@ impl GenericDataset for TransactionDataset {
 }
 
 impl AnyDataset for TransactionDataset {
+    fn get_min_initial_state(&self) -> &MinInitialState {
+        &self.min_initial_state
+    }
+
     fn to_any_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         vec![
             &self.count,
@@ -97,7 +99,12 @@ impl AnyDataset for TransactionDataset {
         ]
     }
 
-    fn get_min_initial_state(&self) -> &MinInitialState {
-        &self.min_initial_state
+    fn to_any_mut_bi_map_vec(&mut self) -> Vec<&mut dyn AnyBiMap> {
+        vec![
+            &mut self.count,
+            &mut self.volume,
+            &mut self.annualized_volume,
+            &mut self.velocity,
+        ]
     }
 }

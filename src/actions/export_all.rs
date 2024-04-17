@@ -6,7 +6,7 @@ use crate::{databases::Databases, datasets::AllDatasets, states::States, utils::
 
 pub struct ExportedData<'a> {
     pub databases: &'a mut Databases,
-    pub datasets: &'a AllDatasets,
+    pub datasets: &'a mut AllDatasets,
     pub date: NaiveDate,
     pub height: usize,
     pub states: &'a States,
@@ -25,22 +25,9 @@ pub fn export_all(
     time("Total save time", || -> color_eyre::Result<()> {
         time("Datasets saved", || datasets.export())?;
 
-        // time("States saved in", || states.export())?;
-
-        // time("Databases saved in", || databases.export())?;
-
-        // time("Datasets saved in", || {
-        //     datasets.export_if_needed(date, height, export_data)
-        // })
-
         thread::scope(|s| {
             s.spawn(|| time("Databases saved", || databases.export()));
             s.spawn(|| time("States saved", || states.export()));
-            // s.spawn(|| {
-            //     time("Datasets saved", || {
-            //         datasets.export_if_needed(date, height, date.month0() == 0)
-            //     })
-            // });
         });
 
         Ok(())

@@ -30,7 +30,7 @@ impl RealizedSubDataset {
     }
 
     pub fn insert(
-        &self,
+        &mut self,
         &ProcessedBlockData {
             height,
             date,
@@ -67,7 +67,18 @@ impl AnyDataset for RealizedSubDataset {
         vec![&self.realized_loss.height, &self.realized_profit.height]
     }
 
+    fn to_any_mut_height_map_vec(&mut self) -> Vec<&mut dyn AnyHeightMap> {
+        vec![
+            &mut self.realized_loss.height,
+            &mut self.realized_profit.height,
+        ]
+    }
+
     fn to_any_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         vec![&self.realized_loss, &self.realized_profit]
+    }
+
+    fn to_any_mut_bi_map_vec(&mut self) -> Vec<&mut dyn AnyBiMap> {
+        vec![&mut self.realized_loss, &mut self.realized_profit]
     }
 }

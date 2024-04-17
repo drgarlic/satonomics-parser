@@ -6,7 +6,10 @@ use crate::{
     utils::{ONE_DAY_IN_DAYS, ONE_YEAR_IN_DAYS, THREE_MONTHS_IN_DAYS, TWO_WEEK_IN_DAYS},
 };
 
-use super::{AnyDataset, GenericDataset, MinInitialState, ProcessedBlockData};
+use super::{
+    AddressDatasets, AnyDataset, MinInitialState, MiningDataset, ProcessedBlockData,
+    TransactionDataset,
+};
 
 pub struct CointimeDataset {
     min_initial_state: MinInitialState,
@@ -113,42 +116,42 @@ impl CointimeDataset {
 
         Ok(s)
     }
-}
 
-impl GenericDataset for CointimeDataset {
-    fn insert_data(
-        &self,
+    pub fn insert_data(
+        &mut self,
         &ProcessedBlockData {
             height,
             date,
             satblocks_destroyed,
             block_price,
             date_price,
-            datasets,
             date_blocks_range,
             is_date_last_block,
             ..
         }: &ProcessedBlockData,
+        address_datasets: &AddressDatasets,
+        mining_dataset: &MiningDataset,
+        transaction_dataset: &TransactionDataset,
     ) {
-        let circulating_supply_map = &datasets.address.all.all.supply.total;
+        let circulating_supply_map = &address_datasets.all.all.supply.total;
         let circulating_supply = circulating_supply_map.height.get(&height).unwrap();
 
-        let realized_cap_map = &datasets.address.all.all.price_paid.realized_cap;
+        let realized_cap_map = &address_datasets.all.all.price_paid.realized_cap;
         let realized_cap = realized_cap_map.height.get(&height).unwrap();
 
-        let realized_price_map = &datasets.address.all.all.price_paid.realized_price;
+        let realized_price_map = &address_datasets.all.all.price_paid.realized_price;
         let realized_price = realized_price_map.height.get(&height).unwrap();
 
-        let yearly_inflation_rate_map = &datasets.mining.yearly_inflation_rate;
+        let yearly_inflation_rate_map = &mining_dataset.yearly_inflation_rate;
         let yearly_inflation_rate = yearly_inflation_rate_map.height.get(&height).unwrap();
 
-        let annualized_transaction_volume_map = &datasets.transaction.annualized_volume;
+        let annualized_transaction_volume_map = &transaction_dataset.annualized_volume;
         let annualized_transaction_volume = annualized_transaction_volume_map
             .height
             .get(&height)
             .unwrap();
 
-        let cumulative_subsidy_in_dollars_map = &datasets.mining.cumulative_subsidy_in_dollars;
+        let cumulative_subsidy_in_dollars_map = &mining_dataset.cumulative_subsidy_in_dollars;
         let cumulative_subsidy_in_dollars = cumulative_subsidy_in_dollars_map
             .height
             .get(&height)
@@ -573,6 +576,51 @@ impl AnyDataset for CointimeDataset {
             &self.vaulted_supply,
             &self.vaultedness,
             &self.vaulting_rate,
+        ]
+    }
+
+    fn to_any_mut_bi_map_vec(&mut self) -> Vec<&mut dyn AnyBiMap> {
+        vec![
+            &mut self.active_cap,
+            &mut self.active_price,
+            &mut self.active_supply,
+            &mut self.active_supply_3m_net_change,
+            &mut self.active_supply_net_change,
+            &mut self.activity_to_vaultedness_ratio,
+            &mut self.coinblocks_created,
+            &mut self.coinblocks_destroyed,
+            &mut self.coinblocks_stored,
+            &mut self.cointime_adjusted_velocity,
+            &mut self.cointime_adjusted_yearly_inflation_rate,
+            &mut self.cointime_cap,
+            &mut self.cointime_price,
+            &mut self.cointime_value_created,
+            &mut self.cointime_value_destroyed,
+            &mut self.cointime_value_stored,
+            &mut self.concurrent_liveliness,
+            &mut self.concurrent_liveliness_2w_median,
+            &mut self.cumulative_coinblocks_created,
+            &mut self.cumulative_coinblocks_destroyed,
+            &mut self.cumulative_coinblocks_stored,
+            &mut self.investor_cap,
+            &mut self.investorness,
+            &mut self.liveliness,
+            &mut self.liveliness_net_change,
+            &mut self.liveliness_net_change_2w_median,
+            &mut self.producerness,
+            &mut self.thermo_cap,
+            &mut self.thermo_cap_to_investor_cap_ratio,
+            &mut self.total_cointime_value_created,
+            &mut self.total_cointime_value_destroyed,
+            &mut self.total_cointime_value_stored,
+            &mut self.true_market_deviation,
+            &mut self.true_market_mean,
+            &mut self.true_market_net_unrealized_profit_and_loss,
+            &mut self.vaulted_cap,
+            &mut self.vaulted_price,
+            &mut self.vaulted_supply,
+            &mut self.vaultedness,
+            &mut self.vaulting_rate,
         ]
     }
 

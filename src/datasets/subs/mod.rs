@@ -45,7 +45,7 @@ impl SubDataset {
 }
 
 impl AnyDatasetGroup for SubDataset {
-    fn to_vec(&self) -> Vec<&(dyn AnyDataset + Send + Sync)> {
+    fn as_vec(&self) -> Vec<&(dyn AnyDataset + Send + Sync)> {
         vec![
             &self.price_paid,
             &self.realized,
@@ -54,6 +54,18 @@ impl AnyDatasetGroup for SubDataset {
             &self.utxo,
             &self.input,
             &self.output,
+        ]
+    }
+
+    fn as_mut_vec(&mut self) -> Vec<&mut dyn AnyDataset> {
+        vec![
+            &mut self.price_paid,
+            &mut self.realized,
+            &mut self.supply,
+            &mut self.unrealized,
+            &mut self.utxo,
+            &mut self.input,
+            &mut self.output,
         ]
     }
 }

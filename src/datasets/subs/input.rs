@@ -29,7 +29,7 @@ impl InputSubDataset {
     }
 
     pub fn insert(
-        &self,
+        &mut self,
         &ProcessedBlockData {
             height,
             date,
@@ -58,5 +58,9 @@ impl AnyDataset for InputSubDataset {
 
     fn to_any_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         vec![&self.count, &self.volume]
+    }
+
+    fn to_any_mut_bi_map_vec(&mut self) -> Vec<&mut dyn AnyBiMap> {
+        vec![&mut self.count, &mut self.volume]
     }
 }

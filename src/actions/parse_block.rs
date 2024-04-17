@@ -12,7 +12,7 @@ use rayon::prelude::*;
 use crate::{
     bitcoin::BitcoinDB,
     databases::{AddressIndexToEmptyAddressData, AddressToAddressIndex, Databases, TxidToTxIndex},
-    datasets::{AllDatasets, AnyDatasets, ProcessedBlockData},
+    datasets::{AllDatasets, ProcessedBlockData},
     parse::{
         Address, AddressData, AddressRealizedData, BlockData, BlockPath, Counter, EmptyAddressData,
         PartialTxoutData, TxData, TxoutIndex,
@@ -662,7 +662,6 @@ pub fn parse_block(
         block_price,
         coinbase,
         databases,
-        datasets,
         date,
         date_first_height: first_date_height,
         date_blocks_range: &(first_date_height..=height),

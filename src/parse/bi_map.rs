@@ -51,7 +51,7 @@ where
     }
 
     pub fn date_insert_sum_range(
-        &self,
+        &mut self,
         date: NaiveDate,
         date_blocks_range: &RangeInclusive<usize>,
     ) {
@@ -64,6 +64,8 @@ pub trait AnyBiMap {
     fn are_date_and_height_safe(&self, date: NaiveDate, height: usize) -> bool;
 
     fn as_any_map(&self) -> Vec<&(dyn AnyMap + Send + Sync)>;
+
+    fn as_any_mut_map(&mut self) -> Vec<&mut dyn AnyMap>;
 
     fn get_height(&self) -> &(dyn AnyHeightMap + Send + Sync);
 
@@ -92,6 +94,10 @@ where
 
     fn as_any_map(&self) -> Vec<&(dyn AnyMap + Send + Sync)> {
         vec![self.date.as_any_map(), self.height.as_any_map()]
+    }
+
+    fn as_any_mut_map(&mut self) -> Vec<&mut dyn AnyMap> {
+        vec![self.date.as_any_mut_map(), self.height.as_any_mut_map()]
     }
 
     fn get_height(&self) -> &(dyn AnyHeightMap + Send + Sync) {

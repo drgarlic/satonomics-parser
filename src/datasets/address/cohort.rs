@@ -2,10 +2,7 @@ use chrono::NaiveDate;
 use itertools::Itertools;
 
 use crate::{
-    datasets::{
-        AnyDataset, AnyDatasetGroup, GenericDataset, MinInitialState, ProcessedBlockData,
-        SubDataset,
-    },
+    datasets::{AnyDataset, AnyDatasetGroup, MinInitialState, ProcessedBlockData, SubDataset},
     parse::{AddressSplit, AnyBiMap, AnyDateMap, AnyHeightMap},
     states::AddressCohortDurableStates,
 };
@@ -115,7 +112,7 @@ impl CohortDataset {
             .any(|sub| sub.output.should_insert(height, date))
     }
 
-    fn insert_realized_data(&self, processed_block_data: &ProcessedBlockData) {
+    fn insert_realized_data(&mut self, processed_block_data: &ProcessedBlockData) {
         let split_realized_state = processed_block_data
             .address_cohorts_realized_states
             .as_ref()
@@ -140,7 +137,7 @@ impl CohortDataset {
             .insert(processed_block_data, &split_realized_state.highly_liquid);
     }
 
-    fn insert_metadata(&self, processed_block_data: &ProcessedBlockData) {
+    fn insert_metadata(&mut self, processed_block_data: &ProcessedBlockData) {
         let address_count = processed_block_data
             .states
             .address_cohorts_durable_states
@@ -152,7 +149,7 @@ impl CohortDataset {
     }
 
     fn insert_supply_data(
-        &self,
+        &mut self,
         processed_block_data: &ProcessedBlockData,
         liquidity_split_state: &AddressCohortDurableStates,
     ) {
@@ -178,7 +175,7 @@ impl CohortDataset {
     }
 
     fn insert_utxo_data(
-        &self,
+        &mut self,
         processed_block_data: &ProcessedBlockData,
         liquidity_split_state: &AddressCohortDurableStates,
     ) {
@@ -203,7 +200,7 @@ impl CohortDataset {
         );
     }
 
-    fn insert_unrealized_data(&self, processed_block_data: &ProcessedBlockData) {
+    fn insert_unrealized_data(&mut self, processed_block_data: &ProcessedBlockData) {
         let states = processed_block_data
             .address_cohorts_one_shot_states
             .as_ref()
@@ -236,7 +233,7 @@ impl CohortDataset {
         );
     }
 
-    fn insert_price_paid_data(&self, processed_block_data: &ProcessedBlockData) {
+    fn insert_price_paid_data(&mut self, processed_block_data: &ProcessedBlockData) {
         let states = processed_block_data
             .address_cohorts_one_shot_states
             .as_ref()
@@ -289,7 +286,7 @@ impl CohortDataset {
         );
     }
 
-    fn insert_input_data(&self, processed_block_data: &ProcessedBlockData) {
+    fn insert_input_data(&mut self, processed_block_data: &ProcessedBlockData) {
         let state = processed_block_data
             .address_cohorts_input_states
             .as_ref()
@@ -309,7 +306,7 @@ impl CohortDataset {
             .insert(processed_block_data, &state.highly_liquid);
     }
 
-    fn insert_output_data(&self, processed_block_data: &ProcessedBlockData) {
+    fn insert_output_data(&mut self, processed_block_data: &ProcessedBlockData) {
         let state = processed_block_data
             .address_cohorts_output_states
             .as_ref()
@@ -329,22 +326,33 @@ impl CohortDataset {
             .insert(processed_block_data, &state.highly_liquid);
     }
 
-    fn to_vec(&self) -> Vec<&(dyn AnyDataset + Send + Sync)> {
+    fn as_vec(&self) -> Vec<&(dyn AnyDataset + Send + Sync)> {
         vec![
-            self.all.to_vec(),
-            self.illiquid.to_vec(),
-            self.liquid.to_vec(),
-            self.highly_liquid.to_vec(),
+            self.all.as_vec(),
+            self.illiquid.as_vec(),
+            self.liquid.as_vec(),
+            self.highly_liquid.as_vec(),
             vec![&self.metadata],
         ]
         .into_iter()
         .flatten()
         .collect_vec()
     }
-}
 
-impl GenericDataset for CohortDataset {
-    fn insert_data(&self, processed_block_data: &ProcessedBlockData) {
+    fn as_mut_vec(&mut self) -> Vec<&mut dyn AnyDataset> {
+        vec![
+            self.all.as_mut_vec(),
+            self.illiquid.as_mut_vec(),
+            self.liquid.as_mut_vec(),
+            self.highly_liquid.as_mut_vec(),
+            vec![&mut self.metadata],
+        ]
+        .into_iter()
+        .flatten()
+        .collect_vec()
+    }
+
+    pub fn insert_data(&mut self, processed_block_data: &ProcessedBlockData) {
         let &ProcessedBlockData { height, date, .. } = processed_block_data;
 
         let needs_metadata = self.needs_metadata(date, height);
@@ -411,23 +419,44 @@ impl GenericDataset for CohortDataset {
 
 impl AnyDataset for CohortDataset {
     fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
-        self.to_vec()
+        self.as_vec()
             .into_iter()
             .flat_map(|d| d.to_any_height_map_vec())
             .collect_vec()
     }
 
     fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
-        self.to_vec()
+        self.as_vec()
             .into_iter()
             .flat_map(|d| d.to_any_date_map_vec())
             .collect_vec()
     }
 
     fn to_any_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
-        self.to_vec()
+        self.as_vec()
             .into_iter()
             .flat_map(|d| d.to_any_bi_map_vec())
+            .collect_vec()
+    }
+
+    fn to_any_mut_height_map_vec(&mut self) -> Vec<&mut dyn AnyHeightMap> {
+        self.as_mut_vec()
+            .into_iter()
+            .flat_map(|d| d.to_any_mut_height_map_vec())
+            .collect_vec()
+    }
+
+    fn to_any_mut_date_map_vec(&mut self) -> Vec<&mut dyn AnyDateMap> {
+        self.as_mut_vec()
+            .into_iter()
+            .flat_map(|d| d.to_any_mut_date_map_vec())
+            .collect_vec()
+    }
+
+    fn to_any_mut_bi_map_vec(&mut self) -> Vec<&mut dyn AnyBiMap> {
+        self.as_mut_vec()
+            .into_iter()
+            .flat_map(|d| d.to_any_mut_bi_map_vec())
             .collect_vec()
     }
 

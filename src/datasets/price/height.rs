@@ -4,7 +4,7 @@ use chrono::{NaiveDateTime, NaiveTime, TimeZone, Timelike, Utc};
 use color_eyre::eyre::Error;
 
 use crate::{
-    datasets::{AnyDataset, GenericDataset, MinInitialState},
+    datasets::{AnyDataset, MinInitialState},
     parse::{AnyHeightMap, HeightMap},
     price::{Binance, Kraken},
 };
@@ -40,6 +40,8 @@ impl HeightDataset {
     }
 
     pub fn get(&mut self, height: usize, timestamp: u32) -> color_eyre::Result<f32> {
+        self.closes.import_if_needed(height);
+
         if let Some(price) = self.closes.get(&height) {
             return Ok(price);
         }
@@ -105,8 +107,6 @@ impl HeightDataset {
             .ok_or(Error::msg("Couldn't find timestamp in har binance"))
     }
 }
-
-impl GenericDataset for HeightDataset {}
 
 impl AnyDataset for HeightDataset {
     fn get_min_initial_state(&self) -> &MinInitialState {

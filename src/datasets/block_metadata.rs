@@ -4,7 +4,7 @@ use crate::{
     utils::timestamp_to_naive_date,
 };
 
-use super::{GenericDataset, MinInitialState, ProcessedBlockData};
+use super::{MinInitialState, ProcessedBlockData};
 
 pub struct BlockMetadataDataset {
     min_initial_state: MinInitialState,
@@ -29,11 +29,9 @@ impl BlockMetadataDataset {
 
         Ok(s)
     }
-}
 
-impl GenericDataset for BlockMetadataDataset {
-    fn insert_data(
-        &self,
+    pub fn insert_data(
+        &mut self,
         &ProcessedBlockData {
             height, timestamp, ..
         }: &ProcessedBlockData,

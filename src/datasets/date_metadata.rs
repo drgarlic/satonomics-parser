@@ -3,7 +3,7 @@ use crate::{
     parse::{AnyDateMap, DateMap},
 };
 
-use super::{GenericDataset, MinInitialState, ProcessedBlockData};
+use super::{MinInitialState, ProcessedBlockData};
 
 pub struct DateMetadataDataset {
     min_initial_state: MinInitialState,
@@ -28,11 +28,9 @@ impl DateMetadataDataset {
 
         Ok(s)
     }
-}
 
-impl GenericDataset for DateMetadataDataset {
-    fn insert_data(
-        &self,
+    pub fn insert_data(
+        &mut self,
         &ProcessedBlockData {
             date,
             date_first_height,

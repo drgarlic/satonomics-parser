@@ -1,10 +1,7 @@
 use itertools::Itertools;
 
 use crate::{
-    datasets::{
-        AnyDataset, AnyDatasetGroup, GenericDataset, MinInitialState, ProcessedBlockData,
-        SubDataset,
-    },
+    datasets::{AnyDataset, AnyDatasetGroup, MinInitialState, ProcessedBlockData, SubDataset},
     parse::{AnyBiMap, AnyDateMap, AnyHeightMap},
     states::UTXOCohortId,
 };
@@ -33,10 +30,8 @@ impl UTXODataset {
 
         Ok(s)
     }
-}
 
-impl GenericDataset for UTXODataset {
-    fn insert_data(&self, processed_block_data: &ProcessedBlockData) {
+    pub fn insert_data(&mut self, processed_block_data: &ProcessedBlockData) {
         let &ProcessedBlockData {
             date,
             height,
@@ -114,7 +109,7 @@ impl AnyDataset for UTXODataset {
 
     fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
         self.subs
-            .to_vec()
+            .as_vec()
             .into_iter()
             .flat_map(|d| d.to_any_height_map_vec())
             .collect_vec()
@@ -122,7 +117,7 @@ impl AnyDataset for UTXODataset {
 
     fn to_any_date_map_vec(&self) -> Vec<&(dyn AnyDateMap + Send + Sync)> {
         self.subs
-            .to_vec()
+            .as_vec()
             .into_iter()
             .flat_map(|d| d.to_any_date_map_vec())
             .collect_vec()
@@ -130,9 +125,33 @@ impl AnyDataset for UTXODataset {
 
     fn to_any_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         self.subs
-            .to_vec()
+            .as_vec()
             .into_iter()
             .flat_map(|d| d.to_any_bi_map_vec())
+            .collect_vec()
+    }
+
+    fn to_any_mut_height_map_vec(&mut self) -> Vec<&mut dyn AnyHeightMap> {
+        self.subs
+            .as_mut_vec()
+            .into_iter()
+            .flat_map(|d| d.to_any_mut_height_map_vec())
+            .collect_vec()
+    }
+
+    fn to_any_mut_date_map_vec(&mut self) -> Vec<&mut dyn AnyDateMap> {
+        self.subs
+            .as_mut_vec()
+            .into_iter()
+            .flat_map(|d| d.to_any_mut_date_map_vec())
+            .collect_vec()
+    }
+
+    fn to_any_mut_bi_map_vec(&mut self) -> Vec<&mut dyn AnyBiMap> {
+        self.subs
+            .as_mut_vec()
+            .into_iter()
+            .flat_map(|d| d.to_any_mut_bi_map_vec())
             .collect_vec()
     }
 }

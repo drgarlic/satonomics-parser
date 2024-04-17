@@ -172,7 +172,7 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
         if export && check_if_height_safe(height, block_count) {
             export_all(ExportedData {
                 databases: &mut databases,
-                datasets: &datasets,
+                datasets: &mut datasets,
                 date: blocks_loop_date.unwrap(),
                 height: last_height,
                 states: &states,

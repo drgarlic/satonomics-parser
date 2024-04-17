@@ -33,7 +33,7 @@ impl MinInitialState {
         datasets: &dyn AnyDatasets,
     ) -> Option<NaiveDate> {
         datasets
-            .to_generic_dataset_vec()
+            .to_any_dataset_vec()
             .into_iter()
             .filter(|dataset| !dataset.to_any_inserted_date_map_vec().is_empty())
             .map(|dataset| dataset.get_min_initial_state().last_date.as_ref().cloned())
@@ -43,7 +43,7 @@ impl MinInitialState {
 
     fn compute_min_initial_last_height_from_datasets(datasets: &dyn AnyDatasets) -> Option<usize> {
         datasets
-            .to_generic_dataset_vec()
+            .to_any_dataset_vec()
             .into_iter()
             .filter(|dataset| !dataset.to_any_inserted_height_map_vec().is_empty())
             .map(|dataset| {
@@ -61,7 +61,7 @@ impl MinInitialState {
         datasets: &dyn AnyDatasets,
     ) -> Option<NaiveDate> {
         datasets
-            .to_generic_dataset_vec()
+            .to_any_dataset_vec()
             .into_iter()
             .filter(|dataset| !dataset.to_any_inserted_date_map_vec().is_empty())
             .map(|dataset| {
@@ -79,7 +79,7 @@ impl MinInitialState {
         datasets: &dyn AnyDatasets,
     ) -> Option<usize> {
         datasets
-            .to_generic_dataset_vec()
+            .to_any_dataset_vec()
             .into_iter()
             .filter(|dataset| !dataset.to_any_inserted_height_map_vec().is_empty())
             .map(|dataset| {

@@ -32,7 +32,7 @@ impl UnrealizedSubDataset {
     }
 
     pub fn insert(
-        &self,
+        &mut self,
         &ProcessedBlockData {
             height,
             date,
@@ -82,6 +82,14 @@ impl AnyDataset for UnrealizedSubDataset {
             &self.supply_in_profit,
             &self.unrealized_profit,
             &self.unrealized_loss,
+        ]
+    }
+
+    fn to_any_mut_bi_map_vec(&mut self) -> Vec<&mut dyn AnyBiMap> {
+        vec![
+            &mut self.supply_in_profit,
+            &mut self.unrealized_profit,
+            &mut self.unrealized_loss,
         ]
     }
 }

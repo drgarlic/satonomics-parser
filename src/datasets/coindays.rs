@@ -4,7 +4,7 @@ use crate::{
     parse::{AnyBiMap, BiMap},
 };
 
-use super::{GenericDataset, MinInitialState, ProcessedBlockData};
+use super::{MinInitialState, ProcessedBlockData};
 
 pub struct CoindaysDataset {
     min_initial_state: MinInitialState,
@@ -27,11 +27,9 @@ impl CoindaysDataset {
 
         Ok(s)
     }
-}
 
-impl GenericDataset for CoindaysDataset {
-    fn insert_data(
-        &self,
+    pub fn insert_data(
+        &mut self,
         &ProcessedBlockData {
             height,
             satdays_destroyed,
@@ -55,6 +53,10 @@ impl GenericDataset for CoindaysDataset {
 impl AnyDataset for CoindaysDataset {
     fn to_any_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         vec![&self.destroyed]
+    }
+
+    fn to_any_mut_bi_map_vec(&mut self) -> Vec<&mut dyn AnyBiMap> {
+        vec![&mut self.destroyed]
     }
 
     fn get_min_initial_state(&self) -> &MinInitialState {

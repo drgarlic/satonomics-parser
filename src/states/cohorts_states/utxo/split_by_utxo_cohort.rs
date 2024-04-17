@@ -437,7 +437,7 @@ impl<T> SplitByUTXOCohort<T> {
         }
     }
 
-    pub fn to_vec(&self) -> Vec<&T> {
+    pub fn as_vec(&self) -> Vec<&T> {
         vec![
             &self.up_to_1d,
             &self.up_to_1w,
@@ -483,6 +483,55 @@ impl<T> SplitByUTXOCohort<T> {
             &self.year_2024,
             &self.sth,
             &self.lth,
+        ]
+    }
+
+    pub fn as_mut_vec(&mut self) -> Vec<&mut T> {
+        vec![
+            &mut self.up_to_1d,
+            &mut self.up_to_1w,
+            &mut self.up_to_1m,
+            &mut self.up_to_2m,
+            &mut self.up_to_3m,
+            &mut self.up_to_4m,
+            &mut self.up_to_5m,
+            &mut self.up_to_6m,
+            &mut self.up_to_1y,
+            &mut self.up_to_2y,
+            &mut self.up_to_3y,
+            &mut self.up_to_5y,
+            &mut self.up_to_7y,
+            &mut self.up_to_10y,
+            &mut self.from_1d_to_1w,
+            &mut self.from_1w_to_1m,
+            &mut self.from_1m_to_3m,
+            &mut self.from_3m_to_6m,
+            &mut self.from_6m_to_1y,
+            &mut self.from_1y_to_2y,
+            &mut self.from_2y_to_3y,
+            &mut self.from_3y_to_5y,
+            &mut self.from_5y_to_7y,
+            &mut self.from_7y_to_10y,
+            &mut self.from_1y,
+            &mut self.from_10y,
+            &mut self.year_2009,
+            &mut self.year_2010,
+            &mut self.year_2011,
+            &mut self.year_2012,
+            &mut self.year_2013,
+            &mut self.year_2014,
+            &mut self.year_2015,
+            &mut self.year_2016,
+            &mut self.year_2017,
+            &mut self.year_2018,
+            &mut self.year_2019,
+            &mut self.year_2020,
+            &mut self.year_2021,
+            &mut self.year_2022,
+            &mut self.year_2023,
+            &mut self.year_2024,
+            &mut self.sth,
+            &mut self.lth,
         ]
     }
 }

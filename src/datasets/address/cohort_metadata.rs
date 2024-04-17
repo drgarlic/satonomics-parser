@@ -26,7 +26,7 @@ impl MetadataDataset {
     }
 
     pub fn insert(
-        &self,
+        &mut self,
         &ProcessedBlockData {
             height,
             date,
@@ -50,5 +50,9 @@ impl AnyDataset for MetadataDataset {
 
     fn to_any_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
         vec![&self.address_count]
+    }
+
+    fn to_any_mut_bi_map_vec(&mut self) -> Vec<&mut dyn AnyBiMap> {
+        vec![&mut self.address_count]
     }
 }
