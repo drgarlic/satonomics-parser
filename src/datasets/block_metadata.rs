@@ -44,11 +44,15 @@ impl BlockMetadataDataset {
 }
 
 impl AnyDataset for BlockMetadataDataset {
+    fn get_min_initial_state(&self) -> &MinInitialState {
+        &self.min_initial_state
+    }
+
     fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
         vec![&self.date, &self.timestamp]
     }
 
-    fn get_min_initial_state(&self) -> &MinInitialState {
-        &self.min_initial_state
+    fn to_any_mut_height_map_vec(&mut self) -> Vec<&mut dyn AnyHeightMap> {
+        vec![&mut self.date, &mut self.timestamp]
     }
 }

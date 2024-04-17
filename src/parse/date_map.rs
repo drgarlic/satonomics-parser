@@ -109,10 +109,6 @@ where
             last_date.checked_sub_days(Days::new(offset as u64))
         });
 
-        if s.initial_first_unsafe_date.is_none() {
-            dbg!(&s.path_all);
-        }
-
         s
     }
 
@@ -290,15 +286,14 @@ where
             }
         }
 
-        let imported = &mut self.imported;
-
         self.to_insert
             .iter_mut()
             .enumerate()
             .for_each(|(_, (chunk_start, map))| {
-                let to_export = imported.entry(chunk_start.to_owned()).or_default();
-
-                to_export.extend(mem::take(map));
+                self.imported
+                    .entry(chunk_start.to_owned())
+                    .or_default()
+                    .extend(mem::take(map));
             });
     }
 

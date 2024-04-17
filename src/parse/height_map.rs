@@ -1,4 +1,5 @@
 use std::{
+    cmp::Ordering,
     collections::BTreeMap,
     fmt::Debug,
     fs,
@@ -33,7 +34,7 @@ where
     initial_last_height: Option<usize>,
     initial_first_unsafe_height: Option<usize>,
 
-    imported: BTreeMap<usize, BTreeMap<usize, T>>,
+    imported: BTreeMap<usize, Vec<T>>,
     to_insert: BTreeMap<usize, BTreeMap<usize, T>>,
 }
 
@@ -101,9 +102,9 @@ where
 
         s.initial_last_height = s
             .imported
-            .values()
+            .iter()
             .last()
-            .and_then(|d| d.keys().cloned().max());
+            .map(|(chunk_start, vec)| chunk_start + vec.len());
 
         s.initial_first_unsafe_height = s.initial_last_height.and_then(|last_height| {
             let offset = NUMBER_OF_UNSAFE_BLOCKS - 1;
@@ -129,7 +130,7 @@ where
             self.to_insert
                 .entry(Self::height_to_chunk_start(height))
                 .or_default()
-                .insert(height, value);
+                .insert(height % CHUNK_SIZE, value);
         }
 
         value
@@ -144,14 +145,14 @@ where
 
         self.to_insert
             .get(&chunk_start)
-            .and_then(|tree| tree.get(height).cloned())
+            .and_then(|map| map.get(&(height - chunk_start)).cloned())
             .or_else(|| {
                 // DO that before
                 // self.import_chunk_if_needed(*height);
 
                 self.imported
                     .get(&chunk_start)
-                    .and_then(|tree| tree.get(height))
+                    .and_then(|vec| vec.get(height - chunk_start))
                     .cloned()
             })
     }
@@ -207,25 +208,8 @@ where
         }
     }
 
-    fn _import(&self, path: &Path) -> color_eyre::Result<BTreeMap<usize, T>> {
-        let chunk_start = path
-            .file_stem()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .split("..")
-            .next()
-            .unwrap()
-            .parse::<usize>()
-            .unwrap();
-
-        Ok(self
-            .serialization
-            .import::<Vec<T>>(path.to_str().unwrap())?
-            .into_iter()
-            .enumerate()
-            .map(|(index, value)| (chunk_start + index, value))
-            .collect())
+    fn _import(&self, path: &Path) -> color_eyre::Result<Vec<T>> {
+        self.serialization.import::<Vec<T>>(path.to_str().unwrap())
     }
 }
 
@@ -262,31 +246,37 @@ where
     }
 
     fn pre_export(&mut self) {
-        // Don't take to_insert, only take map (which should be vecs really)
-        // use to_insert keys to know what to export
-        // Then drop to_insert in post_export
-        //
-        if true {
-            panic!("do upper stuff");
-        }
-
         if let Some(first_map_to_insert) = self.to_insert.iter().next() {
-            let first_height_to_insert = first_map_to_insert.1.iter().next().unwrap().0;
+            let first_height_to_insert = first_map_to_insert
+                .1
+                .iter()
+                .next()
+                .unwrap_or_else(|| {
+                    dbg!(&self.path_all, &self.to_insert);
+                    panic!()
+                })
+                .0;
 
             if first_height_to_insert % CHUNK_SIZE != 0 {
                 self.import_if_needed(*first_height_to_insert);
             }
         }
 
-        let imported = &mut self.imported;
-
         self.to_insert
             .iter_mut()
             .enumerate()
             .for_each(|(_, (chunk_start, map))| {
-                let to_export = imported.entry(chunk_start.to_owned()).or_default();
+                let to_export = self.imported.entry(chunk_start.to_owned()).or_default();
 
-                to_export.extend(mem::take(map));
+                mem::take(map)
+                    .into_iter()
+                    .for_each(
+                        |(chunk_height, value)| match to_export.len().cmp(&chunk_height) {
+                            Ordering::Greater => to_export[chunk_height] = value,
+                            Ordering::Equal => to_export.push(value),
+                            Ordering::Less => panic!(),
+                        },
+                    );
             });
     }
 
@@ -301,15 +291,12 @@ where
                     .serialization
                     .append_extension(&format!("{}/{}", self.path_all, chunk_name));
 
-                let vec = self
-                    .imported
-                    .get(chunk_start)
-                    .unwrap()
-                    .values()
-                    .cloned()
-                    .collect_vec();
+                let vec = self.imported.get(chunk_start).unwrap_or_else(|| {
+                    dbg!(&self.path_all, chunk_start, &self.imported);
+                    panic!();
+                });
 
-                self.serialization.export(&path, &vec)?;
+                self.serialization.export(&path, vec)?;
 
                 if index == len - 1 {
                     if let Some(path_last) = self.path_last.as_ref() {
@@ -481,7 +468,12 @@ where
     {
         let previous_value = height
             .checked_sub(offset)
-            .map(|height| source.get(&height).unwrap())
+            .map(|height| {
+                source.get(&height).unwrap_or_else(|| {
+                    dbg!(&self.path_all, offset);
+                    panic!();
+                })
+            })
             .unwrap_or_default();
 
         let last_value = source.get(&height).unwrap();

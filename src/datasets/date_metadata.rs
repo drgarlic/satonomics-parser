@@ -49,6 +49,10 @@ impl AnyDataset for DateMetadataDataset {
         vec![&self.first_height, &self.last_height]
     }
 
+    fn to_any_mut_date_map_vec(&mut self) -> Vec<&mut dyn AnyDateMap> {
+        vec![&mut self.first_height, &mut self.last_height]
+    }
+
     fn get_min_initial_state(&self) -> &MinInitialState {
         &self.min_initial_state
     }

@@ -1,6 +1,6 @@
 use crate::{
     datasets::{AnyDataset, MinInitialState, ProcessedBlockData},
-    parse::{AnyBiMap, AnyHeightMap, BiMap},
+    parse::{AnyBiMap, BiMap},
     states::RealizedState,
 };
 
@@ -61,17 +61,6 @@ impl RealizedSubDataset {
 impl AnyDataset for RealizedSubDataset {
     fn get_min_initial_state(&self) -> &MinInitialState {
         &self.min_initial_state
-    }
-
-    fn to_any_height_map_vec(&self) -> Vec<&(dyn AnyHeightMap + Send + Sync)> {
-        vec![&self.realized_loss.height, &self.realized_profit.height]
-    }
-
-    fn to_any_mut_height_map_vec(&mut self) -> Vec<&mut dyn AnyHeightMap> {
-        vec![
-            &mut self.realized_loss.height,
-            &mut self.realized_profit.height,
-        ]
     }
 
     fn to_any_bi_map_vec(&self) -> Vec<&(dyn AnyBiMap + Send + Sync)> {
