@@ -82,6 +82,7 @@ impl States {
         let _ = self.txout_index_to_sats.reset();
 
         self.address_cohorts_durable_states = AddressCohortsDurableStates::default();
+        self.utxo_cohorts_durable_states = UTXOCohortsDurableStates::default();
     }
 
     pub fn export(&self) -> color_eyre::Result<()> {

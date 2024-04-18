@@ -27,6 +27,8 @@ pub struct DateMap<T> {
     path_all: String,
     path_last: Option<String>,
 
+    chunks_in_memory: usize,
+
     serialization: Serialization,
 
     initial_last_date: Option<NaiveDate>,
@@ -50,25 +52,34 @@ where
 {
     #[allow(unused)]
     pub fn new_bin(path: &str) -> Self {
-        Self::new(path, Serialization::Binary, true)
+        Self::new(path, Serialization::Binary, 1, true)
     }
 
     #[allow(unused)]
-    pub fn _new_bin(path: &str, export_last: bool) -> Self {
-        Self::new(path, Serialization::Binary, export_last)
+    pub fn _new_bin(path: &str, chunks_in_memory: usize, export_last: bool) -> Self {
+        Self::new(path, Serialization::Binary, chunks_in_memory, export_last)
     }
 
     #[allow(unused)]
     pub fn new_json(path: &str) -> Self {
-        Self::new(path, Serialization::Json, true)
+        Self::new(path, Serialization::Json, 1, true)
     }
 
     #[allow(unused)]
-    pub fn _new_json(path: &str, export_last: bool) -> Self {
-        Self::new(path, Serialization::Json, export_last)
+    pub fn _new_json(path: &str, chunks_in_memory: usize, export_last: bool) -> Self {
+        Self::new(path, Serialization::Json, chunks_in_memory, export_last)
     }
 
-    fn new(path: &str, serialization: Serialization, export_last: bool) -> Self {
+    fn new(
+        path: &str,
+        serialization: Serialization,
+        chunks_in_memory: usize,
+        export_last: bool,
+    ) -> Self {
+        if chunks_in_memory < 1 {
+            panic!("Should always have at least the latest chunk in memory");
+        }
+
         let path = format_path(path);
 
         let path_all = format!("{path}/date");
@@ -87,6 +98,8 @@ where
             path_all,
             path_last,
 
+            chunks_in_memory,
+
             serialization,
 
             initial_last_date: None,
@@ -96,7 +109,15 @@ where
             imported: BTreeMap::default(),
         };
 
-        s.import_last();
+        s.read_dir()
+            .into_iter()
+            .rev()
+            .take(chunks_in_memory)
+            .for_each(|(chunk_start, path)| {
+                if let Ok(map) = s.import(&path) {
+                    s.imported.insert(chunk_start, map);
+                }
+            });
 
         s.initial_last_date = s
             .imported
@@ -123,7 +144,6 @@ where
         value
     }
 
-    #[allow(unused)]
     pub fn insert_default(&mut self, date: NaiveDate) -> T {
         self.insert(date, T::default())
     }
@@ -165,7 +185,7 @@ where
                 path.is_file()
                     && file_stem.len() == 4
                     && file_stem.starts_with("20")
-                    && extension == self.serialization.to_str()
+                    && extension == self.serialization.to_extension()
             })
             .map(|path| {
                 let year = path
@@ -181,62 +201,10 @@ where
             .collect()
     }
 
-    // fn import_all(&self) -> BTreeMap<WNaiveDate, T> {
-    //     self.read_dir()
-    //         .into_values()
-    //         .map(|path| {
-    //             self.serialization
-    //                 .import::<BTreeMap<WNaiveDate, T>>(path.to_str().unwrap())
-    //                 .unwrap()
-    //         })
-    //         .reduce(|mut a, mut b| {
-    //             a.extend(b);
-    //             a
-    //         })
-    //         .unwrap_or_default()
-    // }
-
-    pub fn import_if_needed(&mut self, year: usize) {
-        if let Some(path) = self.read_dir().get(&year) {
-            if self.imported.get(&year).is_none() {
-                if let Ok(map) = self._import(path) {
-                    self.imported.insert(year, map);
-                }
-            }
-        }
-    }
-
-    fn import_last(&mut self) {
-        if let Some((year, path)) = self.read_dir().into_iter().last() {
-            if let Ok(map) = self._import(&path) {
-                self.imported.insert(year, map);
-            }
-        }
-    }
-
-    fn _import(&self, path: &Path) -> color_eyre::Result<BTreeMap<WNaiveDate, T>> {
+    fn import(&self, path: &Path) -> color_eyre::Result<BTreeMap<WNaiveDate, T>> {
         self.serialization
             .import::<BTreeMap<WNaiveDate, T>>(path.to_str().unwrap())
     }
-
-    // pub fn last_inserted_date(&self) -> WNaiveDate {
-    //     self.last_inserted().0
-    // }
-
-    // pub fn last_inserted_value(&self) -> T {
-    //     self.last_inserted().1
-    // }
-
-    // fn last_inserted(&self) -> (WNaiveDate, T) {
-    //     self.to_insert
-    //
-    //         .last_key_value()
-    //         .and_then(|(_, map)| {
-    //             map.last_key_value()
-    //                 .map(|(a, b)| (a.to_owned(), b.to_owned()))
-    //         })
-    //         .unwrap()
-    // }
 }
 
 impl<T> AnyMap for DateMap<T>
@@ -253,6 +221,10 @@ where
 {
     fn path(&self) -> &str {
         &self.path_all
+    }
+
+    fn path_last(&self) -> &Option<String> {
+        &self.path_last
     }
 
     fn t_name(&self) -> &str {
@@ -272,20 +244,6 @@ where
     }
 
     fn pre_export(&mut self) {
-        if let Some(first_map_to_insert) = self.to_insert.iter().next() {
-            let first_date_to_insert = **first_map_to_insert.1.iter().next().unwrap().0;
-
-            let day = first_date_to_insert.day();
-            let month = first_date_to_insert.month();
-            let year = first_date_to_insert.year() as usize;
-
-            let is_first_of_year = month == 1 && (day == 1 || (day == 3 && year == 2009));
-
-            if !is_first_of_year {
-                self.import_if_needed(year)
-            }
-        }
-
         self.to_insert
             .iter_mut()
             .enumerate()
@@ -329,7 +287,7 @@ where
 
         keys.into_iter()
             .enumerate()
-            .filter(|(index, _)| index + 1 < len)
+            .filter(|(index, _)| index + self.chunks_in_memory < len)
             .for_each(|(_, key)| {
                 self.imported.remove(&key);
             });

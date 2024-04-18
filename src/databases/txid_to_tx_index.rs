@@ -79,10 +79,6 @@ impl TxidToTxIndex {
     fn db_index(txid: &Txid) -> u8 {
         txid[0]
     }
-
-    fn inner_mut(&mut self) -> &mut BTreeMap<u8, Database> {
-        &mut self.map
-    }
 }
 
 impl AnyDatabaseGroup for TxidToTxIndex {
@@ -94,7 +90,7 @@ impl AnyDatabaseGroup for TxidToTxIndex {
     }
 
     fn export(&mut self) -> color_eyre::Result<()> {
-        mem::take(self.inner_mut())
+        mem::take(&mut self.map)
             .into_par_iter()
             .try_for_each(|(_, db)| db.export())?;
 

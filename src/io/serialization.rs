@@ -11,15 +11,23 @@ pub enum Serialization {
 }
 
 impl Serialization {
-    pub fn to_str(&self) -> &str {
+    pub fn to_extension(&self) -> &str {
         match self {
             Self::Binary => "bin",
             Self::Json => "json",
         }
     }
 
+    pub fn from_extension(extension: &str) -> Self {
+        match extension {
+            "bin" => Self::Binary,
+            "json" => Self::Json,
+            _ => panic!("Extension \"{extension}\" isn't supported"),
+        }
+    }
+
     pub fn append_extension(&self, path: &str) -> String {
-        format!("{path}.{}", self.to_str())
+        format!("{path}.{}", self.to_extension())
     }
 
     pub fn import<T>(&self, path: &str) -> color_eyre::Result<T>

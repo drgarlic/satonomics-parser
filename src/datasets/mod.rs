@@ -187,7 +187,7 @@ impl AllDatasets {
                 dataset
                     .to_any_map_vec()
                     .into_iter()
-                    .map(|map| map.exported_path_with_t_name())
+                    .flat_map(|map| map.exported_path_with_t_name())
             })
             .collect();
 

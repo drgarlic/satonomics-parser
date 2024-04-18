@@ -25,7 +25,7 @@ impl TransactionDataset {
             min_initial_state: MinInitialState::default(),
 
             count: BiMap::new_bin(&f("transaction_count")),
-            volume: BiMap::new_bin(&f("transaction_volume")),
+            volume: BiMap::_new_bin(&f("transaction_volume"), 3),
 
             annualized_volume: BiMap::new_bin(&f("annualized_transaction_volume")),
             velocity: BiMap::new_bin(&f("transaction_velocity")),

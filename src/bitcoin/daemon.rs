@@ -1,30 +1,35 @@
-#![allow(unused)]
 use std::{process::Command, thread::sleep, time::Duration};
 
 use serde_json::Value;
-
-pub const BITCOIN_DATADIR_RAW_PATH: &str = "/Users/k/Developer/bitcoin";
 
 struct BlockchainInfo {
     pub headers: u64,
     pub blocks: u64,
 }
 
-pub struct Daemon;
+pub struct BitcoinDaemon<'a> {
+    path: &'a str,
+}
 
-impl Daemon {
-    pub fn start() {
+impl<'a> BitcoinDaemon<'a> {
+    pub fn new(bitcoin_dir_path: &'a str) -> Self {
+        Self {
+            path: bitcoin_dir_path,
+        }
+    }
+
+    pub fn start(&self) {
         sleep(Duration::from_secs(1));
 
         println!("Starting node...");
 
-        // bitcoind -datadir=/Users/k/Developer/bitcoin -blocksonly -txindex=1 -daemon -v2transport
-        let output = Command::new("bitcoind")
-            .arg(format!("-datadir={BITCOIN_DATADIR_RAW_PATH}"))
+        // bitcoind -datadir=/Users/k/Developer/bitcoin -blocksonly -txindex=1 -v2transport -daemon
+        let _ = Command::new("bitcoind")
+            .arg(self.datadir())
             .arg("-blocksonly")
             .arg("-txindex=1")
-            .arg("-daemon")
             .arg("-v2transport")
+            .arg("-daemon")
             .output()
             .expect("bitcoind to be able to properly start");
 
@@ -33,10 +38,10 @@ impl Daemon {
         println!("Node started successfully !");
     }
 
-    pub fn stop() {
+    pub fn stop(&self) {
         // bitcoin-cli -datadir=/Users/k/Developer/bitcoin stop
         let status = Command::new("bitcoin-cli")
-            .arg(format!("-datadir={BITCOIN_DATADIR_RAW_PATH}"))
+            .arg(self.datadir())
             .arg("stop")
             .output()
             .unwrap()
@@ -49,26 +54,26 @@ impl Daemon {
         }
     }
 
-    pub fn wait_sync() -> color_eyre::Result<()> {
-        while !Self::check_if_fully_synced()? {
+    pub fn wait_sync(&self) -> color_eyre::Result<()> {
+        while !self.check_if_fully_synced()? {
             sleep(Duration::from_secs(5))
         }
 
         Ok(())
     }
 
-    pub fn wait_for_new_block(last_block_height: usize) -> color_eyre::Result<()> {
+    pub fn wait_for_new_block(&self, last_block_height: usize) -> color_eyre::Result<()> {
         println!("Waiting for new block...");
 
-        while Self::get_blockchain_info()?.headers as usize == last_block_height {
+        while self.get_blockchain_info()?.headers as usize == last_block_height {
             sleep(Duration::from_secs(5))
         }
 
         Ok(())
     }
 
-    pub fn check_if_fully_synced() -> color_eyre::Result<bool> {
-        let BlockchainInfo { blocks, headers } = Self::get_blockchain_info()?;
+    pub fn check_if_fully_synced(&self) -> color_eyre::Result<bool> {
+        let BlockchainInfo { blocks, headers } = self.get_blockchain_info()?;
 
         let synced = blocks == headers;
 
@@ -81,10 +86,10 @@ impl Daemon {
         Ok(synced)
     }
 
-    fn get_blockchain_info() -> color_eyre::Result<BlockchainInfo> {
+    fn get_blockchain_info(&self) -> color_eyre::Result<BlockchainInfo> {
         // bitcoin-cli -datadir=/Users/k/Developer/bitcoin getblockchaininfo
         let output = Command::new("bitcoin-cli")
-            .arg(format!("-datadir={BITCOIN_DATADIR_RAW_PATH}"))
+            .arg(self.datadir())
             .arg("getblockchaininfo")
             .output()
             .unwrap();
@@ -96,5 +101,9 @@ impl Daemon {
         let headers = json.get("headers").unwrap().as_u64().unwrap();
 
         Ok(BlockchainInfo { headers, blocks })
+    }
+
+    fn datadir(&self) -> String {
+        format!("-datadir={}", self.path)
     }
 }

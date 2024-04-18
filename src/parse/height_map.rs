@@ -29,6 +29,8 @@ where
     path_all: String,
     path_last: Option<String>,
 
+    chunks_in_memory: usize,
+
     serialization: Serialization,
 
     initial_last_height: Option<usize>,
@@ -52,25 +54,34 @@ where
 {
     #[allow(unused)]
     pub fn new_bin(path: &str) -> Self {
-        Self::new(path, Serialization::Binary, true)
+        Self::new(path, Serialization::Binary, 1, true)
     }
 
     #[allow(unused)]
-    pub fn _new_bin(path: &str, export_last: bool) -> Self {
-        Self::new(path, Serialization::Binary, export_last)
+    pub fn _new_bin(path: &str, chunks_in_memory: usize, export_last: bool) -> Self {
+        Self::new(path, Serialization::Binary, chunks_in_memory, export_last)
     }
 
     #[allow(unused)]
     pub fn new_json(path: &str) -> Self {
-        Self::new(path, Serialization::Json, true)
+        Self::new(path, Serialization::Json, 1, true)
     }
 
     #[allow(unused)]
-    pub fn _new_json(path: &str, export_last: bool) -> Self {
-        Self::new(path, Serialization::Json, export_last)
+    pub fn _new_json(path: &str, chunks_in_memory: usize, export_last: bool) -> Self {
+        Self::new(path, Serialization::Json, chunks_in_memory, export_last)
     }
 
-    fn new(path: &str, serialization: Serialization, export_last: bool) -> Self {
+    fn new(
+        path: &str,
+        serialization: Serialization,
+        chunks_in_memory: usize,
+        export_last: bool,
+    ) -> Self {
+        if chunks_in_memory < 1 {
+            panic!("Should always have at least the latest chunk in memory");
+        }
+
         let path = format_path(path);
 
         let path_all = format!("{path}/height");
@@ -89,6 +100,8 @@ where
             path_all,
             path_last,
 
+            chunks_in_memory,
+
             serialization,
 
             initial_first_unsafe_height: None,
@@ -98,7 +111,15 @@ where
             imported: BTreeMap::default(),
         };
 
-        s.import_last();
+        s.read_dir()
+            .into_iter()
+            .rev()
+            .take(chunks_in_memory)
+            .for_each(|(chunk_start, path)| {
+                if let Ok(map) = s.import(&path) {
+                    s.imported.insert(chunk_start, map);
+                }
+            });
 
         s.initial_last_height = s
             .imported
@@ -169,7 +190,7 @@ where
             .filter(|path| {
                 let extension = path.extension().unwrap().to_str().unwrap();
 
-                path.is_file() && extension == self.serialization.to_str()
+                path.is_file() && extension == self.serialization.to_extension()
             })
             .map(|path| {
                 (
@@ -188,27 +209,7 @@ where
             .collect()
     }
 
-    pub fn import_if_needed(&mut self, height: usize) {
-        let chunk_start = Self::height_to_chunk_start(height);
-
-        if let Some(path) = self.read_dir().get(&chunk_start) {
-            if self.imported.get(&chunk_start).is_none() {
-                if let Ok(map) = self._import(path) {
-                    self.imported.insert(chunk_start, map);
-                }
-            }
-        }
-    }
-
-    fn import_last(&mut self) {
-        if let Some((chunk_start, path)) = self.read_dir().into_iter().last() {
-            if let Ok(map) = self._import(&path) {
-                self.imported.insert(chunk_start, map);
-            }
-        }
-    }
-
-    fn _import(&self, path: &Path) -> color_eyre::Result<Vec<T>> {
+    fn import(&self, path: &Path) -> color_eyre::Result<Vec<T>> {
         self.serialization.import::<Vec<T>>(path.to_str().unwrap())
     }
 }
@@ -229,6 +230,10 @@ where
         &self.path_all
     }
 
+    fn path_last(&self) -> &Option<String> {
+        &self.path_last
+    }
+
     fn t_name(&self) -> &str {
         std::any::type_name::<T>()
     }
@@ -246,22 +251,6 @@ where
     }
 
     fn pre_export(&mut self) {
-        if let Some(first_map_to_insert) = self.to_insert.iter().next() {
-            let first_height_to_insert = first_map_to_insert
-                .1
-                .iter()
-                .next()
-                .unwrap_or_else(|| {
-                    dbg!(&self.path_all, &self.to_insert);
-                    panic!()
-                })
-                .0;
-
-            if first_height_to_insert % CHUNK_SIZE != 0 {
-                self.import_if_needed(*first_height_to_insert);
-            }
-        }
-
         self.to_insert
             .iter_mut()
             .enumerate()
@@ -316,7 +305,7 @@ where
 
         keys.into_iter()
             .enumerate()
-            .filter(|(index, _)| index + 1 < len)
+            .filter(|(index, _)| index + self.chunks_in_memory < len)
             .for_each(|(_, key)| {
                 self.imported.remove(&key);
             });
@@ -419,7 +408,12 @@ where
     {
         let to_subtract = (height + 1)
             .checked_sub(x)
-            .map(|previous_height| source.get(&previous_height).unwrap())
+            .map(|previous_height| {
+                source.get(&previous_height).unwrap_or_else(|| {
+                    dbg!(&self.path_all, &source.path_all, previous_height);
+                    panic!()
+                })
+            })
             .unwrap_or_default();
 
         let previous_sum = height
@@ -470,7 +464,7 @@ where
             .checked_sub(offset)
             .map(|height| {
                 source.get(&height).unwrap_or_else(|| {
-                    dbg!(&self.path_all, offset);
+                    dbg!(&self.path_all, &source.path_all, offset);
                     panic!();
                 })
             })
@@ -499,14 +493,24 @@ where
                 let median_index = size / 2;
 
                 let mut vec = (start..=height)
-                    .flat_map(|height| source.get(&height))
-                    .map(|f| OrderedFloat(f))
+                    .map(|height| {
+                        OrderedFloat(source.get(&height).unwrap_or_else(|| {
+                            dbg!(height, &source.path_all, size);
+                            panic!()
+                        }))
+                    })
                     .collect_vec();
 
                 vec.sort_unstable();
 
                 if even {
-                    (vec.get(median_index).unwrap().0 + vec.get(median_index - 1).unwrap().0)
+                    (vec.get(median_index)
+                        .unwrap_or_else(|| {
+                            dbg!(median_index, &self.path_all, &source.path_all, size);
+                            panic!()
+                        })
+                        .0
+                        + vec.get(median_index - 1).unwrap().0)
                         / T::from(2.0).unwrap()
                 } else {
                     vec.get(median_index).unwrap().0

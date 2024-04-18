@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use chrono::{Datelike, NaiveDate};
+use chrono::NaiveDate;
 use color_eyre::eyre::Error;
 
 use crate::{
@@ -26,7 +26,7 @@ impl DateDataset {
 
             kraken_daily: None,
 
-            closes: DateMap::new_json(&format!("{parent_path}/{name}")),
+            closes: DateMap::_new_json(&format!("{parent_path}/{name}"), usize::MAX, true),
         };
 
         s.min_initial_state
@@ -37,8 +37,6 @@ impl DateDataset {
 
     pub fn get(&mut self, date: NaiveDate) -> color_eyre::Result<f32> {
         if self.closes.is_date_safe(date) {
-            self.closes.import_if_needed(date.year() as usize);
-
             Ok(self.closes.get(date).unwrap().to_owned())
         } else {
             let price = self.get_from_daily_kraken(&date.to_string())?;

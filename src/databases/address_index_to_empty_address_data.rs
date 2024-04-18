@@ -73,10 +73,6 @@ impl AddressIndexToEmptyAddressData {
     fn db_index(key: &Key) -> usize {
         *key as usize / DB_MAX_SIZE
     }
-
-    fn inner_mut(&mut self) -> &mut BTreeMap<usize, Database> {
-        &mut self.map
-    }
 }
 
 impl AnyDatabaseGroup for AddressIndexToEmptyAddressData {
@@ -88,7 +84,7 @@ impl AnyDatabaseGroup for AddressIndexToEmptyAddressData {
     }
 
     fn export(&mut self) -> color_eyre::Result<()> {
-        mem::take(self.inner_mut())
+        mem::take(&mut self.map)
             .into_par_iter()
             .try_for_each(|(_, db)| db.export())?;
 

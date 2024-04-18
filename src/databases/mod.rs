@@ -12,6 +12,8 @@ pub use address_to_address_index::*;
 use metadata::*;
 pub use txid_to_tx_index::*;
 
+use crate::utils::time;
+
 pub struct Databases {
     pub address_index_to_empty_address_data: AddressIndexToEmptyAddressData,
     pub address_to_address_index: AddressToAddressIndex,
@@ -34,18 +36,23 @@ impl Databases {
     }
 
     pub fn export(&mut self) -> color_eyre::Result<()> {
-        // Don't par them
-        // I'll try again
-
         thread::scope(|s| {
-            s.spawn(|| self.address_index_to_empty_address_data.export());
-            s.spawn(|| self.address_to_address_index.export());
-            s.spawn(|| self.txid_to_tx_index.export());
+            s.spawn(|| {
+                time("  Database address_index_to_empty_address_data", || {
+                    self.address_index_to_empty_address_data.export()
+                })
+            });
+            s.spawn(|| {
+                time("  Database address_to_address_index", || {
+                    self.address_to_address_index.export()
+                })
+            });
+            s.spawn(|| {
+                time("  Database txid_to_tx_index", || {
+                    self.txid_to_tx_index.export()
+                })
+            });
         });
-
-        // self.address_index_to_empty_address_data.export()?;
-        // self.address_to_address_index.export()?;
-        // self.txid_to_tx_index.export()?;
 
         Ok(())
     }

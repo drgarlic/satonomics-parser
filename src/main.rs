@@ -1,25 +1,16 @@
 use std::path::Path;
 
-mod actions;
-mod bitcoin;
-mod databases;
-mod datasets;
-mod io;
-mod parse;
-mod price;
-mod states;
-mod utils;
+use parser::{iter_blocks, BitcoinDB, BitcoinDaemon};
 
-use crate::{
-    actions::iter_blocks,
-    bitcoin::{BitcoinDB, Daemon, BITCOIN_DATADIR_RAW_PATH},
-};
+const BITCOIN_DATADIR_RAW_PATH: &str = "/Users/k/Developer/bitcoin";
 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
+    let deamon = BitcoinDaemon::new(BITCOIN_DATADIR_RAW_PATH);
+
     loop {
-        Daemon::stop();
+        deamon.stop();
 
         // Scoped to free bitcoin's lock
         let block_count = {
@@ -33,12 +24,12 @@ fn main() -> color_eyre::Result<()> {
             block_count
         };
 
-        Daemon::start();
+        deamon.start();
 
-        if Daemon::check_if_fully_synced()? {
-            Daemon::wait_for_new_block(block_count - 1)?;
+        if deamon.check_if_fully_synced()? {
+            deamon.wait_for_new_block(block_count - 1)?;
         } else {
-            Daemon::wait_sync()?;
+            deamon.wait_sync()?;
         }
     }
 

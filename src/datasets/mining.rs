@@ -36,7 +36,7 @@ impl MiningDataset {
             coinbase: BiMap::new_bin(&f("coinbase")),
             fees: BiMap::new_bin(&f("fees")),
 
-            subsidy: BiMap::new_bin(&f("subsidy")),
+            subsidy: BiMap::_new_bin(&f("subsidy"), 3),
             subsidy_in_dollars: BiMap::new_bin(&f("subsidy_in_dollars")),
             cumulative_subsidy_in_dollars: BiMap::new_bin(&f("cumulative_subsidy_in_dollars")),
 

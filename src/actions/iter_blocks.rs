@@ -147,10 +147,10 @@ pub fn iter_blocks(bitcoin_db: &BitcoinDB, block_count: usize) -> color_eyre::Re
                         let is_new_month = next_block_date
                             .map_or(true, |next_block_date| next_block_date.day() == 1);
 
-                        let is_close_to_the_end =
-                            height > (block_count - (NUMBER_OF_UNSAFE_BLOCKS * 10));
+                        // let is_close_to_the_end =
+                        //     height > (block_count - (NUMBER_OF_UNSAFE_BLOCKS * 10));
 
-                        if is_new_month || is_close_to_the_end {
+                        if is_new_month {
                             break 'days;
                         }
 

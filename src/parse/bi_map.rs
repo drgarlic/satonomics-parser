@@ -37,18 +37,24 @@ where
 {
     pub fn new_bin(path: &str) -> Self {
         Self {
-            height: HeightMap::_new_bin(path, true),
-            date: DateMap::_new_bin(path, false),
+            height: HeightMap::_new_bin(path, 1, true),
+            date: DateMap::_new_bin(path, 1, false),
         }
     }
 
-    #[allow(unused)]
-    pub fn new_json(path: &str) -> Self {
+    pub fn _new_bin(path: &str, height_chunks_in_memory: usize) -> Self {
         Self {
-            height: HeightMap::_new_json(path, true),
-            date: DateMap::_new_json(path, false),
+            height: HeightMap::_new_bin(path, height_chunks_in_memory, true),
+            date: DateMap::_new_bin(path, height_chunks_in_memory, false),
         }
     }
+
+    // pub fn new_json(path: &str) -> Self {
+    //     Self {
+    //         height: HeightMap::_new_json(path, true),
+    //         date: DateMap::_new_json(path, false),
+    //     }
+    // }
 
     pub fn date_insert_sum_range(
         &mut self,

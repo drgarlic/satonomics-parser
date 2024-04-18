@@ -30,7 +30,7 @@ impl HeightDataset {
             binance_har: None,
             kraken_1mn: None,
 
-            closes: HeightMap::new_json(&format!("{parent_path}/{name}")),
+            closes: HeightMap::_new_json(&format!("{parent_path}/{name}"), usize::MAX, false),
         };
 
         s.min_initial_state
@@ -40,8 +40,6 @@ impl HeightDataset {
     }
 
     pub fn get(&mut self, height: usize, timestamp: u32) -> color_eyre::Result<f32> {
-        self.closes.import_if_needed(height);
-
         if let Some(price) = self.closes.get(&height) {
             return Ok(price);
         }
