@@ -19,7 +19,7 @@ impl CoindaysDataset {
         let mut s = Self {
             min_initial_state: MinInitialState::default(),
 
-            destroyed: BiMap::new_bin(&f("coindays_destroyed")),
+            destroyed: BiMap::new_bin(1, &f("coindays_destroyed")),
         };
 
         s.min_initial_state

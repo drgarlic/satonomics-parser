@@ -12,7 +12,8 @@ use std::{
 use chrono::{Datelike, Days, NaiveDate};
 use itertools::Itertools;
 use ordered_float::{FloatCore, OrderedFloat};
-use serde::{de::DeserializeOwned, Serialize};
+use savefile_derive::Savefile;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::{
     io::{format_path, Serialization},
@@ -23,7 +24,15 @@ use super::{AnyMap, WNaiveDate};
 
 const NUMBER_OF_UNSAFE_DATES: usize = 2;
 
+#[derive(Debug, Savefile, Serialize, Deserialize)]
+pub struct SerializedDateMap<T> {
+    version: u32,
+    map: BTreeMap<WNaiveDate, T>,
+}
+
 pub struct DateMap<T> {
+    version: u32,
+
     path_all: String,
     path_last: Option<String>,
 
@@ -34,7 +43,7 @@ pub struct DateMap<T> {
     initial_last_date: Option<NaiveDate>,
     initial_first_unsafe_date: Option<NaiveDate>,
 
-    imported: BTreeMap<usize, BTreeMap<WNaiveDate, T>>,
+    imported: BTreeMap<usize, SerializedDateMap<T>>,
     to_insert: BTreeMap<usize, BTreeMap<WNaiveDate, T>>,
 }
 
@@ -48,29 +57,43 @@ where
         + DeserializeOwned
         + Sum
         + savefile::Serialize
-        + savefile::Deserialize,
+        + savefile::Deserialize
+        + savefile::ReprC,
 {
     #[allow(unused)]
-    pub fn new_bin(path: &str) -> Self {
-        Self::new(path, Serialization::Binary, 1, true)
+    pub fn new_bin(version: u32, path: &str) -> Self {
+        Self::new(version, path, Serialization::Binary, 1, true)
     }
 
     #[allow(unused)]
-    pub fn _new_bin(path: &str, chunks_in_memory: usize, export_last: bool) -> Self {
-        Self::new(path, Serialization::Binary, chunks_in_memory, export_last)
+    pub fn _new_bin(version: u32, path: &str, chunks_in_memory: usize, export_last: bool) -> Self {
+        Self::new(
+            version,
+            path,
+            Serialization::Binary,
+            chunks_in_memory,
+            export_last,
+        )
     }
 
     #[allow(unused)]
-    pub fn new_json(path: &str) -> Self {
-        Self::new(path, Serialization::Json, 1, true)
+    pub fn new_json(version: u32, path: &str) -> Self {
+        Self::new(version, path, Serialization::Json, 1, true)
     }
 
     #[allow(unused)]
-    pub fn _new_json(path: &str, chunks_in_memory: usize, export_last: bool) -> Self {
-        Self::new(path, Serialization::Json, chunks_in_memory, export_last)
+    pub fn _new_json(version: u32, path: &str, chunks_in_memory: usize, export_last: bool) -> Self {
+        Self::new(
+            version,
+            path,
+            Serialization::Json,
+            chunks_in_memory,
+            export_last,
+        )
     }
 
     fn new(
+        version: u32,
         path: &str,
         serialization: Serialization,
         chunks_in_memory: usize,
@@ -95,6 +118,8 @@ where
         };
 
         let mut s = Self {
+            version,
+
             path_all,
             path_last,
 
@@ -114,8 +139,10 @@ where
             .rev()
             .take(chunks_in_memory)
             .for_each(|(chunk_start, path)| {
-                if let Ok(map) = s.import(&path) {
-                    s.imported.insert(chunk_start, map);
+                if let Ok(serialized) = s.import(&path) {
+                    if serialized.version == s.version {
+                        s.imported.insert(chunk_start, serialized);
+                    }
                 }
             });
 
@@ -123,7 +150,7 @@ where
             .imported
             .values()
             .last()
-            .and_then(|d| d.keys().map(|date| **date).max());
+            .and_then(|serialized| serialized.map.keys().map(|date| **date).max());
 
         s.initial_first_unsafe_date = s.initial_last_date.and_then(|last_date| {
             let offset = NUMBER_OF_UNSAFE_DATES - 1;
@@ -161,7 +188,7 @@ where
             .or_else(|| {
                 self.imported
                     .get(&year)
-                    .and_then(|tree| tree.get(date))
+                    .and_then(|serialized| serialized.map.get(date))
                     .cloned()
             })
     }
@@ -175,7 +202,11 @@ where
     }
 
     fn read_dir(&self) -> BTreeMap<usize, PathBuf> {
-        fs::read_dir(&self.path_all)
+        Self::_read_dir(&self.path_all, &self.serialization)
+    }
+
+    pub fn _read_dir(path: &str, serialization: &Serialization) -> BTreeMap<usize, PathBuf> {
+        fs::read_dir(path)
             .unwrap()
             .map(|entry| entry.unwrap().path())
             .filter(|path| {
@@ -185,7 +216,7 @@ where
                 path.is_file()
                     && file_stem.len() == 4
                     && file_stem.starts_with("20")
-                    && extension == self.serialization.to_extension()
+                    && extension == serialization.to_extension()
             })
             .map(|path| {
                 let year = path
@@ -201,9 +232,9 @@ where
             .collect()
     }
 
-    fn import(&self, path: &Path) -> color_eyre::Result<BTreeMap<WNaiveDate, T>> {
+    fn import(&self, path: &Path) -> color_eyre::Result<SerializedDateMap<T>> {
         self.serialization
-            .import::<BTreeMap<WNaiveDate, T>>(path.to_str().unwrap())
+            .import::<SerializedDateMap<T>>(path.to_str().unwrap())
     }
 }
 
@@ -217,7 +248,8 @@ where
         + DeserializeOwned
         + Sum
         + savefile::Serialize
-        + savefile::Deserialize,
+        + savefile::Deserialize
+        + savefile::ReprC,
 {
     fn path(&self) -> &str {
         &self.path_all
@@ -250,7 +282,11 @@ where
             .for_each(|(_, (chunk_start, map))| {
                 self.imported
                     .entry(chunk_start.to_owned())
-                    .or_default()
+                    .or_insert(SerializedDateMap {
+                        version: self.version,
+                        map: BTreeMap::default(),
+                    })
+                    .map
                     .extend(mem::take(map));
             });
     }
@@ -264,14 +300,14 @@ where
                     .serialization
                     .append_extension(&format!("{}/{}", self.path_all, year));
 
-                let to_export = self.imported.get(year).unwrap();
+                let serialized = self.imported.get(year).unwrap();
 
-                self.serialization.export(&path, to_export)?;
+                self.serialization.export(&path, serialized)?;
 
                 if index == len - 1 {
                     if let Some(path_last) = self.path_last.as_ref() {
                         self.serialization
-                            .export(path_last, to_export.values().last().unwrap())?;
+                            .export(path_last, serialized.map.values().last().unwrap())?;
                     }
                 }
 
@@ -318,7 +354,8 @@ where
         + Sync
         + Send
         + savefile::Serialize
-        + savefile::Deserialize,
+        + savefile::Deserialize
+        + savefile::ReprC,
 {
     #[inline(always)]
     fn get_initial_first_unsafe_date(&self) -> Option<NaiveDate> {
@@ -349,7 +386,8 @@ where
         + DeserializeOwned
         + Sum
         + savefile::Serialize
-        + savefile::Deserialize,
+        + savefile::Deserialize
+        + savefile::ReprC,
 {
     // #[allow(unused)]
     // pub fn transform<F>(&self, transform: F) -> BTreeMap<WNaiveDate, T>
@@ -614,6 +652,7 @@ where
             + Sum
             + savefile::Serialize
             + savefile::Deserialize
+            + savefile::ReprC
             + ToF32,
     {
         let to_subtract = date

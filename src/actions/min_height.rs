@@ -49,9 +49,10 @@ pub fn find_first_unsafe_height(
 
             states.reset();
 
-            let include_addresses = min_initial_last_address_date.is_none() || min_initial_last_address_height.is_none();
 
-            databases.reset(include_addresses);
+            databases.reset(true);
+            // Doesn't always work as intended
+            // databases.reset(min_initial_last_address_date.is_none() || min_initial_last_address_height.is_none());
 
             0
         })

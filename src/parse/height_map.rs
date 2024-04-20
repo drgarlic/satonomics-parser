@@ -11,7 +11,8 @@ use std::{
 
 use itertools::Itertools;
 use ordered_float::{FloatCore, OrderedFloat};
-use serde::{de::DeserializeOwned, Serialize};
+use savefile_derive::Savefile;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::{
     bitcoin::{BLOCKS_PER_HAVLING_EPOCH, NUMBER_OF_UNSAFE_BLOCKS},
@@ -20,12 +21,20 @@ use crate::{
 
 use super::AnyMap;
 
-const CHUNK_SIZE: usize = BLOCKS_PER_HAVLING_EPOCH / 8;
+pub const HEIGHT_MAP_CHUNK_SIZE: usize = BLOCKS_PER_HAVLING_EPOCH / 16;
+
+#[derive(Debug, Savefile, Serialize, Deserialize)]
+pub struct SerializedHeightMap<T> {
+    version: u32,
+    map: Vec<T>,
+}
 
 pub struct HeightMap<T>
 where
     T: Clone + Default + Debug + savefile::Serialize + savefile::Deserialize,
 {
+    version: u32,
+
     path_all: String,
     path_last: Option<String>,
 
@@ -36,7 +45,7 @@ where
     initial_last_height: Option<usize>,
     initial_first_unsafe_height: Option<usize>,
 
-    imported: BTreeMap<usize, Vec<T>>,
+    imported: BTreeMap<usize, SerializedHeightMap<T>>,
     to_insert: BTreeMap<usize, BTreeMap<usize, T>>,
 }
 
@@ -53,26 +62,39 @@ where
         + savefile::ReprC,
 {
     #[allow(unused)]
-    pub fn new_bin(path: &str) -> Self {
-        Self::new(path, Serialization::Binary, 1, true)
+    pub fn new_bin(version: u32, path: &str) -> Self {
+        Self::new(version, path, Serialization::Binary, 1, true)
     }
 
     #[allow(unused)]
-    pub fn _new_bin(path: &str, chunks_in_memory: usize, export_last: bool) -> Self {
-        Self::new(path, Serialization::Binary, chunks_in_memory, export_last)
+    pub fn _new_bin(version: u32, path: &str, chunks_in_memory: usize, export_last: bool) -> Self {
+        Self::new(
+            version,
+            path,
+            Serialization::Binary,
+            chunks_in_memory,
+            export_last,
+        )
     }
 
     #[allow(unused)]
-    pub fn new_json(path: &str) -> Self {
-        Self::new(path, Serialization::Json, 1, true)
+    pub fn new_json(version: u32, path: &str) -> Self {
+        Self::new(version, path, Serialization::Json, 1, true)
     }
 
     #[allow(unused)]
-    pub fn _new_json(path: &str, chunks_in_memory: usize, export_last: bool) -> Self {
-        Self::new(path, Serialization::Json, chunks_in_memory, export_last)
+    pub fn _new_json(version: u32, path: &str, chunks_in_memory: usize, export_last: bool) -> Self {
+        Self::new(
+            version,
+            path,
+            Serialization::Json,
+            chunks_in_memory,
+            export_last,
+        )
     }
 
     fn new(
+        version: u32,
         path: &str,
         serialization: Serialization,
         chunks_in_memory: usize,
@@ -97,6 +119,8 @@ where
         };
 
         let mut s = Self {
+            version,
+
             path_all,
             path_last,
 
@@ -116,8 +140,10 @@ where
             .rev()
             .take(chunks_in_memory)
             .for_each(|(chunk_start, path)| {
-                if let Ok(map) = s.import(&path) {
-                    s.imported.insert(chunk_start, map);
+                if let Ok(serialized) = s.import(&path) {
+                    if serialized.version == s.version {
+                        s.imported.insert(chunk_start, serialized);
+                    }
                 }
             });
 
@@ -125,7 +151,7 @@ where
             .imported
             .iter()
             .last()
-            .map(|(chunk_start, vec)| chunk_start + vec.len());
+            .map(|(chunk_start, serialized)| chunk_start + serialized.map.len());
 
         s.initial_first_unsafe_height = s.initial_last_height.and_then(|last_height| {
             let offset = NUMBER_OF_UNSAFE_BLOCKS - 1;
@@ -137,13 +163,13 @@ where
 
     fn height_to_chunk_name(height: usize) -> String {
         let start = Self::height_to_chunk_start(height);
-        let end = start + CHUNK_SIZE;
+        let end = start + HEIGHT_MAP_CHUNK_SIZE;
 
         format!("{start}..{end}")
     }
 
     fn height_to_chunk_start(height: usize) -> usize {
-        height / CHUNK_SIZE * CHUNK_SIZE
+        height / HEIGHT_MAP_CHUNK_SIZE * HEIGHT_MAP_CHUNK_SIZE
     }
 
     pub fn insert(&mut self, height: usize, value: T) -> T {
@@ -151,7 +177,7 @@ where
             self.to_insert
                 .entry(Self::height_to_chunk_start(height))
                 .or_default()
-                .insert(height % CHUNK_SIZE, value);
+                .insert(height % HEIGHT_MAP_CHUNK_SIZE, value);
         }
 
         value
@@ -168,12 +194,9 @@ where
             .get(&chunk_start)
             .and_then(|map| map.get(&(height - chunk_start)).cloned())
             .or_else(|| {
-                // DO that before
-                // self.import_chunk_if_needed(*height);
-
                 self.imported
                     .get(&chunk_start)
-                    .and_then(|vec| vec.get(height - chunk_start))
+                    .and_then(|serialized| serialized.map.get(height - chunk_start))
                     .cloned()
             })
     }
@@ -184,13 +207,17 @@ where
     }
 
     fn read_dir(&self) -> BTreeMap<usize, PathBuf> {
-        fs::read_dir(&self.path_all)
+        Self::_read_dir(&self.path_all, &self.serialization)
+    }
+
+    pub fn _read_dir(path: &str, serialization: &Serialization) -> BTreeMap<usize, PathBuf> {
+        fs::read_dir(path)
             .unwrap()
             .map(|entry| entry.unwrap().path())
             .filter(|path| {
                 let extension = path.extension().unwrap().to_str().unwrap();
 
-                path.is_file() && extension == self.serialization.to_extension()
+                path.is_file() && extension == serialization.to_extension()
             })
             .map(|path| {
                 (
@@ -209,8 +236,9 @@ where
             .collect()
     }
 
-    fn import(&self, path: &Path) -> color_eyre::Result<Vec<T>> {
-        self.serialization.import::<Vec<T>>(path.to_str().unwrap())
+    fn import(&self, path: &Path) -> color_eyre::Result<SerializedHeightMap<T>> {
+        self.serialization
+            .import::<SerializedHeightMap<T>>(path.to_str().unwrap())
     }
 }
 
@@ -255,17 +283,23 @@ where
             .iter_mut()
             .enumerate()
             .for_each(|(_, (chunk_start, map))| {
-                let to_export = self.imported.entry(chunk_start.to_owned()).or_default();
+                let serialized =
+                    self.imported
+                        .entry(chunk_start.to_owned())
+                        .or_insert(SerializedHeightMap {
+                            version: self.version,
+                            map: vec![],
+                        });
 
                 mem::take(map)
                     .into_iter()
-                    .for_each(
-                        |(chunk_height, value)| match to_export.len().cmp(&chunk_height) {
-                            Ordering::Greater => to_export[chunk_height] = value,
-                            Ordering::Equal => to_export.push(value),
+                    .for_each(|(chunk_height, value)| {
+                        match serialized.map.len().cmp(&chunk_height) {
+                            Ordering::Greater => serialized.map[chunk_height] = value,
+                            Ordering::Equal => serialized.map.push(value),
                             Ordering::Less => panic!(),
-                        },
-                    );
+                        }
+                    });
             });
     }
 
@@ -280,16 +314,17 @@ where
                     .serialization
                     .append_extension(&format!("{}/{}", self.path_all, chunk_name));
 
-                let vec = self.imported.get(chunk_start).unwrap_or_else(|| {
+                let serialized = self.imported.get(chunk_start).unwrap_or_else(|| {
                     dbg!(&self.path_all, chunk_start, &self.imported);
                     panic!();
                 });
 
-                self.serialization.export(&path, vec)?;
+                self.serialization.export(&path, serialized)?;
 
                 if index == len - 1 {
                     if let Some(path_last) = self.path_last.as_ref() {
-                        self.serialization.export(path_last, vec.last().unwrap())?;
+                        self.serialization
+                            .export(path_last, serialized.map.last().unwrap())?;
                     }
                 }
 

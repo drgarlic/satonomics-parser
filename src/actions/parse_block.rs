@@ -80,10 +80,7 @@ pub fn parse_block(
         timestamp,
     }: ParseData,
 ) {
-    // println!("block: {height}");
-
     // If false, expect that the code is flawless
-    // TODO: Instead store zero outputs in a database to check
     let enable_check_if_txout_value_is_zero_in_db: bool = true;
 
     let date_index = states.date_data_vec.len() - 1;

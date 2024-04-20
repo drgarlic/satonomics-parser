@@ -16,7 +16,7 @@ impl MetadataDataset {
         let mut s = Self {
             min_initial_state: MinInitialState::default(),
 
-            address_count: BiMap::new_bin(&f("address_count")),
+            address_count: BiMap::new_bin(1, &f("address_count")),
         };
 
         s.min_initial_state

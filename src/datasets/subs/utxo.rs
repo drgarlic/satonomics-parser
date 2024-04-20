@@ -17,7 +17,7 @@ impl UTXOSubDataset {
         let mut s = Self {
             min_initial_state: MinInitialState::default(),
 
-            count: BiMap::new_bin(&f("utxo_count")),
+            count: BiMap::new_bin(1, &f("utxo_count")),
         };
 
         s.min_initial_state

@@ -32,22 +32,22 @@ impl MiningDataset {
         let mut s = Self {
             min_initial_state: MinInitialState::default(),
 
-            blocks_mined: DateMap::new_bin(&f("blocks_mined")),
-            coinbase: BiMap::new_bin(&f("coinbase")),
-            fees: BiMap::new_bin(&f("fees")),
+            blocks_mined: DateMap::new_bin(1, &f("blocks_mined")),
+            coinbase: BiMap::new_bin(1, &f("coinbase")),
+            fees: BiMap::new_bin(1, &f("fees")),
 
-            subsidy: BiMap::_new_bin(&f("subsidy"), 3),
-            subsidy_in_dollars: BiMap::new_bin(&f("subsidy_in_dollars")),
-            cumulative_subsidy_in_dollars: BiMap::new_bin(&f("cumulative_subsidy_in_dollars")),
+            subsidy: BiMap::_new_bin(1, &f("subsidy"), 5),
+            subsidy_in_dollars: BiMap::new_bin(1, &f("subsidy_in_dollars")),
+            cumulative_subsidy_in_dollars: BiMap::new_bin(1, &f("cumulative_subsidy_in_dollars")),
 
-            annualized_issuance: BiMap::new_bin(&f("annualized_issuance")),
-            yearly_inflation_rate: BiMap::new_bin(&f("yearly_inflation_rate")),
+            annualized_issuance: BiMap::new_bin(1, &f("annualized_issuance")),
+            yearly_inflation_rate: BiMap::new_bin(1, &f("yearly_inflation_rate")),
 
-            last_subsidy: DateMap::new_bin(&f("last_subsidy")),
-            last_subsidy_in_dollars: DateMap::new_bin(&f("last_subsidy_in_dollars")),
+            last_subsidy: DateMap::new_bin(1, &f("last_subsidy")),
+            last_subsidy_in_dollars: DateMap::new_bin(1, &f("last_subsidy_in_dollars")),
 
-            blocks_mined_1w_sma: DateMap::new_bin(&f("blocks_mined_7d_sma")),
-            blocks_mined_1m_sma: DateMap::new_bin(&f("blocks_mined_1m_sma")),
+            blocks_mined_1w_sma: DateMap::new_bin(1, &f("blocks_mined_7d_sma")),
+            blocks_mined_1m_sma: DateMap::new_bin(1, &f("blocks_mined_1m_sma")),
         };
 
         s.min_initial_state

@@ -35,17 +35,17 @@ where
         + savefile::Deserialize
         + savefile::ReprC,
 {
-    pub fn new_bin(path: &str) -> Self {
+    pub fn new_bin(version: u32, path: &str) -> Self {
         Self {
-            height: HeightMap::_new_bin(path, 1, true),
-            date: DateMap::_new_bin(path, 1, false),
+            height: HeightMap::_new_bin(version, path, 1, true),
+            date: DateMap::_new_bin(version, path, 1, false),
         }
     }
 
-    pub fn _new_bin(path: &str, height_chunks_in_memory: usize) -> Self {
+    pub fn _new_bin(version: u32, path: &str, height_chunks_in_memory: usize) -> Self {
         Self {
-            height: HeightMap::_new_bin(path, height_chunks_in_memory, true),
-            date: DateMap::_new_bin(path, height_chunks_in_memory, false),
+            height: HeightMap::_new_bin(version, path, height_chunks_in_memory, true),
+            date: DateMap::_new_bin(version, path, height_chunks_in_memory, false),
         }
     }
 

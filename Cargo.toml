@@ -18,7 +18,7 @@ leveldb = "0.8.6"
 ordered-float = "4.2.0"
 par-iter-sync = "0.1.11"
 rayon = "1.10.0"
-reqwest = { version = "0.12.3", features = ["blocking", "json"] }
+reqwest = { version = "0.12.4", features = ["blocking", "json"] }
 sanakirja = "1.4.2"
 savefile = "0.16.5"
 savefile-derive = "0.16.5"

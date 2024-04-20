@@ -38,17 +38,20 @@ fn main() -> color_eyre::Result<()> {
 
 // let vec = Json::import::<Vec<f32>>("./price/close/height.json")?;
 
-// let chunk_size = BLOCKS_PER_HAVLING_EPOCH / 8;
-
-// vec.chunks(chunk_size)
+// vec.chunks(HEIGHT_MAP_CHUNK_SIZE)
 //     .enumerate()
 //     .for_each(|(index, chunk)| {
 //         let _ = Json::export(
 //             &format!(
 //                 "./price/close/height/{}..{}.json",
-//                 index * chunk_size,
-//                 (index + 1) * chunk_size
+//                 index * HEIGHT_MAP_CHUNK_SIZE,
+//                 (index + 1) * HEIGHT_MAP_CHUNK_SIZE
 //             ),
-//             &chunk,
+//             &SerializedHeightMap {
+//                 version: 1,
+//                 map: chunk.to_vec(),
+//             },
 //         );
 //     });
+
+// panic!();

@@ -18,7 +18,7 @@ impl SupplySubDataset {
         let mut s = Self {
             min_initial_state: MinInitialState::default(),
 
-            total: BiMap::new_bin(&f("supply")),
+            total: BiMap::new_bin(1, &f("supply")),
         };
 
         s.min_initial_state

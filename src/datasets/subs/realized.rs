@@ -19,8 +19,8 @@ impl RealizedSubDataset {
         let mut s = Self {
             min_initial_state: MinInitialState::default(),
 
-            realized_profit: BiMap::new_bin(&f("realized_profit")),
-            realized_loss: BiMap::new_bin(&f("realized_loss")),
+            realized_profit: BiMap::new_bin(1, &f("realized_profit")),
+            realized_loss: BiMap::new_bin(1, &f("realized_loss")),
         };
 
         s.min_initial_state

@@ -26,7 +26,7 @@ impl DateDataset {
 
             kraken_daily: None,
 
-            closes: DateMap::_new_json(&format!("{parent_path}/{name}"), usize::MAX, true),
+            closes: DateMap::_new_json(1, &format!("{parent_path}/{name}"), usize::MAX, true),
         };
 
         s.min_initial_state

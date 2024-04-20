@@ -24,11 +24,11 @@ impl TransactionDataset {
         let mut s = Self {
             min_initial_state: MinInitialState::default(),
 
-            count: BiMap::new_bin(&f("transaction_count")),
-            volume: BiMap::_new_bin(&f("transaction_volume"), 3),
+            count: BiMap::new_bin(1, &f("transaction_count")),
+            volume: BiMap::_new_bin(1, &f("transaction_volume"), 5),
 
-            annualized_volume: BiMap::new_bin(&f("annualized_transaction_volume")),
-            velocity: BiMap::new_bin(&f("transaction_velocity")),
+            annualized_volume: BiMap::new_bin(1, &f("annualized_transaction_volume")),
+            velocity: BiMap::new_bin(1, &f("transaction_velocity")),
         };
 
         s.min_initial_state

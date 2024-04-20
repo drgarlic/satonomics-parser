@@ -18,8 +18,8 @@ impl OutputSubDataset {
         let mut s = Self {
             min_initial_state: MinInitialState::default(),
 
-            count: BiMap::new_bin(&f("output_count")),
-            volume: BiMap::new_bin(&f("output_volume")),
+            count: BiMap::new_bin(1, &f("output_count")),
+            volume: BiMap::new_bin(1, &f("output_volume")),
         };
 
         s.min_initial_state

@@ -30,7 +30,7 @@ impl HeightDataset {
             binance_har: None,
             kraken_1mn: None,
 
-            closes: HeightMap::_new_json(&format!("{parent_path}/{name}"), usize::MAX, false),
+            closes: HeightMap::_new_json(1, &format!("{parent_path}/{name}"), usize::MAX, false),
         };
 
         s.min_initial_state
